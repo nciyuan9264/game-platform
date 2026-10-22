@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"strconv"
 
-	"github.com/nciyuan9264/game-platform/internal/splendor/domain"
-	"github.com/nciyuan9264/game-platform/internal/splendor/entities"
+	"github.com/nciyuan9264/game-platform-server/internal/splendor/domain"
+	"github.com/nciyuan9264/game-platform-server/internal/splendor/entities"
 )
 
 type ActionError struct {

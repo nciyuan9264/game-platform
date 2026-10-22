@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/nciyuan9264/game-platform/internal/rpcmeta"
+	"github.com/nciyuan9264/game-platform-server/internal/rpcmeta"
 )
 
 func TestRPCActorIdentityComesFromVerifiedToken(t *testing.T) {

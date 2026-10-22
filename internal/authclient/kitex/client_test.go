@@ -7,10 +7,10 @@ import (
 
 	"github.com/bytedance/gopkg/cloud/metainfo"
 	"github.com/cloudwego/kitex/client/callopt"
-	"github.com/nciyuan9264/game-platform/internal/authclient"
-	"github.com/nciyuan9264/game-platform/internal/rpcmeta"
-	auth "github.com/nciyuan9264/game-platform/kitex_gen/pam/auth/v1"
-	authservice "github.com/nciyuan9264/game-platform/kitex_gen/pam/auth/v1/authservice"
+	"github.com/nciyuan9264/game-platform-server/internal/authclient"
+	"github.com/nciyuan9264/game-platform-server/internal/rpcmeta"
+	auth "github.com/nciyuan9264/game-platform-server/kitex_gen/pam/auth/v1"
+	authservice "github.com/nciyuan9264/game-platform-server/kitex_gen/pam/auth/v1/authservice"
 	"github.com/nciyuan9264/pam-protocol/httpmeta"
 )
 

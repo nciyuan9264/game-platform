@@ -7,8 +7,8 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/nciyuan9264/game-platform/internal/acquire/arrayutil"
-	"github.com/nciyuan9264/game-platform/internal/acquire/domain/domain"
+	"github.com/nciyuan9264/game-platform-server/internal/acquire/arrayutil"
+	"github.com/nciyuan9264/game-platform-server/internal/acquire/domain/domain"
 )
 
 // GenerateAvailableTiles 生成count个当前房间中未被任何玩家使用的 tile

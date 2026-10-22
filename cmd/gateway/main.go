@@ -5,15 +5,15 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/nciyuan9264/game-platform/internal/authclient"
-	authkitex "github.com/nciyuan9264/game-platform/internal/authclient/kitex"
-	"github.com/nciyuan9264/game-platform/internal/contracts"
-	"github.com/nciyuan9264/game-platform/internal/coordination"
-	"github.com/nciyuan9264/game-platform/internal/gateway"
-	"github.com/nciyuan9264/game-platform/internal/observability"
-	"github.com/nciyuan9264/game-platform/internal/platform/node"
-	"github.com/nciyuan9264/game-platform/internal/store"
-	"github.com/nciyuan9264/game-platform/internal/transport"
+	"github.com/nciyuan9264/game-platform-server/internal/authclient"
+	authkitex "github.com/nciyuan9264/game-platform-server/internal/authclient/kitex"
+	"github.com/nciyuan9264/game-platform-server/internal/contracts"
+	"github.com/nciyuan9264/game-platform-server/internal/coordination"
+	"github.com/nciyuan9264/game-platform-server/internal/gateway"
+	"github.com/nciyuan9264/game-platform-server/internal/observability"
+	"github.com/nciyuan9264/game-platform-server/internal/platform/node"
+	"github.com/nciyuan9264/game-platform-server/internal/store"
+	"github.com/nciyuan9264/game-platform-server/internal/transport"
 )
 
 func main() {

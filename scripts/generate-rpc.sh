@@ -19,6 +19,6 @@ for relative_idl in auth/v1/service.thrift game_platform_control/v1/service.thri
     echo "PAM IDL not found: $idl" >&2
     exit 1
   fi
-  "$KITEX_BIN" -module github.com/nciyuan9264/game-platform -I "$PAM_IDL_ROOT/idl" "$idl"
+  "$KITEX_BIN" -module github.com/nciyuan9264/game-platform-server -I "$PAM_IDL_ROOT/idl" "$idl"
 done
 gofmt -w kitex_gen/pam/auth/v1 kitex_gen/pam/platform/control/v1

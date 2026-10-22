@@ -8,9 +8,9 @@ import (
 	"strings"
 
 	platform "github.com/nciyuan9264/game-platform-client/kitex_gen/pam/game/platform/v1"
-	"github.com/nciyuan9264/game-platform/internal/contracts"
-	"github.com/nciyuan9264/game-platform/internal/store"
-	platformcontrol "github.com/nciyuan9264/game-platform/kitex_gen/pam/platform/control/v1"
+	"github.com/nciyuan9264/game-platform-server/internal/contracts"
+	"github.com/nciyuan9264/game-platform-server/internal/store"
+	platformcontrol "github.com/nciyuan9264/game-platform-server/kitex_gen/pam/platform/control/v1"
 )
 
 func (h *Handler) CreateRoom(ctx context.Context, req *platform.CreateRoomReq) (*platform.RoomResp, error) {

@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/nciyuan9264/game-platform/internal/contracts"
-	"github.com/nciyuan9264/game-platform/internal/rpcmeta"
+	"github.com/nciyuan9264/game-platform-server/internal/contracts"
+	"github.com/nciyuan9264/game-platform-server/internal/rpcmeta"
 )
 
 type fakeClient struct {

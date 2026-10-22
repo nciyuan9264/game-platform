@@ -7,13 +7,13 @@ import (
 	"sort"
 	"time"
 
-	"github.com/nciyuan9264/game-platform/internal/acquire/arrayutil"
-	"github.com/nciyuan9264/game-platform/internal/acquire/domain/data"
-	"github.com/nciyuan9264/game-platform/internal/acquire/domain/domain"
-	"github.com/nciyuan9264/game-platform/internal/acquire/logger"
-	"github.com/nciyuan9264/game-platform/internal/acquire/roomcore"
-	"github.com/nciyuan9264/game-platform/internal/acquire/rules"
-	"github.com/nciyuan9264/game-platform/internal/acquire/utils"
+	"github.com/nciyuan9264/game-platform-server/internal/acquire/arrayutil"
+	"github.com/nciyuan9264/game-platform-server/internal/acquire/domain/data"
+	"github.com/nciyuan9264/game-platform-server/internal/acquire/domain/domain"
+	"github.com/nciyuan9264/game-platform-server/internal/acquire/logger"
+	"github.com/nciyuan9264/game-platform-server/internal/acquire/roomcore"
+	"github.com/nciyuan9264/game-platform-server/internal/acquire/rules"
+	"github.com/nciyuan9264/game-platform-server/internal/acquire/utils"
 
 	"math/rand/v2"
 )

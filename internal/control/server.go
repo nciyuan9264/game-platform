@@ -15,11 +15,11 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/nciyuan9264/game-platform/internal/authclient"
-	"github.com/nciyuan9264/game-platform/internal/contracts"
-	"github.com/nciyuan9264/game-platform/internal/coordination"
-	"github.com/nciyuan9264/game-platform/internal/game"
-	"github.com/nciyuan9264/game-platform/internal/observability"
+	"github.com/nciyuan9264/game-platform-server/internal/authclient"
+	"github.com/nciyuan9264/game-platform-server/internal/contracts"
+	"github.com/nciyuan9264/game-platform-server/internal/coordination"
+	"github.com/nciyuan9264/game-platform-server/internal/game"
+	"github.com/nciyuan9264/game-platform-server/internal/observability"
 )
 
 var (

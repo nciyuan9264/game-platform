@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/nciyuan9264/game-platform/internal/history"
+	"github.com/nciyuan9264/game-platform-server/internal/history"
 )
 
 func (s *PostgresStore) StartHistoryGame(ctx context.Context, gameRecord history.Game, players []history.Player) (int64, error) {

@@ -1,6 +1,6 @@
 package roompkg
 
-import "github.com/nciyuan9264/game-platform/internal/acquire/domain/domain"
+import "github.com/nciyuan9264/game-platform-server/internal/acquire/domain/domain"
 
 func DecideCommand(room *domain.Room, playerID string) (string, []byte, bool) {
 	if room == nil || room.State == nil {

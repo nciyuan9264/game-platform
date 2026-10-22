@@ -6,13 +6,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/nciyuan9264/game-platform/internal/contracts"
-	"github.com/nciyuan9264/game-platform/internal/coordination"
-	"github.com/nciyuan9264/game-platform/internal/observability"
-	"github.com/nciyuan9264/game-platform/internal/plugins"
-	"github.com/nciyuan9264/game-platform/internal/roomhost"
-	"github.com/nciyuan9264/game-platform/internal/store"
-	"github.com/nciyuan9264/game-platform/internal/transport"
+	"github.com/nciyuan9264/game-platform-server/internal/contracts"
+	"github.com/nciyuan9264/game-platform-server/internal/coordination"
+	"github.com/nciyuan9264/game-platform-server/internal/observability"
+	"github.com/nciyuan9264/game-platform-server/internal/plugins"
+	"github.com/nciyuan9264/game-platform-server/internal/roomhost"
+	"github.com/nciyuan9264/game-platform-server/internal/store"
+	"github.com/nciyuan9264/game-platform-server/internal/transport"
 )
 
 func main() {

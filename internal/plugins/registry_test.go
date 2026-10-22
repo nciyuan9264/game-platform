@@ -3,7 +3,7 @@ package plugins
 import (
 	"testing"
 
-	"github.com/nciyuan9264/game-platform/internal/contracts"
+	"github.com/nciyuan9264/game-platform-server/internal/contracts"
 )
 
 func TestRegistryContainsAllGamePlugins(t *testing.T) {

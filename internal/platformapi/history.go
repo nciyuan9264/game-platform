@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/nciyuan9264/game-platform/internal/acquire/domain/domain"
-	rules "github.com/nciyuan9264/game-platform/internal/acquire/rules"
-	"github.com/nciyuan9264/game-platform/internal/history"
+	"github.com/nciyuan9264/game-platform-server/internal/acquire/domain/domain"
+	rules "github.com/nciyuan9264/game-platform-server/internal/acquire/rules"
+	"github.com/nciyuan9264/game-platform-server/internal/history"
 )
 
 func (s *Server) historyGames(w http.ResponseWriter, r *http.Request) {

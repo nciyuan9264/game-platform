@@ -3,7 +3,7 @@ package game
 import (
 	"testing"
 
-	"github.com/nciyuan9264/game-platform/internal/acquire/domain/domain"
+	"github.com/nciyuan9264/game-platform-server/internal/acquire/domain/domain"
 )
 
 // TestEncodeDecodeStateSnapshot 验证瘦身 + gzip 编码后，解码能补齐完整 108 格棋盘，

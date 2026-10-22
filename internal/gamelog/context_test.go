@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/nciyuan9264/game-platform/internal/game"
+	"github.com/nciyuan9264/game-platform-server/internal/game"
 )
 
 type recordingSink struct {

@@ -6,8 +6,8 @@ import (
 	"math/rand"
 	"strconv"
 
-	"github.com/nciyuan9264/game-platform/internal/splendor/domain"
-	"github.com/nciyuan9264/game-platform/internal/splendor/entities"
+	"github.com/nciyuan9264/game-platform-server/internal/splendor/domain"
+	"github.com/nciyuan9264/game-platform-server/internal/splendor/entities"
 )
 
 // gemColors 是可作为普通宝石拿取的五种颜色（不含 Gold 万能币）。

@@ -10,13 +10,13 @@ import (
 	"strings"
 	"time"
 
-	acquireai "github.com/nciyuan9264/game-platform/internal/acquire/ai"
-	"github.com/nciyuan9264/game-platform/internal/acquire/domain/data"
-	"github.com/nciyuan9264/game-platform/internal/acquire/domain/domain"
-	"github.com/nciyuan9264/game-platform/internal/acquire/roomcore"
-	rules "github.com/nciyuan9264/game-platform/internal/acquire/rules"
-	"github.com/nciyuan9264/game-platform/internal/contracts"
-	"github.com/nciyuan9264/game-platform/internal/game"
+	acquireai "github.com/nciyuan9264/game-platform-server/internal/acquire/ai"
+	"github.com/nciyuan9264/game-platform-server/internal/acquire/domain/data"
+	"github.com/nciyuan9264/game-platform-server/internal/acquire/domain/domain"
+	"github.com/nciyuan9264/game-platform-server/internal/acquire/roomcore"
+	rules "github.com/nciyuan9264/game-platform-server/internal/acquire/rules"
+	"github.com/nciyuan9264/game-platform-server/internal/contracts"
+	"github.com/nciyuan9264/game-platform-server/internal/game"
 )
 
 const (

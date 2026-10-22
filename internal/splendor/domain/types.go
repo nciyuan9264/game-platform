@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/nciyuan9264/game-platform/internal/splendor/entities"
+	"github.com/nciyuan9264/game-platform-server/internal/splendor/entities"
 )
 
 type RoomStatus string

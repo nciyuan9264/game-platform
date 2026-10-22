@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/nciyuan9264/game-platform/internal/contracts"
-	storepkg "github.com/nciyuan9264/game-platform/internal/store"
+	"github.com/nciyuan9264/game-platform-server/internal/contracts"
+	storepkg "github.com/nciyuan9264/game-platform-server/internal/store"
 )
 
 const spectatorSessionTTL = 6 * time.Hour

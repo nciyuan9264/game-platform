@@ -1,8 +1,8 @@
 package roompkg
 
 import (
-	"github.com/nciyuan9264/game-platform/internal/acquire/domain/domain"
-	"github.com/nciyuan9264/game-platform/internal/acquire/rules"
+	"github.com/nciyuan9264/game-platform-server/internal/acquire/domain/domain"
+	"github.com/nciyuan9264/game-platform-server/internal/acquire/rules"
 )
 
 func simulateAction(r *domain.Room, playerID string, action aiAction) (*domain.Room, bool) {

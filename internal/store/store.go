@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/nciyuan9264/game-platform/internal/contracts"
-	"github.com/nciyuan9264/game-platform/internal/history"
+	"github.com/nciyuan9264/game-platform-server/internal/contracts"
+	"github.com/nciyuan9264/game-platform-server/internal/history"
 )
 
 type Store struct {

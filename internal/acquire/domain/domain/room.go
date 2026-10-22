@@ -3,7 +3,7 @@ package domain
 import (
 	"time"
 
-	"github.com/nciyuan9264/game-platform/internal/acquire/roomcore"
+	"github.com/nciyuan9264/game-platform-server/internal/acquire/roomcore"
 )
 
 // 类型别名：保持外部使用 domain.Command 等不变

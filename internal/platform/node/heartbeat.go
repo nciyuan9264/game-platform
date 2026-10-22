@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/nciyuan9264/game-platform/internal/contracts"
-	"github.com/nciyuan9264/game-platform/internal/store"
+	"github.com/nciyuan9264/game-platform-server/internal/contracts"
+	"github.com/nciyuan9264/game-platform-server/internal/store"
 )
 
 func Heartbeat(ctx context.Context, st *store.Store, ttl time.Duration, snapshot func() contracts.NodeInfo) {

@@ -17,14 +17,14 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
-	"github.com/nciyuan9264/game-platform/internal/contracts"
-	"github.com/nciyuan9264/game-platform/internal/coordination"
-	"github.com/nciyuan9264/game-platform/internal/game"
-	"github.com/nciyuan9264/game-platform/internal/gamelog"
-	"github.com/nciyuan9264/game-platform/internal/history"
-	"github.com/nciyuan9264/game-platform/internal/observability"
-	"github.com/nciyuan9264/game-platform/internal/store"
-	"github.com/nciyuan9264/game-platform/internal/transport"
+	"github.com/nciyuan9264/game-platform-server/internal/contracts"
+	"github.com/nciyuan9264/game-platform-server/internal/coordination"
+	"github.com/nciyuan9264/game-platform-server/internal/game"
+	"github.com/nciyuan9264/game-platform-server/internal/gamelog"
+	"github.com/nciyuan9264/game-platform-server/internal/history"
+	"github.com/nciyuan9264/game-platform-server/internal/observability"
+	"github.com/nciyuan9264/game-platform-server/internal/store"
+	"github.com/nciyuan9264/game-platform-server/internal/transport"
 )
 
 const snapshotEverySeq = 5

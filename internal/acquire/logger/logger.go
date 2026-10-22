@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"log"
 
-	"github.com/nciyuan9264/game-platform/internal/acquire/timeutil"
+	"github.com/nciyuan9264/game-platform-server/internal/acquire/timeutil"
 )
 
 // Field 日志字段类型

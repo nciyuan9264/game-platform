@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nciyuan9264/game-platform/internal/authapi"
-	"github.com/nciyuan9264/game-platform/internal/contracts"
-	"github.com/nciyuan9264/game-platform/internal/store"
+	"github.com/nciyuan9264/game-platform-server/internal/authapi"
+	"github.com/nciyuan9264/game-platform-server/internal/contracts"
+	"github.com/nciyuan9264/game-platform-server/internal/store"
 )
 
 type fakeSpectatorStore struct {

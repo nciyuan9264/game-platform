@@ -8,7 +8,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/nciyuan9264/game-platform/internal/acquire/ai"
+	"github.com/nciyuan9264/game-platform-server/internal/acquire/ai"
 )
 
 func main() {

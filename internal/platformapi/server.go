@@ -12,12 +12,12 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/nciyuan9264/game-platform/internal/authapi"
-	"github.com/nciyuan9264/game-platform/internal/authclient"
-	"github.com/nciyuan9264/game-platform/internal/contracts"
-	platformtoken "github.com/nciyuan9264/game-platform/internal/platform/token"
-	"github.com/nciyuan9264/game-platform/internal/rpcmeta"
-	"github.com/nciyuan9264/game-platform/internal/store"
+	"github.com/nciyuan9264/game-platform-server/internal/authapi"
+	"github.com/nciyuan9264/game-platform-server/internal/authclient"
+	"github.com/nciyuan9264/game-platform-server/internal/contracts"
+	platformtoken "github.com/nciyuan9264/game-platform-server/internal/platform/token"
+	"github.com/nciyuan9264/game-platform-server/internal/rpcmeta"
+	"github.com/nciyuan9264/game-platform-server/internal/store"
 )
 
 type roomController interface {

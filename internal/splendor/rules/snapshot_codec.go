@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"io"
 
-	"github.com/nciyuan9264/game-platform/internal/splendor/domain"
+	"github.com/nciyuan9264/game-platform-server/internal/splendor/domain"
 )
 
 // snapshotEnvelope 是 state_blob 的载荷结构：权威 GameState + 派生 result。

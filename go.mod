@@ -1,4 +1,4 @@
-module github.com/nciyuan9264/game-platform
+module github.com/nciyuan9264/game-platform-server
 
 go 1.24.4
 

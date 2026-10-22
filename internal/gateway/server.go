@@ -15,12 +15,12 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
-	"github.com/nciyuan9264/game-platform/internal/contracts"
-	"github.com/nciyuan9264/game-platform/internal/coordination"
-	"github.com/nciyuan9264/game-platform/internal/observability"
-	"github.com/nciyuan9264/game-platform/internal/platform/token"
-	"github.com/nciyuan9264/game-platform/internal/store"
-	"github.com/nciyuan9264/game-platform/internal/transport"
+	"github.com/nciyuan9264/game-platform-server/internal/contracts"
+	"github.com/nciyuan9264/game-platform-server/internal/coordination"
+	"github.com/nciyuan9264/game-platform-server/internal/observability"
+	"github.com/nciyuan9264/game-platform-server/internal/platform/token"
+	"github.com/nciyuan9264/game-platform-server/internal/store"
+	"github.com/nciyuan9264/game-platform-server/internal/transport"
 )
 
 type Server struct {

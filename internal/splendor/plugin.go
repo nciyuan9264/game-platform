@@ -11,12 +11,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nciyuan9264/game-platform/internal/contracts"
-	"github.com/nciyuan9264/game-platform/internal/game"
-	"github.com/nciyuan9264/game-platform/internal/splendor/catalog"
-	"github.com/nciyuan9264/game-platform/internal/splendor/domain"
-	"github.com/nciyuan9264/game-platform/internal/splendor/entities"
-	"github.com/nciyuan9264/game-platform/internal/splendor/rules"
+	"github.com/nciyuan9264/game-platform-server/internal/contracts"
+	"github.com/nciyuan9264/game-platform-server/internal/game"
+	"github.com/nciyuan9264/game-platform-server/internal/splendor/catalog"
+	"github.com/nciyuan9264/game-platform-server/internal/splendor/domain"
+	"github.com/nciyuan9264/game-platform-server/internal/splendor/entities"
+	"github.com/nciyuan9264/game-platform-server/internal/splendor/rules"
 )
 
 const (

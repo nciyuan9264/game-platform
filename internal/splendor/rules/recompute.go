@@ -1,7 +1,7 @@
 package rules
 
 import (
-	"github.com/nciyuan9264/game-platform/internal/splendor/domain"
+	"github.com/nciyuan9264/game-platform-server/internal/splendor/domain"
 )
 
 // RecomputeDerivedState 基于当前 r.State 重新计算每位玩家的分数，并产出 result。

@@ -3,9 +3,9 @@ package ai
 import (
 	"context"
 
-	"github.com/nciyuan9264/game-platform/internal/contracts"
-	"github.com/nciyuan9264/game-platform/internal/davinci"
-	"github.com/nciyuan9264/game-platform/internal/game"
+	"github.com/nciyuan9264/game-platform-server/internal/contracts"
+	"github.com/nciyuan9264/game-platform-server/internal/davinci"
+	"github.com/nciyuan9264/game-platform-server/internal/game"
 )
 
 type Service struct {
