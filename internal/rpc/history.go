@@ -1,0 +1,460 @@
+package rpc
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"errors"
+	"net/http"
+	"strconv"
+
+	platform "github.com/nciyuan9264/game-platform-client/kitex_gen/pam/game/platform/v1"
+	"github.com/nciyuan9264/game-platform/internal/contracts"
+	"github.com/nciyuan9264/game-platform/internal/game"
+	"github.com/nciyuan9264/game-platform/internal/history"
+)
+
+const (
+	defaultHistoryLimit     = 20
+	defaultReplayLimit      = 20
+	defaultLeaderboardLimit = 50
+	maxPageLimit            = 200
+)
+
+func (h *Handler) ListHistoryGames(ctx context.Context, req *platform.ListHistoryGamesReq) (*platform.HistoryListResp, error) {
+	userID, err := numericUserID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if req == nil {
+		return nil, platformError("invalid_request", errors.New("request is required"))
+	}
+	gameType, err := h.validGameType(req.GetGameType())
+	if err != nil {
+		return nil, err
+	}
+	limit, offset, err := pageParams(req.Limit, req.Offset, defaultHistoryLimit)
+	if err != nil {
+		return nil, err
+	}
+	games, err := h.store.ListHistoryGames(ctx, userID, gameType, limit, offset)
+	if err != nil {
+		return nil, platformError("history_error", err)
+	}
+	total, err := h.store.CountHistoryGames(ctx, userID, gameType)
+	if err != nil {
+		return nil, platformError("history_error", err)
+	}
+	items := make([]*platform.HistoryGame, 0, len(games))
+	for _, value := range games {
+		items = append(items, mapHistoryGame(value))
+	}
+	return &platform.HistoryListResp{
+		StatusCode: http.StatusOK,
+		Message:    "ok",
+		Data: &platform.HistoryListData{
+			Games: items,
+			Page:  pageInfo(limit, offset, total),
+		},
+	}, nil
+}
+
+func (h *Handler) GetHistoryDetail(ctx context.Context, req *platform.GetHistoryDetailReq) (*platform.HistoryDetailResp, error) {
+	userID, err := numericUserID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if req == nil || req.GetId() <= 0 {
+		return nil, platformError("invalid_request", errors.New("positive history id is required"))
+	}
+	gameType, err := h.validGameType(req.GetGameType())
+	if err != nil {
+		return nil, err
+	}
+	gameRecord, players, events, err := h.store.GetCompletedHistoryGameForUser(
+		ctx,
+		req.GetId(),
+		userID,
+		gameType,
+		false,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, platformError("not_found", errors.New("history game not found"))
+	}
+	if err != nil {
+		return nil, platformError("history_error", err)
+	}
+	metas := make([]*platform.HistoryEventMeta, 0, len(events))
+	for _, event := range events {
+		metas = append(metas, &platform.HistoryEventMeta{
+			Seq:      int32(event.Seq),
+			PlayerID: event.PlayerID,
+			CmdType:  event.CommandType,
+		})
+	}
+	return &platform.HistoryDetailResp{
+		StatusCode: http.StatusOK,
+		Message:    "ok",
+		Data: &platform.HistoryDetailData{
+			Game:    mapHistoryGame(gameRecord),
+			Players: mapHistoryPlayers(players),
+			Events:  metas,
+		},
+	}, nil
+}
+
+func (h *Handler) GetSnapshot(ctx context.Context, req *platform.GetSnapshotReq) (*platform.SnapshotResp, error) {
+	userID, err := numericUserID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if req == nil || req.GetId() <= 0 || req.GetSeq() < -1 {
+		return nil, platformError("invalid_request", errors.New("valid history id and seq are required"))
+	}
+	gameType, err := h.replayGameType(req.GetGameType())
+	if err != nil {
+		return nil, err
+	}
+	eventOffset, eventLimit := 0, 0
+	if req.GetSeq() >= 0 {
+		eventOffset = int(req.GetSeq())
+		eventLimit = 1
+	}
+	gameRecord, players, totalEvents, events, err := h.store.HistoryReplayPageForUser(
+		ctx,
+		req.GetId(),
+		userID,
+		gameType,
+		eventOffset,
+		eventLimit,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, platformError("not_found", errors.New("history game not found"))
+	}
+	if err != nil {
+		return nil, platformError("history_error", err)
+	}
+	var event *history.Event
+	if req.GetSeq() >= 0 {
+		if len(events) != 1 || events[0].Seq != int(req.GetSeq()) {
+			return nil, platformError("not_found", errors.New("replay snapshot not found"))
+		}
+		event = &events[0]
+	}
+	snapshot, err := h.buildReplaySnapshot(ctx, gameRecord, players, event, int(req.GetSeq()), totalEvents)
+	if err != nil {
+		return nil, err
+	}
+	return &platform.SnapshotResp{StatusCode: http.StatusOK, Message: "ok", Data: snapshot}, nil
+}
+
+func (h *Handler) ListSnapshots(ctx context.Context, req *platform.ListSnapshotsReq) (*platform.SnapshotListResp, error) {
+	userID, err := numericUserID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if req == nil || req.GetId() <= 0 {
+		return nil, platformError("invalid_request", errors.New("positive history id is required"))
+	}
+	gameType, err := h.replayGameType(req.GetGameType())
+	if err != nil {
+		return nil, err
+	}
+	limit, offset, err := pageParams(req.Limit, req.Offset, defaultReplayLimit)
+	if err != nil {
+		return nil, err
+	}
+	eventOffset := offset - 1
+	eventLimit := limit
+	includeInitial := offset == 0
+	if includeInitial {
+		eventOffset = 0
+		eventLimit = limit - 1
+	}
+	gameRecord, players, totalEvents, events, err := h.store.HistoryReplayPageForUser(
+		ctx,
+		req.GetId(),
+		userID,
+		gameType,
+		eventOffset,
+		eventLimit,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, platformError("not_found", errors.New("history game not found"))
+	}
+	if err != nil {
+		return nil, platformError("history_error", err)
+	}
+	snapshots := make([]*platform.ReplaySnapshot, 0, len(events)+1)
+	if includeInitial {
+		initial, err := h.buildReplaySnapshot(ctx, gameRecord, players, nil, -1, totalEvents)
+		if err != nil {
+			return nil, err
+		}
+		snapshots = append(snapshots, initial)
+	}
+	for index := range events {
+		event := &events[index]
+		snapshot, err := h.buildReplaySnapshot(ctx, gameRecord, players, event, event.Seq, totalEvents)
+		if err != nil {
+			return nil, err
+		}
+		snapshots = append(snapshots, snapshot)
+	}
+	totalSnapshots := totalEvents + 1
+	return &platform.SnapshotListResp{
+		StatusCode: http.StatusOK,
+		Message:    "ok",
+		Data: &platform.SnapshotListData{
+			Snapshots:      snapshots,
+			TotalEvents:    int32(totalEvents),
+			TotalSnapshots: int32(totalSnapshots),
+			Page:           pageInfo(limit, offset, totalSnapshots),
+		},
+	}, nil
+}
+
+func (h *Handler) GetStats(ctx context.Context, req *platform.GetStatsReq) (*platform.StatsResp, error) {
+	userID, err := numericUserID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if req == nil {
+		return nil, platformError("invalid_request", errors.New("request is required"))
+	}
+	gameType, err := h.validGameType(req.GetGameType())
+	if err != nil {
+		return nil, err
+	}
+	stats, err := h.store.HistoryStats(ctx, userID, gameType)
+	if err != nil {
+		return nil, platformError("history_error", err)
+	}
+	return &platform.StatsResp{
+		StatusCode: http.StatusOK,
+		Message:    "ok",
+		Data: &platform.HistoryStats{
+			TotalGames: int32(stats.TotalGames),
+			Wins:       int32(stats.Wins),
+			WinRate:    stats.WinRate,
+			AvgScore:   stats.AvgScore,
+		},
+	}, nil
+}
+
+func (h *Handler) GetLeaderboard(ctx context.Context, req *platform.GetLeaderboardReq) (*platform.LeaderboardResp, error) {
+	if req == nil {
+		return nil, platformError("invalid_request", errors.New("request is required"))
+	}
+	gameType, err := h.validGameType(req.GetGameType())
+	if err != nil {
+		return nil, err
+	}
+	sortBy := req.GetSort()
+	if sortBy == "" {
+		sortBy = "metric"
+	}
+	if sortBy != "metric" && sortBy != "totalGames" {
+		return nil, platformError("invalid_sort", errors.New("sort must be metric or totalGames"))
+	}
+	limit, offset, err := pageParams(req.Limit, req.Offset, defaultLeaderboardLimit)
+	if err != nil {
+		return nil, err
+	}
+	entries, err := h.store.HistoryLeaderboardSorted(ctx, gameType, sortBy, limit, offset)
+	if err != nil {
+		return nil, platformError("history_error", err)
+	}
+	total, err := h.store.CountLeaderboardEntries(ctx, gameType)
+	if err != nil {
+		return nil, platformError("history_error", err)
+	}
+	mapped := make([]*platform.LeaderboardEntry, 0, len(entries))
+	for _, entry := range entries {
+		metric := &platform.LeaderboardMetric{}
+		if gameType == contracts.GameDaVinci {
+			metric.Davinci = &platform.DavinciLeaderboardMetric{
+				Wins:    int32(valueOrZero(entry.Wins)),
+				WinRate: floatValueOrZero(entry.WinRate),
+			}
+		} else {
+			metric.Rank = &platform.RankLeaderboardMetric{AvgRank: floatValueOrZero(entry.AvgRank)}
+		}
+		mapped = append(mapped, &platform.LeaderboardEntry{
+			UserID:     entry.UserID,
+			PlayerID:   entry.PlayerID,
+			TotalGames: int32(entry.TotalGames),
+			Metric:     metric,
+		})
+	}
+	return &platform.LeaderboardResp{
+		StatusCode: http.StatusOK,
+		Message:    "ok",
+		Data: &platform.LeaderboardData{
+			GameType: platform.GameType(gameType),
+			Entries:  mapped,
+			Page:     pageInfo(limit, offset, total),
+		},
+	}, nil
+}
+
+func (h *Handler) replayGameType(value string) (string, error) {
+	gameType, err := h.validGameType(value)
+	if err != nil {
+		return "", err
+	}
+	if gameType == contracts.GameDaVinci {
+		return "", platformError("replay_not_supported", errors.New("davinci replay is not supported"))
+	}
+	definition, ok := h.games.Get(gameType)
+	if !ok || definition.History == nil {
+		return "", platformError("replay_not_supported", errors.New("game replay is not supported"))
+	}
+	return gameType, nil
+}
+
+func (h *Handler) buildReplaySnapshot(
+	ctx context.Context,
+	gameRecord history.Game,
+	players []history.Player,
+	event *history.Event,
+	seq,
+	total int,
+) (*platform.ReplaySnapshot, error) {
+	definition, ok := h.games.Get(gameRecord.GameType)
+	if !ok || definition.History == nil {
+		return nil, platformError("replay_not_supported", errors.New("game replay is not supported"))
+	}
+	historyPlayers := make([]game.HistoryPlayer, 0, len(players))
+	for _, player := range players {
+		historyPlayers = append(historyPlayers, game.HistoryPlayer{
+			UserID:      numericPointerString(player.UserID),
+			PlayerID:    player.PlayerID,
+			SeatIndex:   player.SeatIndex,
+			IsAI:        player.IsAI,
+			FinalScore:  player.FinalScore,
+			FinalMoney:  player.FinalMoney,
+			FinalStocks: player.FinalStocks,
+			FinalRank:   player.FinalRank,
+			IsWinner:    player.IsWinner,
+		})
+	}
+	var stateSnapshot, stateBlob []byte
+	commandType, playerID := "", ""
+	var payload any
+	if event != nil {
+		stateSnapshot = event.StateSnapshot
+		stateBlob = event.StateBlob
+		commandType = event.CommandType
+		playerID = event.PlayerID
+		if len(event.Payload) > 0 {
+			_ = json.Unmarshal(event.Payload, &payload)
+		}
+	}
+	state, err := definition.History.DecodeReplayState(
+		ctx,
+		gameRecord.InitialState,
+		stateSnapshot,
+		stateBlob,
+		historyPlayers,
+	)
+	if err != nil {
+		return nil, platformError("replay_error", err)
+	}
+	value, err := definition.History.BuildReplaySnapshot(
+		ctx,
+		state,
+		seq,
+		total,
+		commandType,
+		playerID,
+		payload,
+	)
+	if err != nil {
+		return nil, platformError("replay_error", err)
+	}
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return nil, platformError("replay_error", err)
+	}
+	result := &platform.ReplaySnapshot{}
+	switch gameRecord.GameType {
+	case contracts.GameAcquire:
+		result.Acquire = &platform.AcquireReplaySnapshot{}
+		if err := json.Unmarshal(encoded, result.Acquire); err != nil {
+			return nil, platformError("replay_error", err)
+		}
+	case "splendor":
+		result.Splendor = &platform.SplendorReplaySnapshot{}
+		if err := json.Unmarshal(encoded, result.Splendor); err != nil {
+			return nil, platformError("replay_error", err)
+		}
+	default:
+		return nil, platformError("replay_not_supported", errors.New("game replay is not supported"))
+	}
+	return result, nil
+}
+
+func numericUserID(ctx context.Context) (int64, error) {
+	value, err := requireIdentity(ctx)
+	if err != nil {
+		return 0, err
+	}
+	userID, parseErr := strconv.ParseInt(value.UserID, 10, 64)
+	if parseErr != nil || userID <= 0 {
+		return 0, platformError("unauthorized", errors.New("invalid authenticated user id"))
+	}
+	return userID, nil
+}
+
+func pageParams(limitValue, offsetValue *int32, fallback int) (int, int, error) {
+	limit := fallback
+	if limitValue != nil {
+		limit = int(*limitValue)
+	}
+	offset := 0
+	if offsetValue != nil {
+		offset = int(*offsetValue)
+	}
+	if limit <= 0 || limit > maxPageLimit || offset < 0 {
+		return 0, 0, platformError("invalid_pagination", errors.New("limit must be 1..200 and offset must be non-negative"))
+	}
+	return limit, offset, nil
+}
+
+func pageInfo(limit, offset, total int) *platform.PageInfo {
+	next := offset + limit
+	hasMore := next < total
+	result := &platform.PageInfo{
+		Limit:   int32(limit),
+		Offset:  int32(offset),
+		HasMore: hasMore,
+		Total:   int32(total),
+	}
+	if hasMore {
+		value := int32(next)
+		result.NextOffset = &value
+	}
+	return result
+}
+
+func numericPointerString(value *int64) string {
+	if value == nil {
+		return ""
+	}
+	return strconv.FormatInt(*value, 10)
+}
+
+func valueOrZero(value *int) int {
+	if value == nil {
+		return 0
+	}
+	return *value
+}
+
+func floatValueOrZero(value *float64) float64 {
+	if value == nil {
+		return 0
+	}
+	return *value
+}

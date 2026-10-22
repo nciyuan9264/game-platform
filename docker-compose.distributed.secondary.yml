@@ -1,0 +1,98 @@
+name: game-platform-distributed-secondary
+
+x-build-args: &build_args
+  GOPROXY: ${GOPROXY:-https://goproxy.cn,direct}
+  HTTP_PROXY: ${HTTP_PROXY:-http://sys-proxy-rd-relay.byted.org:8118}
+  HTTPS_PROXY: ${HTTPS_PROXY:-http://sys-proxy-rd-relay.byted.org:8118}
+  http_proxy: ${http_proxy:-http://sys-proxy-rd-relay.byted.org:8118}
+  https_proxy: ${https_proxy:-http://sys-proxy-rd-relay.byted.org:8118}
+
+x-common-env: &common_env
+  PAM_ENV: test
+  PAM_SERVICE_REGISTRY_PREFIX: pam/services
+  REDIS_ADDR: "${PRIMARY_HOST:-10.37.223.1}:6379"
+  REDIS_PASSWORD: "${REDIS_PASSWORD:-local-redis}"
+  REDIS_DB: "0"
+  POSTGRES_DSN: "postgres://${GAME_RUNTIME_USER:-game}:${GAME_RUNTIME_PASSWORD:-game}@${PRIMARY_HOST:-10.37.223.1}:5432/game_platform?sslmode=disable"
+  ETCD_ENDPOINTS: "${PRIMARY_HOST:-10.37.223.1}:2379"
+
+x-browser-origins: &browser_origins "${BROWSER_ALLOWED_ORIGINS:-http://10.37.223.1:18000,http://10.37.223.1:18031,http://10.37.223.1:18032,http://localhost:18000,http://localhost:18031,http://localhost:18032}"
+
+services:
+  platform-rpc-2:
+    build:
+      context: .
+      dockerfile: deployments/Dockerfile
+      args:
+        <<: *build_args
+        SERVICE: platform-rpc
+    environment:
+      <<: *common_env
+      GAME_PLATFORM_RPC_ADDR: ":18092"
+      GAME_PLATFORM_HEALTH_ADDR: ":18093"
+      GAME_PLATFORM_RPC_PSM: game.platform.rpc
+      KITEX_IP_TO_REGISTRY: "${SECONDARY_HOST:-10.37.4.66}"
+      KITEX_PORT_TO_REGISTRY: "18092"
+      CONTROL_RPC_ADDR: "${PRIMARY_HOST:-10.37.223.1}:18091"
+    ports:
+      - "${DISTRIBUTED_BIND_ADDR:-0.0.0.0}:18092:18092"
+      - "${DISTRIBUTED_BIND_ADDR:-0.0.0.0}:18093:18093"
+    restart: unless-stopped
+
+  platform-api-2:
+    build:
+      context: .
+      dockerfile: deployments/Dockerfile
+      args:
+        <<: *build_args
+        SERVICE: platform-api
+    environment:
+      <<: *common_env
+      SERVER_ADDR: ":8080"
+      AUTH_RPC_ADDR: "${PRIMARY_HOST:-10.37.223.1}:19090"
+      CONTROL_RPC_ADDR: "${PRIMARY_HOST:-10.37.223.1}:18091"
+      COOKIE_DOMAIN: ""
+      COOKIE_SECURE: "false"
+      AUTH_DEV_CODE_RESPONSE: "true"
+      CORS_ALLOWED_ORIGINS: *browser_origins
+      ACQUIRE_LOADTEST_ENABLED: "${ACQUIRE_LOADTEST_ENABLED:-false}"
+      ACQUIRE_LOADTEST_TOKEN: "${ACQUIRE_LOADTEST_TOKEN:-}"
+    ports:
+      - "${DISTRIBUTED_BIND_ADDR:-0.0.0.0}:${PLATFORM_API_B_PORT:-18083}:8080"
+    restart: unless-stopped
+
+  gateway-2:
+    build:
+      context: .
+      dockerfile: deployments/Dockerfile
+      args:
+        <<: *build_args
+        SERVICE: gateway
+    environment:
+      <<: *common_env
+      SERVER_ADDR: ":8080"
+      NODE_ID: gateway-b
+      PUBLIC_ADDR: "${SECONDARY_HOST:-10.37.4.66}:${GATEWAY_B_PORT:-18081}"
+      AUTH_RPC_ADDR: "${PRIMARY_HOST:-10.37.223.1}:19090"
+      NATS_URL: "nats://gateway-b:${NATS_GATEWAY_B_PASSWORD:-local-gateway-b}@${PRIMARY_HOST:-10.37.223.1}:4222"
+      WS_ALLOWED_ORIGINS: *browser_origins
+    ports:
+      - "${DISTRIBUTED_BIND_ADDR:-0.0.0.0}:${GATEWAY_B_PORT:-18081}:8080"
+    restart: unless-stopped
+
+  roomhost-2:
+    build:
+      context: .
+      dockerfile: deployments/Dockerfile
+      args:
+        <<: *build_args
+        SERVICE: roomhost
+    environment:
+      <<: *common_env
+      NODE_ID: roomhost-b
+      PUBLIC_ADDR: "${SECONDARY_HOST:-10.37.4.66}:9000"
+      NATS_URL: "nats://roomhost-b:${NATS_ROOMHOST_B_PASSWORD:-local-roomhost-b}@${PRIMARY_HOST:-10.37.223.1}:4222"
+      DAVINCI_AI_THINK_DELAY_MIN_MS: 1500
+      DAVINCI_AI_THINK_DELAY_MAX_MS: 2500
+    stop_grace_period: 15s
+    restart: unless-stopped

@@ -1,0 +1,419 @@
+name: game-platform-distributed-primary
+
+x-build-args: &build_args
+  GOPROXY: ${GOPROXY:-https://goproxy.cn,direct}
+  HTTP_PROXY: ${HTTP_PROXY:-http://sys-proxy-rd-relay.byted.org:8118}
+  HTTPS_PROXY: ${HTTPS_PROXY:-http://sys-proxy-rd-relay.byted.org:8118}
+  http_proxy: ${http_proxy:-http://sys-proxy-rd-relay.byted.org:8118}
+  https_proxy: ${https_proxy:-http://sys-proxy-rd-relay.byted.org:8118}
+
+x-common-env: &common_env
+  PAM_ENV: test
+  PAM_SERVICE_REGISTRY_PREFIX: pam/services
+  REDIS_ADDR: redis:6379
+  REDIS_PASSWORD: "${REDIS_PASSWORD:-local-redis}"
+  REDIS_DB: "0"
+  POSTGRES_DSN: "postgres://${GAME_RUNTIME_USER:-game}:${GAME_RUNTIME_PASSWORD:-game}@postgres:5432/game_platform?sslmode=disable"
+  ETCD_ENDPOINTS: etcd:2379
+
+x-browser-origins: &browser_origins "${BROWSER_ALLOWED_ORIGINS:-http://10.37.223.1:18000,http://10.37.223.1:18031,http://10.37.223.1:18032,http://localhost:18000,http://localhost:18031,http://localhost:18032}"
+
+services:
+  redis:
+    image: redis:7-alpine
+    command:
+      - sh
+      - -ec
+      - exec redis-server --appendonly yes --appendfsync everysec --maxmemory-policy noeviction --requirepass "$${REDIS_PASSWORD}"
+    environment:
+      REDIS_PASSWORD: "${REDIS_PASSWORD:-local-redis}"
+    ports:
+      - "${DISTRIBUTED_BIND_ADDR:-0.0.0.0}:6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$${REDIS_PASSWORD}\" redis-cli ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: "${POSTGRES_ADMIN_USER:-game}"
+      POSTGRES_PASSWORD: "${POSTGRES_ADMIN_PASSWORD:-game}"
+      POSTGRES_DB: game_platform
+      AUTH_DB_ADMIN_PASSWORD: "${AUTH_DB_ADMIN_PASSWORD:-auth}"
+      GAME_MIGRATOR_PASSWORD: "${GAME_MIGRATOR_PASSWORD:-local-game-migrator}"
+      GAME_RUNTIME_PASSWORD: "${GAME_RUNTIME_PASSWORD:-local-game-runtime}"
+      AUTH_MIGRATOR_PASSWORD: "${AUTH_MIGRATOR_PASSWORD:-local-auth-migrator}"
+      AUTH_RUNTIME_PASSWORD: "${AUTH_RUNTIME_PASSWORD:-local-auth-runtime}"
+    ports:
+      - "${DISTRIBUTED_BIND_ADDR:-0.0.0.0}:5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./deployments/postgres-init/001-create-databases-and-roles.sh:/docker-entrypoint-initdb.d/001-create-databases-and-roles.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    restart: unless-stopped
+
+  nats:
+    image: nats:2-alpine
+    command: ["-c", "/etc/nats/nats.conf"]
+    environment:
+      NATS_CONTROL_PASSWORD: "${NATS_CONTROL_PASSWORD:-local-control}"
+      NATS_MAINTENANCE_PASSWORD: "${NATS_MAINTENANCE_PASSWORD:-local-maintenance}"
+      NATS_GATEWAY_1_PASSWORD: "${NATS_GATEWAY_1_PASSWORD:-local-gateway-1}"
+      NATS_GATEWAY_2_PASSWORD: "${NATS_GATEWAY_2_PASSWORD:-local-gateway-2}"
+      NATS_ROOMHOST_1_PASSWORD: "${NATS_ROOMHOST_1_PASSWORD:-local-roomhost-1}"
+      NATS_ROOMHOST_2_PASSWORD: "${NATS_ROOMHOST_2_PASSWORD:-local-roomhost-2}"
+      NATS_GATEWAY_A_PASSWORD: "${NATS_GATEWAY_A_PASSWORD:-local-gateway-a}"
+      NATS_GATEWAY_B_PASSWORD: "${NATS_GATEWAY_B_PASSWORD:-local-gateway-b}"
+      NATS_ROOMHOST_A_PASSWORD: "${NATS_ROOMHOST_A_PASSWORD:-local-roomhost-a}"
+      NATS_ROOMHOST_B_PASSWORD: "${NATS_ROOMHOST_B_PASSWORD:-local-roomhost-b}"
+    ports:
+      - "${DISTRIBUTED_BIND_ADDR:-0.0.0.0}:4222:4222"
+      - "${DISTRIBUTED_BIND_ADDR:-0.0.0.0}:8222:8222"
+    volumes:
+      - nats-data:/data
+      - ./deployments/nats.conf:/etc/nats/nats.conf:ro
+    restart: unless-stopped
+
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.15
+    command:
+      - /usr/local/bin/etcd
+      - --name=etcd-primary
+      - --data-dir=/etcd-data
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --advertise-client-urls=http://${PRIMARY_HOST:-10.37.223.1}:2379
+      - --listen-peer-urls=http://0.0.0.0:2380
+      - --initial-advertise-peer-urls=http://${PRIMARY_HOST:-10.37.223.1}:2380
+      - --initial-cluster=etcd-primary=http://${PRIMARY_HOST:-10.37.223.1}:2380
+      - --initial-cluster-token=game-platform-distributed
+      - --initial-cluster-state=new
+    ports:
+      - "${DISTRIBUTED_BIND_ADDR:-0.0.0.0}:2379:2379"
+      - "${DISTRIBUTED_BIND_ADDR:-0.0.0.0}:2380:2380"
+    volumes:
+      - etcd-data:/etcd-data
+    restart: unless-stopped
+
+  cloudbeaver:
+    image: dbeaver/cloudbeaver:latest
+    profiles: [ops]
+    environment:
+      CLOUDBEAVER_APP_SUPPORTS_CUSTOM_CONNECTIONS: "true"
+    ports:
+      - "${DISTRIBUTED_BIND_ADDR:-0.0.0.0}:18030:8978"
+    volumes:
+      - cloudbeaver-workspace:/opt/cloudbeaver/workspace
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  traefik:
+    image: traefik:v3.1
+    command:
+      - --providers.file.filename=/etc/traefik/dynamic.yml
+      - --providers.file.watch=true
+      - --entrypoints.web.address=:80
+      - --accesslog=true
+    ports:
+      - "${ENTRYPOINT_BIND_ADDR:-0.0.0.0}:${ENTRYPOINT_PORT:-18000}:80"
+    volumes:
+      - ./.generated/traefik-distributed.yml:/etc/traefik/dynamic.yml:ro
+    depends_on:
+      - frontend
+      - auth-frontend
+      - game-frontend
+      - admin-console
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: deployments/frontend-static.Dockerfile
+    restart: unless-stopped
+
+  auth-frontend:
+    build:
+      context: ../game-platform-auth-frontend
+      dockerfile: Dockerfile
+      args:
+        NPM_REGISTRY: https://bnpm.byted.org
+        VITE_API_BASE_URL: "http://${PRIMARY_HOST:-10.37.223.1}:${ENTRYPOINT_PORT:-18000}"
+    ports:
+      - "${DISTRIBUTED_BIND_ADDR:-0.0.0.0}:18031:8080"
+    restart: unless-stopped
+
+  game-frontend:
+    build:
+      context: ../game-platform-game-frontend
+      dockerfile: Dockerfile
+      args:
+        NPM_REGISTRY: https://bnpm.byted.org
+        VITE_API_BASE_URL: "http://${PRIMARY_HOST:-10.37.223.1}:${ENTRYPOINT_PORT:-18000}"
+        VITE_AUTH_PAGE_URL: "http://${PRIMARY_HOST:-10.37.223.1}:18031/login"
+        VITE_AUTH_API_BASE_URL: "http://${PRIMARY_HOST:-10.37.223.1}:${ENTRYPOINT_PORT:-18000}/platform/auth"
+        VITE_GAME_WS_URL: "ws://${PRIMARY_HOST:-10.37.223.1}:${ENTRYPOINT_PORT:-18000}/ws"
+    ports:
+      - "${DISTRIBUTED_BIND_ADDR:-0.0.0.0}:18032:8080"
+    restart: unless-stopped
+
+  admin-console:
+    build:
+      context: ../game-platform-admin
+      dockerfile: Dockerfile
+    restart: unless-stopped
+
+  schema-migrate:
+    build:
+      context: .
+      dockerfile: deployments/Dockerfile
+      args:
+        <<: *build_args
+        SERVICE: migrate-schema
+    environment:
+      POSTGRES_DSN: "postgres://${GAME_MIGRATOR_USER:-game}:${GAME_MIGRATOR_PASSWORD:-game}@postgres:5432/game_platform?sslmode=disable"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  auth-schema-migrate:
+    build:
+      context: ../auth/backend
+      dockerfile: Dockerfile
+      args:
+        SERVICE: migrate-schema
+    environment:
+      POSTGRES_DSN: "postgres://${AUTH_MIGRATOR_USER:-auth}:${AUTH_MIGRATOR_PASSWORD:-auth}@postgres:5432/auth_center?sslmode=disable"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  auth-rpc:
+    build:
+      context: ../auth/backend
+      dockerfile: Dockerfile
+      args:
+        SERVICE: auth-rpc
+    environment:
+      AUTH_RPC_ADDR: ":19090"
+      AUTH_RPC_PSM: pam.auth.rpc
+      PAM_ENV: test
+      PAM_SERVICE_REGISTRY_PREFIX: pam/services
+      ETCD_ENDPOINTS: etcd:2379
+      KITEX_IP_TO_REGISTRY: "${PRIMARY_HOST:-10.37.223.1}"
+      KITEX_PORT_TO_REGISTRY: "19090"
+      POSTGRES_DSN: "postgres://${AUTH_RUNTIME_USER:-auth}:${AUTH_RUNTIME_PASSWORD:-auth}@postgres:5432/auth_center?sslmode=disable"
+      REDIS_ADDR: redis:6379
+      REDIS_PASSWORD: "${REDIS_PASSWORD:-local-redis}"
+      REDIS_DB: "2"
+      AUTH_DEV_CODE_LOG: "true"
+      AUTH_DEV_CODE_RESPONSE: "true"
+      JWT_PRIVATE_PATH: /run/secrets/jwt_private.pem
+      JWT_PUBLIC_PATH: /run/secrets/jwt_public.pem
+    volumes:
+      - ../auth/keys/jwt_private.pem:/run/secrets/jwt_private.pem:ro
+      - ../auth/keys/jwt_public.pem:/run/secrets/jwt_public.pem:ro
+    ports:
+      - "${DISTRIBUTED_BIND_ADDR:-0.0.0.0}:19090:19090"
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 19090"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    depends_on:
+      auth-schema-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  control-plane:
+    build:
+      context: .
+      dockerfile: deployments/Dockerfile
+      args:
+        <<: *build_args
+        SERVICE: control-plane
+    environment:
+      <<: *common_env
+      SERVER_ADDR: ":8080"
+      CONTROL_RPC_ADDR: ":18091"
+      CONTROL_RPC_PSM: game.platform.control
+      PAM_ENV: test
+      PAM_SERVICE_REGISTRY_PREFIX: pam/services
+      KITEX_IP_TO_REGISTRY: "${PRIMARY_HOST:-10.37.223.1}"
+      KITEX_PORT_TO_REGISTRY: "18091"
+      NODE_ID: control-plane-a
+      PUBLIC_ADDR: "${PRIMARY_HOST:-10.37.223.1}:18080"
+      ROOM_SCHEDULER: "${ROOM_SCHEDULER:-load_aware}"
+      AUTH_RPC_ADDR: auth-rpc:19090
+      NATS_URL: "nats://control:${NATS_CONTROL_PASSWORD:-local-control}@nats:4222"
+    ports:
+      - "${DISTRIBUTED_BIND_ADDR:-0.0.0.0}:18080:8080"
+      - "${DISTRIBUTED_BIND_ADDR:-0.0.0.0}:18091:18091"
+    depends_on:
+      auth-rpc:
+        condition: service_healthy
+      schema-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      etcd:
+        condition: service_started
+      nats:
+        condition: service_started
+    restart: unless-stopped
+
+  platform-rpc:
+    build:
+      context: .
+      dockerfile: deployments/Dockerfile
+      args:
+        <<: *build_args
+        SERVICE: platform-rpc
+    environment:
+      <<: *common_env
+      GAME_PLATFORM_RPC_ADDR: ":18092"
+      GAME_PLATFORM_HEALTH_ADDR: ":18093"
+      GAME_PLATFORM_RPC_PSM: game.platform.rpc
+      KITEX_IP_TO_REGISTRY: "${PRIMARY_HOST:-10.37.223.1}"
+      KITEX_PORT_TO_REGISTRY: "18092"
+      CONTROL_RPC_ADDR: "${PRIMARY_HOST:-10.37.223.1}:18091"
+    ports:
+      - "${DISTRIBUTED_BIND_ADDR:-0.0.0.0}:18092:18092"
+      - "${DISTRIBUTED_BIND_ADDR:-0.0.0.0}:18093:18093"
+    depends_on:
+      schema-migrate:
+        condition: service_completed_successfully
+      control-plane:
+        condition: service_started
+      redis:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      etcd:
+        condition: service_started
+    restart: unless-stopped
+
+  platform-api-1:
+    networks:
+      default:
+        aliases:
+          - platform-api
+    build:
+      context: .
+      dockerfile: deployments/Dockerfile
+      args:
+        <<: *build_args
+        SERVICE: platform-api
+    environment:
+      <<: *common_env
+      SERVER_ADDR: ":8080"
+      AUTH_RPC_ADDR: auth-rpc:19090
+      CONTROL_RPC_ADDR: control-plane:18091
+      COOKIE_DOMAIN: ""
+      COOKIE_SECURE: "false"
+      AUTH_DEV_CODE_RESPONSE: "true"
+      CORS_ALLOWED_ORIGINS: *browser_origins
+      ACQUIRE_LOADTEST_ENABLED: "${ACQUIRE_LOADTEST_ENABLED:-false}"
+      ACQUIRE_LOADTEST_TOKEN: "${ACQUIRE_LOADTEST_TOKEN:-}"
+    ports:
+      - "${DISTRIBUTED_BIND_ADDR:-0.0.0.0}:${PLATFORM_API_A_PORT:-18083}:8080"
+    depends_on:
+      auth-rpc:
+        condition: service_healthy
+      schema-migrate:
+        condition: service_completed_successfully
+      control-plane:
+        condition: service_started
+      redis:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  gateway-1:
+    networks:
+      default:
+        aliases:
+          - gateway
+          - gateway-lb
+    build:
+      context: .
+      dockerfile: deployments/Dockerfile
+      args:
+        <<: *build_args
+        SERVICE: gateway
+    environment:
+      <<: *common_env
+      SERVER_ADDR: ":8080"
+      NODE_ID: gateway-a
+      PUBLIC_ADDR: "${PRIMARY_HOST:-10.37.223.1}:${GATEWAY_A_PORT:-18081}"
+      AUTH_RPC_ADDR: auth-rpc:19090
+      NATS_URL: "nats://gateway-a:${NATS_GATEWAY_A_PASSWORD:-local-gateway-a}@nats:4222"
+      WS_ALLOWED_ORIGINS: *browser_origins
+    ports:
+      - "${DISTRIBUTED_BIND_ADDR:-0.0.0.0}:${GATEWAY_A_PORT:-18081}:8080"
+    depends_on:
+      auth-rpc:
+        condition: service_healthy
+      schema-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      etcd:
+        condition: service_started
+      nats:
+        condition: service_started
+    restart: unless-stopped
+
+  roomhost-1:
+    build:
+      context: .
+      dockerfile: deployments/Dockerfile
+      args:
+        <<: *build_args
+        SERVICE: roomhost
+    environment:
+      <<: *common_env
+      NODE_ID: roomhost-a
+      PUBLIC_ADDR: "${PRIMARY_HOST:-10.37.223.1}:9000"
+      NATS_URL: "nats://roomhost-a:${NATS_ROOMHOST_A_PASSWORD:-local-roomhost-a}@nats:4222"
+      DAVINCI_AI_THINK_DELAY_MIN_MS: 1500
+      DAVINCI_AI_THINK_DELAY_MAX_MS: 2500
+    stop_grace_period: 15s
+    depends_on:
+      schema-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      etcd:
+        condition: service_started
+      nats:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  redis-data:
+  postgres-data:
+  cloudbeaver-workspace:
+  etcd-data:
+  nats-data:

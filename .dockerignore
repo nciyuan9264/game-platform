@@ -1,0 +1,6 @@
+.bin/
+.logs/
+.git/
+game-platform-docs/
+node_modules/
+*.log

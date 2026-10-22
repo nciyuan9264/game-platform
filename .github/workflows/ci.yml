@@ -1,0 +1,112 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout game platform
+        uses: actions/checkout@v4
+        with:
+          path: game-platform
+
+      - name: Checkout pinned IDL
+        uses: actions/checkout@v4
+        with:
+          repository: nciyuan9264/pam-idl
+          ref: bfa32fb7b35dc37d382bf879a947fa5ad6d99419
+          path: pam-idl
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.24.4
+          cache-dependency-path: game-platform/go.sum
+
+      - name: Validate IDL
+        working-directory: pam-idl
+        run: |
+          node --test scripts/validator.test.js
+          node scripts/validate.js
+
+      - name: Verify generated internal RPC code
+        working-directory: game-platform
+        run: |
+          go install github.com/cloudwego/kitex/tool/cmd/kitex@v0.16.3
+          PAM_IDL_ROOT="$GITHUB_WORKSPACE/pam-idl" \
+            KITEX_BIN="$(go env GOPATH)/bin/kitex" \
+            ./scripts/generate-rpc.sh
+          git diff --exit-code -- kitex_gen
+
+      - name: Go quality gates
+        working-directory: game-platform
+        run: |
+          test -z "$(gofmt -l $(find . -name '*.go' -not -path './.git/*'))"
+          go vet ./...
+          go test ./...
+
+      - name: Build service binaries
+        working-directory: game-platform
+        run: |
+          services=(
+            platform-rpc
+            control-plane
+            gateway
+            roomhost
+            platform-api
+            migrate-schema
+            migrate-game-history
+            smoke-test
+          )
+          pids=()
+          for service in "${services[@]}"; do
+            go build -o "/tmp/${service}" "./cmd/${service}" &
+            pids+=("$!")
+          done
+          for pid in "${pids[@]}"; do
+            wait "$pid"
+          done
+
+      - name: Validate Compose configurations
+        working-directory: game-platform
+        env:
+          REDIS_PASSWORD: ci-redis
+          POSTGRES_ADMIN_USER: ci-admin
+          POSTGRES_ADMIN_PASSWORD: ci-admin-password
+          AUTH_DB_ADMIN_PASSWORD: ci-auth-admin
+          GAME_MIGRATOR_PASSWORD: ci-game-migrator
+          GAME_RUNTIME_PASSWORD: ci-game-runtime
+          AUTH_MIGRATOR_PASSWORD: ci-auth-migrator
+          AUTH_RUNTIME_PASSWORD: ci-auth-runtime
+          GAME_MIGRATOR_DSN: postgres://ci@db/game?sslmode=require
+          GAME_RUNTIME_DSN: postgres://ci@db/game?sslmode=require
+          AUTH_MIGRATOR_DSN: postgres://ci@db/auth?sslmode=require
+          AUTH_RUNTIME_DSN: postgres://ci@db/auth?sslmode=require
+          CORS_ALLOWED_ORIGINS: https://board.example.com
+          WS_ALLOWED_ORIGINS: https://board.example.com
+          NATS_CONTROL_PASSWORD: ci-control
+          NATS_MAINTENANCE_PASSWORD: ci-maintenance
+          NATS_GATEWAY_1_PASSWORD: ci-gateway-1
+          NATS_GATEWAY_2_PASSWORD: ci-gateway-2
+          NATS_ROOMHOST_1_PASSWORD: ci-roomhost-1
+          NATS_ROOMHOST_2_PASSWORD: ci-roomhost-2
+          NATS_GATEWAY_A_PASSWORD: ci-gateway-a
+          NATS_GATEWAY_B_PASSWORD: ci-gateway-b
+          NATS_ROOMHOST_A_PASSWORD: ci-roomhost-a
+          NATS_ROOMHOST_B_PASSWORD: ci-roomhost-b
+        run: |
+          docker compose -f docker-compose.yml config >/dev/null
+          docker compose -f docker-compose.distributed.primary.yml config >/dev/null
+          docker compose -f docker-compose.distributed.secondary.yml config >/dev/null
+          docker compose -f docker-compose.integration.infra.yml config >/dev/null
+          docker compose -f docker-compose.integration.stack-a.yml config >/dev/null
+          docker compose -f docker-compose.integration.stack-b.yml config >/dev/null
+          ./scripts/validate-prod-config.sh

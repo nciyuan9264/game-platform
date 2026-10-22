@@ -1,0 +1,585 @@
+services:
+  redis:
+    image: redis:7-alpine
+    command:
+      - sh
+      - -ec
+      - exec redis-server --appendonly yes --appendfsync everysec --maxmemory-policy noeviction --requirepass "$${REDIS_PASSWORD}"
+    environment:
+      REDIS_PASSWORD: "${REDIS_PASSWORD:-local-redis}"
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$${REDIS_PASSWORD}\" redis-cli ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: game
+      POSTGRES_PASSWORD: game
+      POSTGRES_DB: game_platform
+      AUTH_DB_ADMIN_PASSWORD: "${AUTH_DB_ADMIN_PASSWORD:-auth}"
+      GAME_MIGRATOR_PASSWORD: "${GAME_MIGRATOR_PASSWORD:-local-game-migrator}"
+      GAME_RUNTIME_PASSWORD: "${GAME_RUNTIME_PASSWORD:-local-game-runtime}"
+      AUTH_MIGRATOR_PASSWORD: "${AUTH_MIGRATOR_PASSWORD:-local-auth-migrator}"
+      AUTH_RUNTIME_PASSWORD: "${AUTH_RUNTIME_PASSWORD:-local-auth-runtime}"
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./deployments/postgres-init/001-create-databases-and-roles.sh:/docker-entrypoint-initdb.d/001-create-databases-and-roles.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    restart: unless-stopped
+
+  schema-migrate:
+    build:
+      context: .
+      dockerfile: deployments/Dockerfile
+      args:
+        SERVICE: migrate-schema
+        GOPROXY: https://goproxy.cn,direct
+    environment:
+      POSTGRES_DSN: postgres://game:game@postgres:5432/game_platform?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  auth-schema-migrate:
+    build:
+      context: ../auth/backend
+      dockerfile: Dockerfile
+      args:
+        SERVICE: migrate-schema
+    environment:
+      POSTGRES_DSN: postgres://auth:auth@postgres:5432/auth_center?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  cloudbeaver:
+    image: dbeaver/cloudbeaver:latest
+    environment:
+      CLOUDBEAVER_APP_SUPPORTS_CUSTOM_CONNECTIONS: "true"
+    ports:
+      - "127.0.0.1:18030:8978"
+    volumes:
+      - cloudbeaver-workspace:/opt/cloudbeaver/workspace
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  nats:
+    image: nats:2-alpine
+    command: ["-c", "/etc/nats/nats.conf"]
+    environment:
+      NATS_CONTROL_PASSWORD: "${NATS_CONTROL_PASSWORD:-local-control}"
+      NATS_MAINTENANCE_PASSWORD: "${NATS_MAINTENANCE_PASSWORD:-local-maintenance}"
+      NATS_GATEWAY_1_PASSWORD: "${NATS_GATEWAY_1_PASSWORD:-local-gateway-1}"
+      NATS_GATEWAY_2_PASSWORD: "${NATS_GATEWAY_2_PASSWORD:-local-gateway-2}"
+      NATS_ROOMHOST_1_PASSWORD: "${NATS_ROOMHOST_1_PASSWORD:-local-roomhost-1}"
+      NATS_ROOMHOST_2_PASSWORD: "${NATS_ROOMHOST_2_PASSWORD:-local-roomhost-2}"
+      NATS_GATEWAY_A_PASSWORD: "${NATS_GATEWAY_A_PASSWORD:-local-gateway-a}"
+      NATS_GATEWAY_B_PASSWORD: "${NATS_GATEWAY_B_PASSWORD:-local-gateway-b}"
+      NATS_ROOMHOST_A_PASSWORD: "${NATS_ROOMHOST_A_PASSWORD:-local-roomhost-a}"
+      NATS_ROOMHOST_B_PASSWORD: "${NATS_ROOMHOST_B_PASSWORD:-local-roomhost-b}"
+    ports:
+      - "127.0.0.1:4222:4222"
+      - "127.0.0.1:8222:8222"
+    volumes:
+      - nats-data:/data
+      - ./deployments/nats.conf:/etc/nats/nats.conf:ro
+    restart: unless-stopped
+
+  auth-rpc:
+    build:
+      context: ../auth/backend
+      dockerfile: Dockerfile
+      args:
+        SERVICE: auth-rpc
+    environment:
+      AUTH_RPC_ADDR: ":19090"
+      AUTH_RPC_PSM: pam.auth.rpc
+      PAM_ENV: local
+      PAM_SERVICE_REGISTRY_PREFIX: pam/services
+      ETCD_ENDPOINTS: ${ETCD_ENDPOINTS:-global-etcd:2379}
+      KITEX_IP_TO_REGISTRY: auth-rpc
+      KITEX_PORT_TO_REGISTRY: "19090"
+      POSTGRES_DSN: postgres://auth:auth@postgres:5432/auth_center?sslmode=disable
+      REDIS_ADDR: redis:6379
+      REDIS_PASSWORD: "${REDIS_PASSWORD:-local-redis}"
+      REDIS_DB: 2
+      AUTH_DEV_CODE_LOG: "${AUTH_DEV_CODE_LOG:-false}"
+      AUTH_DEV_CODE_RESPONSE: "${AUTH_DEV_CODE_RESPONSE:-false}"
+      JWT_PRIVATE_PATH: /run/secrets/jwt_private.pem
+      JWT_PUBLIC_PATH: /run/secrets/jwt_public.pem
+    volumes:
+      - ../auth/keys/jwt_private.pem:/run/secrets/jwt_private.pem:ro
+      - ../auth/keys/jwt_public.pem:/run/secrets/jwt_public.pem:ro
+    ports:
+      - "127.0.0.1:19090:19090"
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 19090"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    depends_on:
+      auth-schema-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    networks:
+      default:
+      global-network:
+        aliases:
+          - auth-rpc
+    restart: unless-stopped
+
+  control-plane:
+    build:
+      context: .
+      dockerfile: deployments/Dockerfile
+      args:
+        SERVICE: control-plane
+        GOPROXY: https://goproxy.cn,direct
+        HTTP_PROXY: http://sys-proxy-rd-relay.byted.org:8118
+        HTTPS_PROXY: http://sys-proxy-rd-relay.byted.org:8118
+        http_proxy: http://sys-proxy-rd-relay.byted.org:8118
+        https_proxy: http://sys-proxy-rd-relay.byted.org:8118
+    environment:
+      SERVER_ADDR: ":8080"
+      CONTROL_RPC_ADDR: ":18091"
+      CONTROL_RPC_PSM: game.platform.control
+      PAM_ENV: local
+      PAM_SERVICE_REGISTRY_PREFIX: pam/services
+      NODE_ID: control-plane-1
+      REDIS_ADDR: redis:6379
+      REDIS_PASSWORD: "${REDIS_PASSWORD:-local-redis}"
+      REDIS_DB: 0
+      POSTGRES_DSN: postgres://game:game@postgres:5432/game_platform?sslmode=disable
+      ETCD_ENDPOINTS: ${ETCD_ENDPOINTS:-global-etcd:2379}
+      KITEX_IP_TO_REGISTRY: control-plane
+      KITEX_PORT_TO_REGISTRY: "18091"
+      NATS_URL: "nats://control:${NATS_CONTROL_PASSWORD:-local-control}@nats:4222"
+      AUTH_RPC_ADDR: auth-rpc:19090
+    ports:
+      - "127.0.0.1:18080:8080"
+    depends_on:
+      auth-rpc:
+        condition: service_healthy
+      schema-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_started
+    networks:
+      default:
+      global-network:
+        aliases:
+          - control-plane
+    restart: unless-stopped
+
+  platform-rpc:
+    build:
+      context: .
+      dockerfile: deployments/Dockerfile
+      args:
+        SERVICE: platform-rpc
+        GOPROXY: https://goproxy.cn,direct
+        HTTP_PROXY: http://sys-proxy-rd-relay.byted.org:8118
+        HTTPS_PROXY: http://sys-proxy-rd-relay.byted.org:8118
+        http_proxy: http://sys-proxy-rd-relay.byted.org:8118
+        https_proxy: http://sys-proxy-rd-relay.byted.org:8118
+    environment:
+      GAME_PLATFORM_RPC_ADDR: ":18092"
+      GAME_PLATFORM_HEALTH_ADDR: ":18093"
+      GAME_PLATFORM_RPC_PSM: game.platform.rpc
+      PAM_ENV: local
+      PAM_SERVICE_REGISTRY_PREFIX: pam/services
+      KITEX_IP_TO_REGISTRY: platform-rpc
+      KITEX_PORT_TO_REGISTRY: "18092"
+      REDIS_ADDR: redis:6379
+      REDIS_PASSWORD: "${REDIS_PASSWORD:-local-redis}"
+      REDIS_DB: 0
+      POSTGRES_DSN: postgres://game:game@postgres:5432/game_platform?sslmode=disable
+      CONTROL_RPC_ADDR: control-plane:18091
+    ports:
+      - "127.0.0.1:18092:18092"
+      - "127.0.0.1:18093:18093"
+    depends_on:
+      schema-migrate:
+        condition: service_completed_successfully
+      control-plane:
+        condition: service_started
+      redis:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    networks:
+      default:
+      global-network:
+        aliases:
+          - game-platform-rpc
+    restart: unless-stopped
+
+  platform-api-1:
+    build:
+      context: .
+      dockerfile: deployments/Dockerfile
+      args:
+        SERVICE: platform-api
+        GOPROXY: https://goproxy.cn,direct
+        HTTP_PROXY: http://sys-proxy-rd-relay.byted.org:8118
+        HTTPS_PROXY: http://sys-proxy-rd-relay.byted.org:8118
+        http_proxy: http://sys-proxy-rd-relay.byted.org:8118
+        https_proxy: http://sys-proxy-rd-relay.byted.org:8118
+    environment:
+      SERVER_ADDR: ":8080"
+      REDIS_ADDR: redis:6379
+      REDIS_PASSWORD: "${REDIS_PASSWORD:-local-redis}"
+      REDIS_DB: 0
+      POSTGRES_DSN: postgres://game:game@postgres:5432/game_platform?sslmode=disable
+      AUTH_RPC_ADDR: auth-rpc:19090
+      CONTROL_RPC_ADDR: control-plane:18091
+      COOKIE_DOMAIN: ""
+      COOKIE_SECURE: "false"
+      AUTH_DEV_CODE_RESPONSE: "${AUTH_DEV_CODE_RESPONSE:-false}"
+      CORS_ALLOWED_ORIGINS: "http://localhost:18010,http://localhost:18020,http://localhost:18031,http://localhost:18032"
+      ACQUIRE_LOADTEST_ENABLED: "${ACQUIRE_LOADTEST_ENABLED:-false}"
+      ACQUIRE_LOADTEST_TOKEN: "${ACQUIRE_LOADTEST_TOKEN:-}"
+    depends_on:
+      auth-rpc:
+        condition: service_healthy
+      schema-migrate:
+        condition: service_completed_successfully
+      control-plane:
+        condition: service_started
+      redis:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  platform-api-2:
+    build:
+      context: .
+      dockerfile: deployments/Dockerfile
+      args:
+        SERVICE: platform-api
+        GOPROXY: https://goproxy.cn,direct
+        HTTP_PROXY: http://sys-proxy-rd-relay.byted.org:8118
+        HTTPS_PROXY: http://sys-proxy-rd-relay.byted.org:8118
+        http_proxy: http://sys-proxy-rd-relay.byted.org:8118
+        https_proxy: http://sys-proxy-rd-relay.byted.org:8118
+    environment:
+      SERVER_ADDR: ":8080"
+      REDIS_ADDR: redis:6379
+      REDIS_PASSWORD: "${REDIS_PASSWORD:-local-redis}"
+      REDIS_DB: 0
+      POSTGRES_DSN: postgres://game:game@postgres:5432/game_platform?sslmode=disable
+      AUTH_RPC_ADDR: auth-rpc:19090
+      CONTROL_RPC_ADDR: control-plane:18091
+      COOKIE_DOMAIN: ""
+      COOKIE_SECURE: "false"
+      AUTH_DEV_CODE_RESPONSE: "${AUTH_DEV_CODE_RESPONSE:-false}"
+      CORS_ALLOWED_ORIGINS: "http://localhost:18010,http://localhost:18020,http://localhost:18031,http://localhost:18032"
+      ACQUIRE_LOADTEST_ENABLED: "${ACQUIRE_LOADTEST_ENABLED:-false}"
+      ACQUIRE_LOADTEST_TOKEN: "${ACQUIRE_LOADTEST_TOKEN:-}"
+    depends_on:
+      auth-rpc:
+        condition: service_healthy
+      schema-migrate:
+        condition: service_completed_successfully
+      control-plane:
+        condition: service_started
+      redis:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  platform-api-lb:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./deployments/nginx-platform-api.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "127.0.0.1:8083:8080"
+    networks:
+      default:
+        aliases:
+          - platform-api
+    depends_on:
+      - platform-api-1
+      - platform-api-2
+    restart: unless-stopped
+
+  gateway-1:
+    build:
+      context: .
+      dockerfile: deployments/Dockerfile
+      args:
+        SERVICE: gateway
+        GOPROXY: https://goproxy.cn,direct
+        HTTP_PROXY: http://sys-proxy-rd-relay.byted.org:8118
+        HTTPS_PROXY: http://sys-proxy-rd-relay.byted.org:8118
+        http_proxy: http://sys-proxy-rd-relay.byted.org:8118
+        https_proxy: http://sys-proxy-rd-relay.byted.org:8118
+    environment:
+      SERVER_ADDR: ":8080"
+      NODE_ID: gateway-1
+      PUBLIC_ADDR: gateway-1:8080
+      REDIS_ADDR: redis:6379
+      REDIS_PASSWORD: "${REDIS_PASSWORD:-local-redis}"
+      POSTGRES_DSN: postgres://game:game@postgres:5432/game_platform?sslmode=disable
+      ETCD_ENDPOINTS: ${ETCD_ENDPOINTS:-global-etcd:2379}
+      NATS_URL: "nats://gateway-1:${NATS_GATEWAY_1_PASSWORD:-local-gateway-1}@nats:4222"
+      AUTH_RPC_ADDR: auth-rpc:19090
+      WS_ALLOWED_ORIGINS: "http://localhost:18010,http://localhost:18032"
+    ports:
+      - "127.0.0.1:8081:8080"
+    networks:
+      default:
+        aliases:
+          - gateway
+      global-network:
+    depends_on:
+      auth-rpc:
+        condition: service_healthy
+      schema-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_started
+    restart: unless-stopped
+
+  gateway-2:
+    build:
+      context: .
+      dockerfile: deployments/Dockerfile
+      args:
+        SERVICE: gateway
+        GOPROXY: https://goproxy.cn,direct
+        HTTP_PROXY: http://sys-proxy-rd-relay.byted.org:8118
+        HTTPS_PROXY: http://sys-proxy-rd-relay.byted.org:8118
+        http_proxy: http://sys-proxy-rd-relay.byted.org:8118
+        https_proxy: http://sys-proxy-rd-relay.byted.org:8118
+    environment:
+      SERVER_ADDR: ":8080"
+      NODE_ID: gateway-2
+      PUBLIC_ADDR: gateway-2:8080
+      REDIS_ADDR: redis:6379
+      REDIS_PASSWORD: "${REDIS_PASSWORD:-local-redis}"
+      POSTGRES_DSN: postgres://game:game@postgres:5432/game_platform?sslmode=disable
+      ETCD_ENDPOINTS: ${ETCD_ENDPOINTS:-global-etcd:2379}
+      NATS_URL: "nats://gateway-2:${NATS_GATEWAY_2_PASSWORD:-local-gateway-2}@nats:4222"
+      AUTH_RPC_ADDR: auth-rpc:19090
+      WS_ALLOWED_ORIGINS: "http://localhost:18010,http://localhost:18032"
+    ports:
+      - "127.0.0.1:8082:8080"
+    depends_on:
+      auth-rpc:
+        condition: service_healthy
+      schema-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_started
+    networks:
+      - default
+      - global-network
+    restart: unless-stopped
+
+  gateway-lb:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./deployments/nginx-gateway.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "127.0.0.1:18000:8080"
+    depends_on:
+      - gateway-1
+      - gateway-2
+    networks:
+      default:
+      global-network:
+        aliases:
+          - game-platform-gateway
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: deployments/frontend.Dockerfile
+    ports:
+      - "127.0.0.1:18010:8080"
+    depends_on:
+      - auth-rpc
+      - platform-api-lb
+      - control-plane
+      - gateway-1
+      - gateway-2
+    restart: unless-stopped
+
+  admin-console:
+    build:
+      context: ../game-platform-admin
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:18020:8080"
+    depends_on:
+      - platform-api-lb
+      - control-plane
+    restart: unless-stopped
+
+  auth-frontend:
+    build:
+      context: ../game-platform-auth-frontend
+      dockerfile: Dockerfile
+      args:
+        NPM_REGISTRY: https://bnpm.byted.org
+        VITE_DEFAULT_REDIRECT: http://localhost:18032/game/davinci
+    ports:
+      - "127.0.0.1:18031:8080"
+    depends_on:
+      - platform-api-lb
+    restart: unless-stopped
+
+  game-frontend:
+    build:
+      context: ../game-platform-game-frontend
+      dockerfile: Dockerfile
+      args:
+        NPM_REGISTRY: https://bnpm.byted.org
+        VITE_AUTH_ORIGIN: http://localhost:18031
+    ports:
+      - "127.0.0.1:18032:8080"
+    depends_on:
+      - platform-api-lb
+      - control-plane
+      - gateway-lb
+    restart: unless-stopped
+
+  roomhost-1:
+    build:
+      context: .
+      dockerfile: deployments/Dockerfile
+      args:
+        SERVICE: roomhost
+        GOPROXY: https://goproxy.cn,direct
+        HTTP_PROXY: http://sys-proxy-rd-relay.byted.org:8118
+        HTTPS_PROXY: http://sys-proxy-rd-relay.byted.org:8118
+        http_proxy: http://sys-proxy-rd-relay.byted.org:8118
+        https_proxy: http://sys-proxy-rd-relay.byted.org:8118
+    environment:
+      NODE_ID: roomhost-1
+      PUBLIC_ADDR: roomhost-1:9000
+      REDIS_ADDR: redis:6379
+      REDIS_PASSWORD: "${REDIS_PASSWORD:-local-redis}"
+      POSTGRES_DSN: postgres://game:game@postgres:5432/game_platform?sslmode=disable
+      ETCD_ENDPOINTS: ${ETCD_ENDPOINTS:-global-etcd:2379}
+      NATS_URL: "nats://roomhost-1:${NATS_ROOMHOST_1_PASSWORD:-local-roomhost-1}@nats:4222"
+    stop_grace_period: 15s
+    depends_on:
+      schema-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_started
+    networks:
+      - default
+      - global-network
+    restart: unless-stopped
+
+  roomhost-2:
+    build:
+      context: .
+      dockerfile: deployments/Dockerfile
+      args:
+        SERVICE: roomhost
+        GOPROXY: https://goproxy.cn,direct
+        HTTP_PROXY: http://sys-proxy-rd-relay.byted.org:8118
+        HTTPS_PROXY: http://sys-proxy-rd-relay.byted.org:8118
+        http_proxy: http://sys-proxy-rd-relay.byted.org:8118
+        https_proxy: http://sys-proxy-rd-relay.byted.org:8118
+    environment:
+      NODE_ID: roomhost-2
+      PUBLIC_ADDR: roomhost-2:9000
+      REDIS_ADDR: redis:6379
+      REDIS_PASSWORD: "${REDIS_PASSWORD:-local-redis}"
+      POSTGRES_DSN: postgres://game:game@postgres:5432/game_platform?sslmode=disable
+      ETCD_ENDPOINTS: ${ETCD_ENDPOINTS:-global-etcd:2379}
+      NATS_URL: "nats://roomhost-2:${NATS_ROOMHOST_2_PASSWORD:-local-roomhost-2}@nats:4222"
+    stop_grace_period: 15s
+    depends_on:
+      schema-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_started
+    networks:
+      - default
+      - global-network
+    restart: unless-stopped
+
+  smoke-test:
+    profiles: ["test"]
+    build:
+      context: .
+      dockerfile: deployments/Dockerfile
+      args:
+        SERVICE: smoke-test
+        GOPROXY: https://goproxy.cn,direct
+        HTTP_PROXY: http://sys-proxy-rd-relay.byted.org:8118
+        HTTPS_PROXY: http://sys-proxy-rd-relay.byted.org:8118
+        http_proxy: http://sys-proxy-rd-relay.byted.org:8118
+        https_proxy: http://sys-proxy-rd-relay.byted.org:8118
+    environment:
+      AUTH_URL: http://platform-api:8080
+      CONTROL_URL: http://platform-api:8080
+      GW_LB_WS: ws://gateway-lb:8080/ws
+    depends_on:
+      - auth-rpc
+      - platform-api-lb
+      - control-plane
+      - gateway-lb
+      - gateway-1
+      - gateway-2
+      - roomhost-1
+      - roomhost-2
+
+networks:
+  global-network:
+    external: true
+
+volumes:
+  redis-data:
+  postgres-data:
+  cloudbeaver-workspace:
+  nats-data:

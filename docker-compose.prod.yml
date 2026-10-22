@@ -1,0 +1,128 @@
+services:
+  redis:
+    environment:
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"
+
+  postgres:
+    environment:
+      POSTGRES_USER: "${POSTGRES_ADMIN_USER:?POSTGRES_ADMIN_USER is required}"
+      POSTGRES_PASSWORD: "${POSTGRES_ADMIN_PASSWORD:?POSTGRES_ADMIN_PASSWORD is required}"
+      POSTGRES_DB: game_platform
+      AUTH_DB_ADMIN_PASSWORD: "${AUTH_DB_ADMIN_PASSWORD:?AUTH_DB_ADMIN_PASSWORD is required}"
+      GAME_MIGRATOR_PASSWORD: "${GAME_MIGRATOR_PASSWORD:?GAME_MIGRATOR_PASSWORD is required}"
+      GAME_RUNTIME_PASSWORD: "${GAME_RUNTIME_PASSWORD:?GAME_RUNTIME_PASSWORD is required}"
+      AUTH_MIGRATOR_PASSWORD: "${AUTH_MIGRATOR_PASSWORD:?AUTH_MIGRATOR_PASSWORD is required}"
+      AUTH_RUNTIME_PASSWORD: "${AUTH_RUNTIME_PASSWORD:?AUTH_RUNTIME_PASSWORD is required}"
+
+  schema-migrate:
+    image: "${GAME_PLATFORM_IMAGE_REGISTRY:-sgccr.ccs.tencentyun.com/tengxuntcr}/game-platform-migrate-schema:${GAME_PLATFORM_IMAGE_TAG:-latest}"
+    environment:
+      POSTGRES_DSN: "${GAME_MIGRATOR_DSN:?GAME_MIGRATOR_DSN is required}"
+
+  auth-schema-migrate:
+    environment:
+      POSTGRES_DSN: "${AUTH_MIGRATOR_DSN:?AUTH_MIGRATOR_DSN is required}"
+
+  cloudbeaver:
+    profiles: [ops]
+
+  nats:
+    environment:
+      NATS_CONTROL_PASSWORD: "${NATS_CONTROL_PASSWORD:?NATS_CONTROL_PASSWORD is required}"
+      NATS_MAINTENANCE_PASSWORD: "${NATS_MAINTENANCE_PASSWORD:?NATS_MAINTENANCE_PASSWORD is required}"
+      NATS_GATEWAY_1_PASSWORD: "${NATS_GATEWAY_1_PASSWORD:?NATS_GATEWAY_1_PASSWORD is required}"
+      NATS_GATEWAY_2_PASSWORD: "${NATS_GATEWAY_2_PASSWORD:?NATS_GATEWAY_2_PASSWORD is required}"
+      NATS_ROOMHOST_1_PASSWORD: "${NATS_ROOMHOST_1_PASSWORD:?NATS_ROOMHOST_1_PASSWORD is required}"
+      NATS_ROOMHOST_2_PASSWORD: "${NATS_ROOMHOST_2_PASSWORD:?NATS_ROOMHOST_2_PASSWORD is required}"
+      NATS_GATEWAY_A_PASSWORD: "${NATS_GATEWAY_A_PASSWORD:?NATS_GATEWAY_A_PASSWORD is required}"
+      NATS_GATEWAY_B_PASSWORD: "${NATS_GATEWAY_B_PASSWORD:?NATS_GATEWAY_B_PASSWORD is required}"
+      NATS_ROOMHOST_A_PASSWORD: "${NATS_ROOMHOST_A_PASSWORD:?NATS_ROOMHOST_A_PASSWORD is required}"
+      NATS_ROOMHOST_B_PASSWORD: "${NATS_ROOMHOST_B_PASSWORD:?NATS_ROOMHOST_B_PASSWORD is required}"
+
+  auth-rpc:
+    environment:
+      PAM_ENV: prod
+      AUTH_RPC_PSM: pam.auth.rpc
+      PAM_SERVICE_REGISTRY_PREFIX: pam/services
+      POSTGRES_DSN: "${AUTH_RUNTIME_DSN:?AUTH_RUNTIME_DSN is required}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"
+      AUTH_DEV_CODE_LOG: "false"
+      AUTH_DEV_CODE_RESPONSE: "false"
+
+  control-plane:
+    image: "${GAME_PLATFORM_IMAGE_REGISTRY:-sgccr.ccs.tencentyun.com/tengxuntcr}/game-platform-control-plane:${GAME_PLATFORM_IMAGE_TAG:-latest}"
+    environment:
+      PAM_ENV: prod
+      CONTROL_RPC_PSM: game.platform.control
+      PAM_SERVICE_REGISTRY_PREFIX: pam/services
+      POSTGRES_DSN: "${GAME_RUNTIME_DSN:?GAME_RUNTIME_DSN is required}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"
+
+  platform-rpc:
+    image: "${GAME_PLATFORM_IMAGE_REGISTRY:-sgccr.ccs.tencentyun.com/tengxuntcr}/game-platform-platform-rpc:${GAME_PLATFORM_IMAGE_TAG:-latest}"
+    environment:
+      PAM_ENV: prod
+      GAME_PLATFORM_RPC_PSM: game.platform.rpc
+      PAM_SERVICE_REGISTRY_PREFIX: pam/services
+      POSTGRES_DSN: "${GAME_RUNTIME_DSN:?GAME_RUNTIME_DSN is required}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "${OTEL_EXPORTER_OTLP_ENDPOINT:-}"
+      OTEL_EXPORTER_OTLP_INSECURE: "${OTEL_EXPORTER_OTLP_INSECURE:-false}"
+      OTEL_TRACES_SAMPLER: "${OTEL_TRACES_SAMPLER:-parentbased_traceidratio}"
+      OTEL_TRACES_SAMPLER_ARG: "${OTEL_TRACES_SAMPLER_ARG:-0.1}"
+
+  platform-api-1:
+    image: "${GAME_PLATFORM_IMAGE_REGISTRY:-sgccr.ccs.tencentyun.com/tengxuntcr}/game-platform-platform-api:${GAME_PLATFORM_IMAGE_TAG:-latest}"
+    environment:
+      PAM_ENV: prod
+      PAM_SERVICE_REGISTRY_PREFIX: pam/services
+      POSTGRES_DSN: "${GAME_RUNTIME_DSN:?GAME_RUNTIME_DSN is required}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"
+      COOKIE_SECURE: "true"
+      AUTH_DEV_CODE_RESPONSE: "false"
+      ACQUIRE_LOADTEST_ENABLED: "false"
+      ACQUIRE_LOADTEST_TOKEN: ""
+      CORS_ALLOWED_ORIGINS: "${CORS_ALLOWED_ORIGINS:?CORS_ALLOWED_ORIGINS is required}"
+
+  platform-api-2:
+    image: "${GAME_PLATFORM_IMAGE_REGISTRY:-sgccr.ccs.tencentyun.com/tengxuntcr}/game-platform-platform-api:${GAME_PLATFORM_IMAGE_TAG:-latest}"
+    environment:
+      PAM_ENV: prod
+      PAM_SERVICE_REGISTRY_PREFIX: pam/services
+      POSTGRES_DSN: "${GAME_RUNTIME_DSN:?GAME_RUNTIME_DSN is required}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"
+      COOKIE_SECURE: "true"
+      AUTH_DEV_CODE_RESPONSE: "false"
+      ACQUIRE_LOADTEST_ENABLED: "false"
+      ACQUIRE_LOADTEST_TOKEN: ""
+      CORS_ALLOWED_ORIGINS: "${CORS_ALLOWED_ORIGINS:?CORS_ALLOWED_ORIGINS is required}"
+
+  gateway-1:
+    image: "${GAME_PLATFORM_IMAGE_REGISTRY:-sgccr.ccs.tencentyun.com/tengxuntcr}/game-platform-gateway:${GAME_PLATFORM_IMAGE_TAG:-latest}"
+    environment:
+      PAM_ENV: prod
+      PAM_SERVICE_REGISTRY_PREFIX: pam/services
+      POSTGRES_DSN: "${GAME_RUNTIME_DSN:?GAME_RUNTIME_DSN is required}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"
+      WS_ALLOWED_ORIGINS: "${WS_ALLOWED_ORIGINS:?WS_ALLOWED_ORIGINS is required}"
+
+  gateway-2:
+    image: "${GAME_PLATFORM_IMAGE_REGISTRY:-sgccr.ccs.tencentyun.com/tengxuntcr}/game-platform-gateway:${GAME_PLATFORM_IMAGE_TAG:-latest}"
+    environment:
+      PAM_ENV: prod
+      PAM_SERVICE_REGISTRY_PREFIX: pam/services
+      POSTGRES_DSN: "${GAME_RUNTIME_DSN:?GAME_RUNTIME_DSN is required}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"
+      WS_ALLOWED_ORIGINS: "${WS_ALLOWED_ORIGINS:?WS_ALLOWED_ORIGINS is required}"
+
+  roomhost-1:
+    image: "${GAME_PLATFORM_IMAGE_REGISTRY:-sgccr.ccs.tencentyun.com/tengxuntcr}/game-platform-roomhost:${GAME_PLATFORM_IMAGE_TAG:-latest}"
+    environment:
+      POSTGRES_DSN: "${GAME_RUNTIME_DSN:?GAME_RUNTIME_DSN is required}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"
+
+  roomhost-2:
+    image: "${GAME_PLATFORM_IMAGE_REGISTRY:-sgccr.ccs.tencentyun.com/tengxuntcr}/game-platform-roomhost:${GAME_PLATFORM_IMAGE_TAG:-latest}"
+    environment:
+      POSTGRES_DSN: "${GAME_RUNTIME_DSN:?GAME_RUNTIME_DSN is required}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"
