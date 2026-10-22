@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/nciyuan9264/game-platform-server/internal/contracts"
+	"github.com/nciyuan9264/game-platform/internal/contracts"
 	"github.com/redis/go-redis/v9"
 )
 

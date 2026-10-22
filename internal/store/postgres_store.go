@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/lib/pq"
-	"github.com/nciyuan9264/game-platform-server/internal/contracts"
+	"github.com/nciyuan9264/game-platform/internal/contracts"
 )
 
 type PostgresStore struct {

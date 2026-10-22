@@ -3,7 +3,7 @@ package gamelog
 import (
 	"context"
 
-	"github.com/nciyuan9264/game-platform-server/internal/game"
+	"github.com/nciyuan9264/game-platform/internal/game"
 )
 
 type contextKey struct{}

@@ -3,7 +3,7 @@ package authservice
 
 import (
 	server "github.com/cloudwego/kitex/server"
-	v1 "github.com/nciyuan9264/game-platform-server/kitex_gen/pam/auth/v1"
+	v1 "github.com/nciyuan9264/game-platform/kitex_gen/pam/auth/v1"
 )
 
 // NewServer creates a server.Server with the given handler and options.

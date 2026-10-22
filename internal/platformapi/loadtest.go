@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/nciyuan9264/game-platform-server/internal/contracts"
+	"github.com/nciyuan9264/game-platform/internal/contracts"
 )
 
 const maxLoadtestRooms = 500

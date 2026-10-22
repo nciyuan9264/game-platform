@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nciyuan9264/game-platform-server/internal/authclient"
-	"github.com/nciyuan9264/game-platform-server/internal/contracts"
-	"github.com/nciyuan9264/game-platform-server/internal/rpcmeta"
+	"github.com/nciyuan9264/game-platform/internal/authclient"
+	"github.com/nciyuan9264/game-platform/internal/contracts"
+	"github.com/nciyuan9264/game-platform/internal/rpcmeta"
 )
 
 const (

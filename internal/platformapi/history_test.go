@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/nciyuan9264/game-platform-server/internal/acquire/domain/domain"
-	"github.com/nciyuan9264/game-platform-server/internal/history"
+	"github.com/nciyuan9264/game-platform/internal/acquire/domain/domain"
+	"github.com/nciyuan9264/game-platform/internal/history"
 )
 
 func TestCompletedReplayIncludesAllPlayersPrivateState(t *testing.T) {

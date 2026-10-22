@@ -1,8 +1,8 @@
 package game
 
 import (
-	"github.com/nciyuan9264/game-platform-server/internal/acquire/domain/domain"
-	"github.com/nciyuan9264/game-platform-server/internal/acquire/logger"
+	"github.com/nciyuan9264/game-platform/internal/acquire/domain/domain"
+	"github.com/nciyuan9264/game-platform/internal/acquire/logger"
 )
 
 func CalculateTotalValue(playerStocks map[string]int, companies map[string]*domain.CompanyState) int {

@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/nciyuan9264/game-platform-server/internal/contracts"
-	"github.com/nciyuan9264/game-platform-server/internal/observability"
-	platformcontrol "github.com/nciyuan9264/game-platform-server/kitex_gen/pam/platform/control/v1"
+	"github.com/nciyuan9264/game-platform/internal/contracts"
+	"github.com/nciyuan9264/game-platform/internal/observability"
+	platformcontrol "github.com/nciyuan9264/game-platform/kitex_gen/pam/platform/control/v1"
 )
 
 var beijing = time.FixedZone("CST", 8*60*60)

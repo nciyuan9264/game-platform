@@ -5,12 +5,12 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/nciyuan9264/game-platform-server/internal/authapi"
-	authkitex "github.com/nciyuan9264/game-platform-server/internal/authclient/kitex"
-	"github.com/nciyuan9264/game-platform-server/internal/controlclient"
-	"github.com/nciyuan9264/game-platform-server/internal/observability"
-	"github.com/nciyuan9264/game-platform-server/internal/platformapi"
-	"github.com/nciyuan9264/game-platform-server/internal/store"
+	"github.com/nciyuan9264/game-platform/internal/authapi"
+	authkitex "github.com/nciyuan9264/game-platform/internal/authclient/kitex"
+	"github.com/nciyuan9264/game-platform/internal/controlclient"
+	"github.com/nciyuan9264/game-platform/internal/observability"
+	"github.com/nciyuan9264/game-platform/internal/platformapi"
+	"github.com/nciyuan9264/game-platform/internal/store"
 )
 
 func main() {

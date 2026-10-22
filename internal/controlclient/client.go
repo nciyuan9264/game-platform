@@ -7,11 +7,11 @@ import (
 	kitexclient "github.com/cloudwego/kitex/client"
 	"github.com/cloudwego/kitex/pkg/transmeta"
 	kitextransport "github.com/cloudwego/kitex/transport"
-	"github.com/nciyuan9264/game-platform-server/internal/contracts"
-	"github.com/nciyuan9264/game-platform-server/internal/rpcmeta"
-	"github.com/nciyuan9264/game-platform-server/internal/servicediscovery"
-	platformcontrol "github.com/nciyuan9264/game-platform-server/kitex_gen/pam/platform/control/v1"
-	platformcontrolservice "github.com/nciyuan9264/game-platform-server/kitex_gen/pam/platform/control/v1/platformcontrolservice"
+	"github.com/nciyuan9264/game-platform/internal/contracts"
+	"github.com/nciyuan9264/game-platform/internal/rpcmeta"
+	"github.com/nciyuan9264/game-platform/internal/servicediscovery"
+	platformcontrol "github.com/nciyuan9264/game-platform/kitex_gen/pam/platform/control/v1"
+	platformcontrolservice "github.com/nciyuan9264/game-platform/kitex_gen/pam/platform/control/v1/platformcontrolservice"
 )
 
 type Client struct {

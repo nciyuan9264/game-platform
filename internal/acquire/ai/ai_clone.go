@@ -1,8 +1,8 @@
 package roompkg
 
 import (
-	"github.com/nciyuan9264/game-platform-server/internal/acquire/domain/domain"
-	"github.com/nciyuan9264/game-platform-server/internal/acquire/roomcore"
+	"github.com/nciyuan9264/game-platform/internal/acquire/domain/domain"
+	"github.com/nciyuan9264/game-platform/internal/acquire/roomcore"
 )
 
 // cloneRoomForAISimulation creates an isolated in-memory room for AI search.

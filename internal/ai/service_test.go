@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/nciyuan9264/game-platform-server/internal/davinci"
-	"github.com/nciyuan9264/game-platform-server/internal/game"
+	"github.com/nciyuan9264/game-platform/internal/davinci"
+	"github.com/nciyuan9264/game-platform/internal/game"
 )
 
 func TestDecideGuessDoesNotUseHiddenCardNumber(t *testing.T) {

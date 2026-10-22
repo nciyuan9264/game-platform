@@ -6,11 +6,11 @@ import (
 	"log"
 	"sort"
 
-	"github.com/nciyuan9264/game-platform-server/internal/acquire/arrayutil"
-	"github.com/nciyuan9264/game-platform-server/internal/acquire/domain/data"
-	"github.com/nciyuan9264/game-platform-server/internal/acquire/domain/domain"
-	"github.com/nciyuan9264/game-platform-server/internal/acquire/logger"
-	"github.com/nciyuan9264/game-platform-server/internal/acquire/utils"
+	"github.com/nciyuan9264/game-platform/internal/acquire/arrayutil"
+	"github.com/nciyuan9264/game-platform/internal/acquire/domain/data"
+	"github.com/nciyuan9264/game-platform/internal/acquire/domain/domain"
+	"github.com/nciyuan9264/game-platform/internal/acquire/logger"
+	"github.com/nciyuan9264/game-platform/internal/acquire/utils"
 )
 
 // PlaceTile 用于处理将棋子放置到棋盘上：修改 tile 的 belong 字段并更新 Redis，同时从玩家手牌中移除该 tile。

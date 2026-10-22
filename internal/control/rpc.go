@@ -7,11 +7,11 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/nciyuan9264/game-platform-server/internal/authclient"
-	"github.com/nciyuan9264/game-platform-server/internal/contracts"
-	"github.com/nciyuan9264/game-platform-server/internal/rpcmeta"
-	"github.com/nciyuan9264/game-platform-server/internal/store"
-	platformcontrol "github.com/nciyuan9264/game-platform-server/kitex_gen/pam/platform/control/v1"
+	"github.com/nciyuan9264/game-platform/internal/authclient"
+	"github.com/nciyuan9264/game-platform/internal/contracts"
+	"github.com/nciyuan9264/game-platform/internal/rpcmeta"
+	"github.com/nciyuan9264/game-platform/internal/store"
+	platformcontrol "github.com/nciyuan9264/game-platform/kitex_gen/pam/platform/control/v1"
 )
 
 type RPCHandler struct {

@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nciyuan9264/game-platform-server/internal/acquire/domain/data"
-	"github.com/nciyuan9264/game-platform-server/internal/contracts"
-	"github.com/nciyuan9264/game-platform-server/internal/game"
+	"github.com/nciyuan9264/game-platform/internal/acquire/domain/data"
+	"github.com/nciyuan9264/game-platform/internal/contracts"
+	"github.com/nciyuan9264/game-platform/internal/game"
 )
 
 func TestAcquireRandomTileReplayAcrossSnapshotBoundaries(t *testing.T) {

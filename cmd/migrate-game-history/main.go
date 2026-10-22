@@ -8,8 +8,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/nciyuan9264/game-platform-server/internal/migration"
-	"github.com/nciyuan9264/game-platform-server/internal/store"
+	"github.com/nciyuan9264/game-platform/internal/migration"
+	"github.com/nciyuan9264/game-platform/internal/store"
 )
 
 func main() {

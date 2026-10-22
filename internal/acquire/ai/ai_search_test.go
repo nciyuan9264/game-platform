@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nciyuan9264/game-platform-server/internal/acquire/domain/domain"
+	"github.com/nciyuan9264/game-platform/internal/acquire/domain/domain"
 	"golang.org/x/exp/rand"
 )
 

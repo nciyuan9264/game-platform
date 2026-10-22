@@ -6,9 +6,9 @@ import (
 	"errors"
 	"sort"
 
-	"github.com/nciyuan9264/game-platform-server/internal/game"
-	"github.com/nciyuan9264/game-platform-server/internal/splendor/domain"
-	"github.com/nciyuan9264/game-platform-server/internal/splendor/rules"
+	"github.com/nciyuan9264/game-platform/internal/game"
+	"github.com/nciyuan9264/game-platform/internal/splendor/domain"
+	"github.com/nciyuan9264/game-platform/internal/splendor/rules"
 )
 
 func (p *Plugin) IsRecordableCommand(commandType string) bool {

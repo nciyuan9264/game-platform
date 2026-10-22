@@ -1,9 +1,9 @@
 package game
 
 import (
-	"github.com/nciyuan9264/game-platform-server/internal/acquire/domain/domain"
-	"github.com/nciyuan9264/game-platform-server/internal/acquire/logger"
-	"github.com/nciyuan9264/game-platform-server/internal/acquire/utils"
+	"github.com/nciyuan9264/game-platform/internal/acquire/domain/domain"
+	"github.com/nciyuan9264/game-platform/internal/acquire/logger"
+	"github.com/nciyuan9264/game-platform/internal/acquire/utils"
 )
 
 // RecomputeDerivedState 基于当前 r.State 重新计算公司股价/库存、终局判定、各玩家结算。

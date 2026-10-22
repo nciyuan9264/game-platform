@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/nciyuan9264/game-platform-server/internal/contracts"
+	"github.com/nciyuan9264/game-platform/internal/contracts"
 )
 
 type testEngine struct {

@@ -1,7 +1,7 @@
 package catalog
 
 import (
-	"github.com/nciyuan9264/game-platform-server/internal/splendor/entities"
+	"github.com/nciyuan9264/game-platform/internal/splendor/entities"
 )
 
 var SplendorCards = map[int][]entities.NormalCard{

@@ -8,12 +8,12 @@ import (
 	kitexclient "github.com/cloudwego/kitex/client"
 	"github.com/cloudwego/kitex/pkg/transmeta"
 	kitextransport "github.com/cloudwego/kitex/transport"
-	"github.com/nciyuan9264/game-platform-server/internal/authclient"
-	"github.com/nciyuan9264/game-platform-server/internal/contracts"
-	"github.com/nciyuan9264/game-platform-server/internal/rpcmeta"
-	"github.com/nciyuan9264/game-platform-server/internal/servicediscovery"
-	auth "github.com/nciyuan9264/game-platform-server/kitex_gen/pam/auth/v1"
-	authservice "github.com/nciyuan9264/game-platform-server/kitex_gen/pam/auth/v1/authservice"
+	"github.com/nciyuan9264/game-platform/internal/authclient"
+	"github.com/nciyuan9264/game-platform/internal/contracts"
+	"github.com/nciyuan9264/game-platform/internal/rpcmeta"
+	"github.com/nciyuan9264/game-platform/internal/servicediscovery"
+	auth "github.com/nciyuan9264/game-platform/kitex_gen/pam/auth/v1"
+	authservice "github.com/nciyuan9264/game-platform/kitex_gen/pam/auth/v1/authservice"
 	"github.com/nciyuan9264/pam-protocol/httpmeta"
 )
 

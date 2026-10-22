@@ -6,7 +6,7 @@ import (
 	"context"
 	client "github.com/cloudwego/kitex/client"
 	callopt "github.com/cloudwego/kitex/client/callopt"
-	v1 "github.com/nciyuan9264/game-platform-server/kitex_gen/pam/auth/v1"
+	v1 "github.com/nciyuan9264/game-platform/kitex_gen/pam/auth/v1"
 )
 
 // Client is designed to provide IDL-compatible methods with call-option parameter for kitex framework.

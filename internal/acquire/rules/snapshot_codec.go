@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/nciyuan9264/game-platform-server/internal/acquire/domain/domain"
+	"github.com/nciyuan9264/game-platform/internal/acquire/domain/domain"
 )
 
 // snapshotEnvelope 是 state_snapshot / state_blob 的载荷结构：权威 GameState + 派生 result。

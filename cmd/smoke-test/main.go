@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/nciyuan9264/game-platform-server/internal/contracts"
+	"github.com/nciyuan9264/game-platform/internal/contracts"
 )
 
 func main() {

@@ -3,9 +3,9 @@ package game
 import (
 	"fmt"
 
-	"github.com/nciyuan9264/game-platform-server/internal/acquire/domain/data"
-	"github.com/nciyuan9264/game-platform-server/internal/acquire/domain/domain"
-	"github.com/nciyuan9264/game-platform-server/internal/acquire/logger"
+	"github.com/nciyuan9264/game-platform/internal/acquire/domain/data"
+	"github.com/nciyuan9264/game-platform/internal/acquire/domain/domain"
+	"github.com/nciyuan9264/game-platform/internal/acquire/logger"
 )
 
 func GiveRandomTileToPlayer(r *domain.Room, playerID string) error {

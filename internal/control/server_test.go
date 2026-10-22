@@ -11,12 +11,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nciyuan9264/game-platform-server/internal/authclient"
-	"github.com/nciyuan9264/game-platform-server/internal/contracts"
-	"github.com/nciyuan9264/game-platform-server/internal/coordination"
-	"github.com/nciyuan9264/game-platform-server/internal/davinci"
-	"github.com/nciyuan9264/game-platform-server/internal/game"
-	"github.com/nciyuan9264/game-platform-server/internal/store"
+	"github.com/nciyuan9264/game-platform/internal/authclient"
+	"github.com/nciyuan9264/game-platform/internal/contracts"
+	"github.com/nciyuan9264/game-platform/internal/coordination"
+	"github.com/nciyuan9264/game-platform/internal/davinci"
+	"github.com/nciyuan9264/game-platform/internal/game"
+	"github.com/nciyuan9264/game-platform/internal/store"
 )
 
 type adminTokenVerifier struct{}

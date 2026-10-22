@@ -4,8 +4,8 @@ import (
 	"context"
 	"log"
 
-	"github.com/nciyuan9264/game-platform-server/internal/observability"
-	"github.com/nciyuan9264/game-platform-server/internal/store"
+	"github.com/nciyuan9264/game-platform/internal/observability"
+	"github.com/nciyuan9264/game-platform/internal/store"
 )
 
 func main() {

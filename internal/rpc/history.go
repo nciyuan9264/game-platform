@@ -9,9 +9,9 @@ import (
 	"strconv"
 
 	platform "github.com/nciyuan9264/game-platform-client/kitex_gen/pam/game/platform/v1"
-	"github.com/nciyuan9264/game-platform-server/internal/contracts"
-	"github.com/nciyuan9264/game-platform-server/internal/game"
-	"github.com/nciyuan9264/game-platform-server/internal/history"
+	"github.com/nciyuan9264/game-platform/internal/contracts"
+	"github.com/nciyuan9264/game-platform/internal/game"
+	"github.com/nciyuan9264/game-platform/internal/history"
 )
 
 const (

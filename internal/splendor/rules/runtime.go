@@ -3,7 +3,7 @@ package rules
 import (
 	"encoding/json"
 
-	"github.com/nciyuan9264/game-platform-server/internal/splendor/domain"
+	"github.com/nciyuan9264/game-platform/internal/splendor/domain"
 )
 
 const winningScore = 15

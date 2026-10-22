@@ -1,10 +1,10 @@
 package plugins
 
 import (
-	"github.com/nciyuan9264/game-platform-server/internal/acquire"
-	"github.com/nciyuan9264/game-platform-server/internal/davinci"
-	"github.com/nciyuan9264/game-platform-server/internal/game"
-	"github.com/nciyuan9264/game-platform-server/internal/splendor"
+	"github.com/nciyuan9264/game-platform/internal/acquire"
+	"github.com/nciyuan9264/game-platform/internal/davinci"
+	"github.com/nciyuan9264/game-platform/internal/game"
+	"github.com/nciyuan9264/game-platform/internal/splendor"
 )
 
 func Registry() *game.Registry {

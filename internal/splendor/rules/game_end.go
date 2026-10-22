@@ -3,7 +3,7 @@ package rules
 import (
 	"log"
 
-	"github.com/nciyuan9264/game-platform-server/internal/splendor/domain"
+	"github.com/nciyuan9264/game-platform/internal/splendor/domain"
 )
 
 func HandleGameEndMessage(r *domain.Room, cmd domain.Command) {

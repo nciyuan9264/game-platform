@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/nciyuan9264/game-platform-server/internal/contracts"
-	"github.com/nciyuan9264/game-platform-server/internal/rpcmeta"
+	"github.com/nciyuan9264/game-platform/internal/contracts"
+	"github.com/nciyuan9264/game-platform/internal/rpcmeta"
 )
 
 var ErrUnauthenticated = errors.New("unauthenticated")
