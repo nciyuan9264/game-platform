@@ -34,8 +34,9 @@ func NewPostgresStore(ctx context.Context, dsn string) (*PostgresStore, error) {
 	if err != nil {
 		return nil, err
 	}
-	db.SetMaxOpenConns(20)
-	db.SetMaxIdleConns(10)
+	// Four long-running services share the same direct production endpoint.
+	db.SetMaxOpenConns(8)
+	db.SetMaxIdleConns(4)
 	db.SetConnMaxLifetime(30 * time.Minute)
 
 	store := &PostgresStore{db: db}

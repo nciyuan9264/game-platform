@@ -27,6 +27,7 @@ require() {
 reject '/var/run/docker\.sock' 'raw Docker socket mount is forbidden'
 reject 'CHANGE_ME' 'placeholder values in .env must be replaced'
 reject 'sslmode=disable' 'PostgreSQL TLS must not be disabled'
+reject 'POSTGRES_DSN:.*-pooler\.' 'Neon must use the direct endpoint with lib/pq'
 reject '^[[:space:]]{2}(redis|postgres|nats|auth-rpc|auth-schema-migrate):[[:space:]]*$' 'shared infrastructure and Auth must not be deployed by Game Platform'
 reject 'POSTGRES_DSN:.*@(postgres|localhost|127\.0\.0\.1)(:|/)' 'PostgreSQL must use the remote RDS endpoint'
 reject 'local-(redis|auth|control|gateway|roomhost|maintenance)' 'local fallback credential is forbidden'
