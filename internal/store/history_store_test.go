@@ -40,3 +40,33 @@ func TestScanHistoryGameHandlesNullableLegacyStrings(t *testing.T) {
 		t.Fatalf("legacy strings = %q/%q", gameRecord.WinnerPlayerID, gameRecord.EndReason)
 	}
 }
+
+func TestScanHistoryPlayerMapsNullableValues(t *testing.T) {
+	now := time.Now().UTC()
+	scanner := historyScannerFunc(func(dest ...any) error {
+		*dest[0].(*int64) = 7
+		*dest[1].(*int64) = 3
+		*dest[2].(*sql.NullInt64) = sql.NullInt64{Int64: 11, Valid: true}
+		*dest[3].(*string) = "player-11"
+		*dest[4].(*int) = 1
+		*dest[5].(*bool) = false
+		*dest[6].(*sql.NullInt64) = sql.NullInt64{Int64: 42, Valid: true}
+		*dest[7].(*sql.NullInt64) = sql.NullInt64{}
+		*dest[8].(*int) = 4
+		*dest[9].(*sql.NullInt64) = sql.NullInt64{Int64: 2, Valid: true}
+		*dest[10].(*bool) = true
+		*dest[11].(*time.Time) = now
+		return nil
+	})
+
+	player, err := scanHistoryPlayer(scanner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if player.UserID == nil || *player.UserID != 11 || player.FinalScore == nil || *player.FinalScore != 42 {
+		t.Fatalf("nullable player values = %+v", player)
+	}
+	if player.FinalMoney != nil || player.FinalRank == nil || *player.FinalRank != 2 {
+		t.Fatalf("nullable result values = %+v", player)
+	}
+}

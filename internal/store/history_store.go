@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/lib/pq"
 	"github.com/nciyuan9264/game-platform/internal/history"
 )
 
@@ -152,7 +153,7 @@ func (s *PostgresStore) ListHistoryGames(ctx context.Context, userID int64, game
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT DISTINCT g.id, g.room_id, g.game_type, g.started_at, g.ended_at,
 			g.duration_seconds, g.winner_user_id, g.winner_player_id, g.end_reason,
-			g.max_players, g.initial_state, g.final_result, g.created_at, g.updated_at
+			g.max_players, NULL::jsonb, NULL::jsonb, g.created_at, g.updated_at
 		FROM games g
 		JOIN game_players gp ON gp.game_id = g.id
 		WHERE gp.user_id = $1 AND g.game_type = $2 AND g.ended_at IS NOT NULL
@@ -163,19 +164,29 @@ func (s *PostgresStore) ListHistoryGames(ctx context.Context, userID int64, game
 	}
 	defer rows.Close()
 	games := []history.Game{}
+	gameIDs := make([]int64, 0, limit)
 	for rows.Next() {
-		gameRecord, err := scanHistoryGame(rows)
-		if err != nil {
-			return nil, err
+		gameRecord, scanErr := scanHistoryGame(rows)
+		if scanErr != nil {
+			return nil, scanErr
 		}
-		players, err := s.HistoryPlayers(ctx, gameRecord.ID)
-		if err != nil {
-			return nil, err
-		}
-		gameRecord.Players = players
 		games = append(games, gameRecord)
+		gameIDs = append(gameIDs, gameRecord.ID)
 	}
-	return games, rows.Err()
+	if rowsErr := rows.Err(); rowsErr != nil {
+		return nil, rowsErr
+	}
+	if closeErr := rows.Close(); closeErr != nil {
+		return nil, closeErr
+	}
+	playersByGameID, err := s.historyPlayersByGameIDs(ctx, gameIDs)
+	if err != nil {
+		return nil, err
+	}
+	for index := range games {
+		games[index].Players = playersByGameID[games[index].ID]
+	}
+	return games, nil
 }
 
 func (s *PostgresStore) CountHistoryGames(ctx context.Context, userID int64, gameType string) (int, error) {
@@ -244,19 +255,38 @@ func (s *PostgresStore) HistoryPlayers(ctx context.Context, gameID int64) ([]his
 	defer rows.Close()
 	players := []history.Player{}
 	for rows.Next() {
-		var player history.Player
-		var userID, finalScore, finalMoney, finalRank sql.NullInt64
-		if err := rows.Scan(&player.ID, &player.GameID, &userID, &player.PlayerID, &player.SeatIndex,
-			&player.IsAI, &finalScore, &finalMoney, &player.FinalStocks, &finalRank, &player.IsWinner, &player.CreatedAt); err != nil {
-			return nil, err
+		player, scanErr := scanHistoryPlayer(rows)
+		if scanErr != nil {
+			return nil, scanErr
 		}
-		player.UserID = int64Pointer(userID)
-		player.FinalScore = intPointer(finalScore)
-		player.FinalMoney = intPointer(finalMoney)
-		player.FinalRank = intPointer(finalRank)
 		players = append(players, player)
 	}
 	return players, rows.Err()
+}
+
+func (s *PostgresStore) historyPlayersByGameIDs(ctx context.Context, gameIDs []int64) (map[int64][]history.Player, error) {
+	playersByGameID := make(map[int64][]history.Player, len(gameIDs))
+	if len(gameIDs) == 0 {
+		return playersByGameID, nil
+	}
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, game_id, user_id, player_id, seat_index, is_ai, final_score,
+			final_money, final_stocks, final_rank, is_winner, created_at
+		FROM game_players
+		WHERE game_id = ANY($1)
+		ORDER BY game_id ASC, seat_index ASC, id ASC`, pq.Array(gameIDs))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		player, scanErr := scanHistoryPlayer(rows)
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		playersByGameID[player.GameID] = append(playersByGameID[player.GameID], player)
+	}
+	return playersByGameID, rows.Err()
 }
 
 func (s *PostgresStore) HistoryEvents(ctx context.Context, gameID int64, includeState bool) ([]history.Event, error) {
@@ -451,6 +481,37 @@ func (s *PostgresStore) CountLeaderboardEntries(ctx context.Context, gameType st
 
 type historyGameScanner interface {
 	Scan(dest ...any) error
+}
+
+type historyPlayerScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanHistoryPlayer(scanner historyPlayerScanner) (history.Player, error) {
+	var player history.Player
+	var userID, finalScore, finalMoney, finalRank sql.NullInt64
+	err := scanner.Scan(
+		&player.ID,
+		&player.GameID,
+		&userID,
+		&player.PlayerID,
+		&player.SeatIndex,
+		&player.IsAI,
+		&finalScore,
+		&finalMoney,
+		&player.FinalStocks,
+		&finalRank,
+		&player.IsWinner,
+		&player.CreatedAt,
+	)
+	if err != nil {
+		return history.Player{}, err
+	}
+	player.UserID = int64Pointer(userID)
+	player.FinalScore = intPointer(finalScore)
+	player.FinalMoney = intPointer(finalMoney)
+	player.FinalRank = intPointer(finalRank)
+	return player, nil
 }
 
 func scanHistoryGame(scanner historyGameScanner) (history.Game, error) {
