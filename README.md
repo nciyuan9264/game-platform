@@ -96,7 +96,7 @@ Control Plane
 - etcd：room owner lease、epoch CAS、后续节点租约/leader election
 - NATS：Gateway 与 RoomHost 的内部命令和广播
 - NATS JetStream：per-Match command log，已配置 retention、file storage、duplicate window、临时 replay consumer
-- Docker Compose：应用内 Redis/Postgres/NATS 与容器化服务编排；共享 etcd 由 `../infra` 托管
+- Docker Compose：生产仅编排 Game Platform 服务；Redis/NATS/etcd 由 `../infra` 托管，Postgres 使用远端 RDS
 - Traefik/Nginx：统一入口和 Gateway WebSocket 负载均衡
 
 ## 房间调度与入口负载均衡
@@ -317,21 +317,21 @@ EOF
 
 ## Docker Compose
 
-`docker-compose.yml` 是生产和测试共用的部署基线，应用拓扑为 Auth RPC x1、Platform API x2、Gateway x2、RoomHost x2、Control Plane x1。Platform API 和 Gateway 分别通过独立 Nginx 入口负载均衡。Game Platform 和 Auth schema 由一次性 migration job 创建，运行服务不执行 DDL。
-数据库可视化使用 CloudBeaver，访问 `http://localhost:18030`，容器内通过 `postgres:5432` 连接项目 Postgres。
+`docker-compose.yml` 是本地应用清单，同样使用 `../infra` 的共享服务和环境变量中的 PostgreSQL DSN；自包含故障测试使用 `docker-compose.integration.*`。`docker-compose.prod.yml` 是独立生产清单，不与本地清单合并。生产只部署 Schema Migration、Control Plane、Platform RPC、Platform API、Gateway 和 RoomHost；不包含编号副本或内部负载均衡。
 
-本地和生产环境都先启动 `../infra` 中的共享 etcd。生产必须叠加无默认凭据的覆盖文件，并先执行校验：
+生产环境先启动 `../infra` 中的共享 Redis、NATS、etcd 和 OpenTelemetry Collector，再执行 Game Platform 配置校验：
 
 ```bash
 docker network inspect global-network >/dev/null 2>&1 || docker network create global-network
-docker compose -f ../infra/docker-compose.yml up -d --wait etcd
+docker compose -f ../infra/docker-compose.yml up -d redis nats etcd otel-collector
 ./scripts/validate-prod-config.sh
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.prod.yml up -d
 ```
 
-生产覆盖要求分别提供 Game/Auth migration DSN、runtime DSN、Redis/NATS 凭据、
-Control/Auth RPC 服务密钥和浏览器 Origin 白名单。新建 PostgreSQL 数据卷时会创建独立
-migrator/runtime 角色；运行服务不再需要 DDL 或跨库权限。
+生产 `.env` 可从 [`.env.example`](.env.example) 初始化，必须提供指向远端 RDS 的
+`POSTGRES_DSN`，以及 `CORS_ALLOWED_ORIGINS`、`WS_ALLOWED_ORIGINS`。该数据库账号需要
+同时具备 Schema Migration 和运行期读写权限。Redis 默认使用 `global-redis:6379`，
+NATS 默认使用 `nats://global-nats:4222`，Auth RPC 由独立 Auth 服务提供。
 
 生产基线默认不返回开发验证码、不配置默认管理员、不开启 Acquire 压测接口。
 本地调试需要开发验证码时必须同时显式设置
@@ -344,7 +344,7 @@ migrator/runtime 角色；运行服务不再需要 DDL 或跨库权限。
 
 ## 当前限制
 
-- PostgreSQL、Redis、etcd、NATS、Auth RPC 和 Control Plane 均为单实例，是当前明确接受的单点。
+- Platform 全部运行服务为单实例；共享 Redis、NATS、etcd 也仍是单实例，是当前单服务器部署明确接受的单点。PostgreSQL 由远端 RDS 托管。
 - Control Plane 和 Traefik 已移除原始 Docker socket；服务日志接口暂时下线，等待集中日志后端。
 - 内部 Kitex RPC 不做服务身份鉴权；用户操作通过 TTHeader 透传 access token，并在 RPC 服务端
   重新校验用户和角色。RPC 端口必须限制在可信私网，生产传输加密仍依赖真实部署环境。

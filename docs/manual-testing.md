@@ -9,14 +9,13 @@
 | DaVinci     | <http://localhost:18032/game/davinci> |
 | 管理后台        | <http://localhost:18020/admin/>       |
 | 服务日志        | <http://localhost:18020/admin/logs>   |
-| CloudBeaver | <http://localhost:18030>              |
 | NATS 监控     | <http://localhost:8222>               |
 
 ## 查看日志
 
-管理后台的“运维观测 / 服务日志”可以读取 Auth RPC、Platform API、
-Control Plane、Gateway、RoomHost、NATS、Redis、PostgreSQL 和 etcd 的
-容器日志。
+Game Platform 只管理 Platform API、Control Plane、Gateway 和 RoomHost。
+Auth 与共享 Redis/NATS/etcd 的日志分别在对应项目和 `../infra` 中查看；
+RDS 日志通过云数据库控制台查看。
 
 也可以在终端执行：
 
@@ -24,20 +23,14 @@ Control Plane、Gateway、RoomHost、NATS、Redis、PostgreSQL 和 etcd 的
 cd /data00/home/wangzhenyu.9264/learning/game-platform
 newgrp docker <<'EOF'
 docker compose ps
-docker compose logs -f platform-api-lb platform-api-1 platform-api-2 control-plane gateway-1 gateway-2 roomhost-1 roomhost-2
+docker compose logs -f platform-api-lb platform-api-1 control-plane gateway-1 roomhost-1
 EOF
 ```
 
 ## 查看数据库
 
-CloudBeaver 在容器网络内连接 PostgreSQL 时使用：
-
-| 数据库           | Host       | Port   | Database        | User   | Password |
-| ------------- | ---------- | ------ | --------------- | ------ | -------- |
-| Game Platform | `postgres` | `5432` | `game_platform` | `game` | `game`   |
-| Auth Center   | `postgres` | `5432` | `auth_center`   | `auth` | `auth`   |
-
-宿主机数据库工具连接时把 Host 改为 `localhost`。
+Game Platform PostgreSQL 使用 `.env` 中的远端 RDS `POSTGRES_DSN`。只读排查应使用
+单独的只读 RDS 账号，不要复用应用账号。
 
 常用查询：
 

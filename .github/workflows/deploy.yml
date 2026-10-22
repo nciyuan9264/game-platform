@@ -64,7 +64,7 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "docker-compose.yml,docker-compose.prod.yml,deployments/nginx-gateway.conf,deployments/nginx-platform-api.conf,scripts/validate-prod-config.sh"
+          source: "docker-compose.prod.yml,scripts/validate-prod-config.sh"
           target: /home/game-platform
 
       - name: Migrate and roll out services
@@ -90,14 +90,15 @@ jobs:
             export GAME_PLATFORM_IMAGE_TAG="$(printf '%s' "${IMAGE_TAG}" | cut -c1-7)"
             printf '%s' "${TCR_PASSWORD}" | docker login "${TCR_LOGIN_SERVER}" \
               --username "${TCR_USERNAME}" --password-stdin
+            docker network inspect global-network >/dev/null
             chmod +x scripts/validate-prod-config.sh
             ./scripts/validate-prod-config.sh
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml pull \
-              schema-migrate control-plane platform-rpc platform-api-1 platform-api-2 \
-              gateway-1 gateway-2 roomhost-1 roomhost-2
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+            docker compose -f docker-compose.prod.yml pull \
+              schema-migrate control-plane platform-rpc platform-api \
+              gateway roomhost
+            docker compose -f docker-compose.prod.yml \
               run --rm --no-deps schema-migrate
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+            docker compose -f docker-compose.prod.yml \
               up -d --no-deps control-plane platform-rpc
             for attempt in $(seq 1 30); do
               if curl --fail --silent http://127.0.0.1:18093/readyz >/dev/null; then
@@ -109,11 +110,11 @@ jobs:
               fi
               sleep 2
             done
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml \
-              up -d --no-deps platform-api-1 platform-api-2 gateway-1 gateway-2 roomhost-1 roomhost-2
+            docker compose -f docker-compose.prod.yml \
+              up -d --no-deps --remove-orphans platform-api gateway roomhost
             for endpoint in \
-              http://127.0.0.1:8081/healthz \
-              http://127.0.0.1:8082/healthz; do
+              http://127.0.0.1:8083/healthz \
+              http://127.0.0.1:18000/healthz; do
               curl --fail --retry 20 --retry-delay 2 --retry-connrefused "${endpoint}"
             done
             docker image prune -f

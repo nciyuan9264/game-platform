@@ -293,29 +293,28 @@ flowchart TB
 
 #### 3.7.1 拆分开发和生产配置
 
-保留共同基础文件，例如：
+开发和生产使用独立清单：
 
 ```text
 docker-compose.yml
 docker-compose.prod.yml
-docker-compose.dev.yml
 ```
 
-基础文件保持服务拓扑一致，dev 文件提供本地便利默认值，prod 文件只增加生产约束。
+`docker-compose.yml` 提供本地便利依赖；`docker-compose.prod.yml` 只编排
+Game Platform 服务，通过 `global-network` 使用共享 Redis/NATS/etcd，并连接远端 RDS。
 
 生产启动命令固定为：
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.prod.yml up -d
 ```
 
 #### 3.7.2 生产密码必须显式提供
 
-生产文件使用 Compose required variable：
+生产文件使用 Compose required variable 注入 RDS DSN：
 
 ```yaml
-POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
-NATS_CONTROL_PASSWORD: "${NATS_CONTROL_PASSWORD:?NATS_CONTROL_PASSWORD is required}"
+POSTGRES_DSN: "${POSTGRES_DSN:?set Game Platform RDS DSN}"
 ```
 
 禁止生产文件出现：
