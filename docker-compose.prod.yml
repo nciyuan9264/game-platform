@@ -63,6 +63,7 @@ services:
       KITEX_PORT_TO_REGISTRY: '18092'
       CONTROL_RPC_ADDR: control-plane:18091
       CONTROL_RPC_PSM: game.platform.control
+      CONTROL_RPC_TIMEOUT: ${CONTROL_RPC_TIMEOUT:-30s}
     ports:
       - '127.0.0.1:18092:18092'
       - '127.0.0.1:18093:18093'

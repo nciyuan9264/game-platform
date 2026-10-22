@@ -288,8 +288,8 @@ func TestCreateRoomActorSendsRuntimeCreateCommand(t *testing.T) {
 	if sender.ownerNode != "roomhost-a" {
 		t.Fatalf("owner node = %q, want roomhost-a", sender.ownerNode)
 	}
-	if sender.timeout != 3*time.Second {
-		t.Fatalf("timeout = %s, want 3s", sender.timeout)
+	if sender.timeout != roomInitializationTimeout {
+		t.Fatalf("timeout = %s, want %s", sender.timeout, roomInitializationTimeout)
 	}
 	cmd := sender.cmd
 	if cmd.Type != contracts.RuntimeCommandRoomCreate {

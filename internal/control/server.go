@@ -29,6 +29,7 @@ var (
 
 const (
 	roomCreationCompensationTimeout = 5 * time.Second
+	roomInitializationTimeout       = 15 * time.Second
 	roomIDSuffixLength              = 12
 	roomIDAlphabet                  = "0123456789abcdefghjkmnpqrstvwxyz"
 )
@@ -421,7 +422,7 @@ func (s *Server) createRoomActor(ctx context.Context, rec contracts.RoomRecord, 
 		Type:          commandType,
 		SentAt:        time.Now().UTC(),
 	}
-	ack, err := s.roomCommands.SendRoomCommand(ctx, rec.OwnerNode, cmd, 3*time.Second)
+	ack, err := s.roomCommands.SendRoomCommand(ctx, rec.OwnerNode, cmd, roomInitializationTimeout)
 	if err != nil {
 		return err
 	}

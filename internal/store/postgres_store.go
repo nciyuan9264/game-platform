@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/lib/pq"
@@ -30,7 +32,7 @@ var (
 )
 
 func NewPostgresStore(ctx context.Context, dsn string) (*PostgresStore, error) {
-	db, err := sql.Open("postgres", dsn)
+	db, err := sql.Open("postgres", withBinaryParameters(dsn))
 	if err != nil {
 		return nil, err
 	}
@@ -45,6 +47,20 @@ func NewPostgresStore(ctx context.Context, dsn string) (*PostgresStore, error) {
 		return nil, err
 	}
 	return store, nil
+}
+
+func withBinaryParameters(dsn string) string {
+	if strings.Contains(strings.ToLower(dsn), "binary_parameters=") {
+		return dsn
+	}
+	parsed, err := url.Parse(dsn)
+	if err == nil && parsed.Scheme != "" {
+		query := parsed.Query()
+		query.Set("binary_parameters", "yes")
+		parsed.RawQuery = query.Encode()
+		return parsed.String()
+	}
+	return strings.TrimSpace(dsn) + " binary_parameters=yes"
 }
 
 func (s *PostgresStore) Close() error {
@@ -1460,7 +1476,7 @@ func (s *PostgresStore) SaveSpectatorSnapshot(ctx context.Context, rec contracts
 			WHERE room_id = $1 AND epoch = $5 AND owner_node = $6
 		)
 		ON CONFLICT (match_id, seq) DO NOTHING`,
-		rec.RoomID, rec.MatchID, rec.GameType, rec.Seq, rec.Epoch, rec.OwnerNode, payload, int(contracts.SpectatorDelay.Seconds()))
+		rec.RoomID, rec.MatchID, rec.GameType, rec.Seq, rec.Epoch, rec.OwnerNode, string(payload), int(contracts.SpectatorDelay.Seconds()))
 	if err != nil {
 		return err
 	}
@@ -1626,7 +1642,7 @@ func (s *PostgresStore) SaveOutboundMessage(ctx context.Context, msg contracts.O
 		ON CONFLICT (message_id) DO NOTHING`,
 		msg.MessageID, msg.RoomID, msg.MatchID, msg.Seq, msg.Epoch, msg.OwnerNode, msg.TargetUserID, msg.TargetPlayerID,
 		msg.TargetSessionIDValue(), msg.TargetGatewayNodeValue(), msg.TraceID, msg.Reliable,
-		msg.CloseAfter, payload, msg.CreatedAt)
+		msg.CloseAfter, string(payload), msg.CreatedAt)
 	if err != nil {
 		return err
 	}
@@ -1821,7 +1837,7 @@ func (s *PostgresStore) AppendGameLogEvents(ctx context.Context, events []contra
 			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
 			ON CONFLICT (event_id) DO NOTHING`,
 			event.EventID, event.RoomID, event.MatchID, event.GameType, event.Seq, event.CommandID,
-			event.PlayerID, event.Visibility, event.Type, payload, event.CreatedAt); err != nil {
+			event.PlayerID, event.Visibility, event.Type, string(payload), event.CreatedAt); err != nil {
 			return err
 		}
 	}
@@ -1856,7 +1872,7 @@ func (s *PostgresStore) SaveRuntimeEvent(ctx context.Context, event contracts.Ru
 		INSERT INTO runtime_events (
 			room_id, match_id, trace_id, node_id, component, event, message, payload, created_at
 		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-		event.RoomID, event.MatchID, event.TraceID, event.NodeID, event.Component, event.Event, event.Message, payload, event.CreatedAt)
+		event.RoomID, event.MatchID, event.TraceID, event.NodeID, event.Component, event.Event, event.Message, string(payload), event.CreatedAt)
 	return err
 }
 

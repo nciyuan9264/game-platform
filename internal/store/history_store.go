@@ -489,7 +489,7 @@ func nullableJSON(value json.RawMessage) any {
 	if len(value) == 0 {
 		return nil
 	}
-	return value
+	return string(value)
 }
 
 func nullableBytes(value []byte) any {

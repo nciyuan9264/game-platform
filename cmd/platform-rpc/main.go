@@ -65,7 +65,7 @@ func run() (runErr error) {
 
 	control, err := controlclient.New(
 		observability.Env("CONTROL_RPC_ADDR", "localhost:18091"),
-		observability.EnvDuration("CONTROL_RPC_TIMEOUT", 3*time.Second),
+		observability.EnvDuration("CONTROL_RPC_TIMEOUT", 30*time.Second),
 	)
 	if err != nil {
 		return fmt.Errorf("initialize control client: %w", err)
