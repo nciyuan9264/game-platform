@@ -132,6 +132,7 @@ jobs:
 
       - name: Notify Feishu
         if: success()
+        continue-on-error: true
         run: |
           curl --fail-with-body -X POST \
             "${{ secrets.FEISHU_WEBHOOK_URL }}" \
