@@ -77,34 +77,6 @@ services:
           - game-platform-rpc
     restart: unless-stopped
 
-  platform-api:
-    image: ${GAME_PLATFORM_IMAGE_REGISTRY:-sgccr.ccs.tencentyun.com/tengxuntcr}/game-platform-platform-api:${GAME_PLATFORM_IMAGE_TAG:-latest}
-    environment:
-      <<: *runtime-env
-      SERVER_ADDR: ':8080'
-      AUTH_RPC_ADDR: ${AUTH_RPC_ADDR:-auth-backend:19090}
-      AUTH_RPC_PSM: ${AUTH_RPC_PSM:-pam.auth.rpc}
-      CONTROL_RPC_ADDR: control-plane:18091
-      CONTROL_RPC_PSM: game.platform.control
-      COOKIE_DOMAIN: ${COOKIE_DOMAIN:-.gamebus.online}
-      COOKIE_SECURE: 'true'
-      AUTH_DEV_CODE_RESPONSE: 'false'
-      ACQUIRE_LOADTEST_ENABLED: 'false'
-      ACQUIRE_LOADTEST_TOKEN: ''
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?set Game Platform browser origins}
-    ports:
-      - '127.0.0.1:8083:8080'
-    depends_on:
-      schema-migrate:
-        condition: service_completed_successfully
-      control-plane:
-        condition: service_started
-    networks:
-      global-network:
-        aliases:
-          - platform-api
-    restart: unless-stopped
-
   gateway:
     image: ${GAME_PLATFORM_IMAGE_REGISTRY:-sgccr.ccs.tencentyun.com/tengxuntcr}/game-platform-gateway:${GAME_PLATFORM_IMAGE_TAG:-latest}
     environment:

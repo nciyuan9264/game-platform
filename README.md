@@ -5,7 +5,7 @@
 ## 已实现服务
 
 - `../auth/backend/cmd/auth-rpc`：独立 Auth Center Kitex RPC，平台不再内置 Mock Auth。
-- `cmd/platform-api`：面向浏览器和业务后台的公开 HTTP API，聚合 Auth、房间、用户、历史和排行。
+- `cmd/platform-api`：仅供本地 smoke 和旧集成环境使用的兼容 HTTP API；生产 HTTP 流量统一走 PAM Gateway。
 - `cmd/platform-rpc`：统一 `GamePlatformService` Kitex RPC，承接玩家房间、历史、统计和排行接口。
 - `cmd/control-plane`：内部 Control Plane Kitex RPC + 运维 HTTP，负责调度、房间生命周期、实例与拓扑。
 - `cmd/gateway`：Realtime Gateway，负责 WebSocket 鉴权、session/presence 注册、命令路由、下行投递。
@@ -317,7 +317,7 @@ EOF
 
 ## Docker Compose
 
-`docker-compose.yml` 是本地应用清单，同样使用 `../infra` 的共享服务和环境变量中的 PostgreSQL DSN；自包含故障测试使用 `docker-compose.integration.*`。`docker-compose.prod.yml` 是独立生产清单，不与本地清单合并。生产只部署 Schema Migration、Control Plane、Platform RPC、Platform API、Gateway 和 RoomHost；不包含编号副本或内部负载均衡。
+`docker-compose.yml` 是本地应用清单，同样使用 `../infra` 的共享服务和环境变量中的 PostgreSQL DSN；自包含故障测试使用 `docker-compose.integration.*`。`docker-compose.prod.yml` 是独立生产清单，不与本地清单合并。生产只部署 Schema Migration、Control Plane、Platform RPC、Gateway 和 RoomHost；HTTP API 由 PAM Gateway 转发到 Platform RPC。
 
 生产环境先启动 `../infra` 中的共享 Redis、NATS、etcd 和 OpenTelemetry Collector，再执行 Game Platform 配置校验：
 
@@ -329,7 +329,7 @@ docker compose -f docker-compose.prod.yml up -d
 ```
 
 生产 `.env` 可从 [`.env.example`](.env.example) 初始化，必须提供指向远端 RDS 的
-`POSTGRES_DSN`，以及 `CORS_ALLOWED_ORIGINS`、`WS_ALLOWED_ORIGINS`。该数据库账号需要
+`POSTGRES_DSN` 和 `WS_ALLOWED_ORIGINS`。该数据库账号需要
 同时具备 Schema Migration 和运行期读写权限。Redis 默认使用 `global-redis:6379`，
 NATS 默认使用 `nats://global-nats:4222`，Auth RPC 由独立 Auth 服务提供。
 

@@ -21,9 +21,7 @@ jobs:
           - control-plane
           - gateway
           - roomhost
-          - platform-api
           - migrate-game-history
-          - smoke-test
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -64,7 +62,7 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "docker-compose.prod.yml,scripts/validate-prod-config.sh"
+          source: 'docker-compose.prod.yml,scripts/validate-prod-config.sh'
           target: /home/game-platform
 
       - name: Migrate and roll out services
@@ -94,8 +92,7 @@ jobs:
             chmod +x scripts/validate-prod-config.sh
             ./scripts/validate-prod-config.sh
             docker compose -f docker-compose.prod.yml pull \
-              schema-migrate control-plane platform-rpc platform-api \
-              gateway roomhost
+              schema-migrate control-plane platform-rpc gateway roomhost
             docker compose -f docker-compose.prod.yml \
               run --rm --no-deps schema-migrate
             docker compose -f docker-compose.prod.yml \
@@ -111,12 +108,9 @@ jobs:
               sleep 2
             done
             docker compose -f docker-compose.prod.yml \
-              up -d --no-deps --remove-orphans platform-api gateway roomhost
-            for endpoint in \
-              http://127.0.0.1:8083/healthz \
-              http://127.0.0.1:18000/healthz; do
-              curl --fail --retry 20 --retry-delay 2 --retry-connrefused "${endpoint}"
-            done
+              up -d --no-deps --remove-orphans gateway roomhost
+            curl --fail --retry 20 --retry-delay 2 --retry-connrefused \
+              http://127.0.0.1:18000/healthz
             docker image prune -f
 
       - name: Notify Feishu
