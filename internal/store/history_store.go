@@ -457,11 +457,12 @@ func scanHistoryGame(scanner historyGameScanner) (history.Game, error) {
 	var gameRecord history.Game
 	var endedAt sql.NullTime
 	var winnerUserID sql.NullInt64
+	var winnerPlayerID, endReason sql.NullString
 	var initialState, finalResult []byte
 	err := scanner.Scan(
 		&gameRecord.ID, &gameRecord.RoomID, &gameRecord.GameType, &gameRecord.StartedAt,
-		&endedAt, &gameRecord.DurationSeconds, &winnerUserID, &gameRecord.WinnerPlayerID,
-		&gameRecord.EndReason, &gameRecord.MaxPlayers, &initialState, &finalResult,
+		&endedAt, &gameRecord.DurationSeconds, &winnerUserID, &winnerPlayerID,
+		&endReason, &gameRecord.MaxPlayers, &initialState, &finalResult,
 		&gameRecord.CreatedAt, &gameRecord.UpdatedAt,
 	)
 	if err != nil {
@@ -472,6 +473,12 @@ func scanHistoryGame(scanner historyGameScanner) (history.Game, error) {
 	}
 	if winnerUserID.Valid {
 		gameRecord.WinnerUserID = &winnerUserID.Int64
+	}
+	if winnerPlayerID.Valid {
+		gameRecord.WinnerPlayerID = winnerPlayerID.String
+	}
+	if endReason.Valid {
+		gameRecord.EndReason = endReason.String
 	}
 	gameRecord.InitialState = initialState
 	gameRecord.FinalResult = finalResult

@@ -173,7 +173,8 @@ func copyGameType(ctx context.Context, source, target *sql.DB, gameType string) 
 
 	rows, err := source.QueryContext(ctx, `
 		SELECT id, room_id, started_at, ended_at, duration_seconds,
-			winner_user_id, winner_player_id, end_reason, max_players,
+			winner_user_id, COALESCE(winner_player_id, ''),
+			COALESCE(end_reason, ''), max_players,
 			initial_state, final_result, created_at, updated_at
 		FROM games
 		WHERE game_type = $1

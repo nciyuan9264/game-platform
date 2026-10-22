@@ -202,6 +202,12 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 			created_at TIMESTAMPTZ NOT NULL,
 			updated_at TIMESTAMPTZ NOT NULL
 		)`,
+		`UPDATE games SET winner_player_id = '' WHERE winner_player_id IS NULL`,
+		`ALTER TABLE games ALTER COLUMN winner_player_id SET DEFAULT ''`,
+		`ALTER TABLE games ALTER COLUMN winner_player_id SET NOT NULL`,
+		`UPDATE games SET end_reason = '' WHERE end_reason IS NULL`,
+		`ALTER TABLE games ALTER COLUMN end_reason SET DEFAULT ''`,
+		`ALTER TABLE games ALTER COLUMN end_reason SET NOT NULL`,
 		`CREATE INDEX IF NOT EXISTS idx_games_type_started ON games (game_type, started_at DESC)`,
 		`ALTER TABLE games ADD COLUMN IF NOT EXISTS legacy_source TEXT`,
 		`ALTER TABLE games ADD COLUMN IF NOT EXISTS legacy_game_id BIGINT`,
