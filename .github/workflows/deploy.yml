@@ -109,8 +109,16 @@ jobs:
             done
             docker compose -f docker-compose.prod.yml \
               up -d --no-deps --remove-orphans gateway roomhost
-            curl --fail --retry 20 --retry-delay 2 --retry-connrefused \
-              http://127.0.0.1:18000/healthz
+            for attempt in $(seq 1 30); do
+              if curl --fail --silent http://127.0.0.1:18000/healthz >/dev/null; then
+                break
+              fi
+              if [ "${attempt}" -eq 30 ]; then
+                echo "gateway readiness check failed" >&2
+                exit 1
+              fi
+              sleep 2
+            done
             docker image prune -f
 
       - name: Notify Feishu
