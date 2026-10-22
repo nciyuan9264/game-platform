@@ -5,11 +5,13 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/bytedance/gopkg/cloud/metainfo"
 	"github.com/cloudwego/kitex/client/callopt"
 	"github.com/nciyuan9264/game-platform/internal/authclient"
 	"github.com/nciyuan9264/game-platform/internal/rpcmeta"
 	auth "github.com/nciyuan9264/game-platform/kitex_gen/pam/auth/v1"
 	authservice "github.com/nciyuan9264/game-platform/kitex_gen/pam/auth/v1/authservice"
+	"github.com/nciyuan9264/pam-protocol/httpmeta"
 )
 
 type fakeRPC struct {
@@ -18,12 +20,25 @@ type fakeRPC struct {
 	verify        *auth.VerifyTokenResp
 	loginReq      any
 	login         *auth.UserResp
+	loginMeta     *httpmeta.ResponseMeta
 	profileReq    *auth.GetProfileReq
 	profile       *auth.UserResp
 	profileUserID string
 	profileRoles  []string
 	list          *auth.ListUsersResp
 	err           error
+}
+
+func (f *fakeRPC) publishLoginMeta(ctx context.Context) error {
+	if f.loginMeta == nil {
+		return nil
+	}
+	payload, err := httpmeta.Encode(*f.loginMeta)
+	if err != nil {
+		return err
+	}
+	metainfo.SetBackwardValue(ctx, httpmeta.MetadataKey, payload)
+	return nil
 }
 
 func (f *fakeRPC) Register(context.Context, *auth.RegisterReq, ...callopt.Option) (*auth.BaseResp, error) {
@@ -34,13 +49,22 @@ func (f *fakeRPC) SendCode(context.Context, *auth.SendCodeReq, ...callopt.Option
 }
 func (f *fakeRPC) LoginByPassword(ctx context.Context, req *auth.LoginByPasswordReq, _ ...callopt.Option) (*auth.UserResp, error) {
 	f.loginReq = req
+	if err := f.publishLoginMeta(ctx); err != nil {
+		return nil, err
+	}
 	return f.login, f.err
 }
 func (f *fakeRPC) LoginByCode(ctx context.Context, req *auth.LoginByCodeReq, _ ...callopt.Option) (*auth.UserResp, error) {
 	f.loginReq = req
+	if err := f.publishLoginMeta(ctx); err != nil {
+		return nil, err
+	}
 	return f.login, f.err
 }
-func (f *fakeRPC) RefreshToken(context.Context, *auth.RefreshTokenReq, ...callopt.Option) (*auth.UserResp, error) {
+func (f *fakeRPC) RefreshToken(ctx context.Context, _ *auth.RefreshTokenReq, _ ...callopt.Option) (*auth.UserResp, error) {
+	if err := f.publishLoginMeta(ctx); err != nil {
+		return nil, err
+	}
 	return f.login, f.err
 }
 func (f *fakeRPC) VerifyToken(ctx context.Context, req *auth.VerifyTokenReq, _ ...callopt.Option) (*auth.VerifyTokenResp, error) {
@@ -142,6 +166,34 @@ func TestLoginUsesCodeWhenProvided(t *testing.T) {
 	}
 	if resp.User.UserID != "42" {
 		t.Fatalf("unexpected login response: %+v", resp)
+	}
+}
+
+func TestLoginReadsSessionTokensFromResponseMetadata(t *testing.T) {
+	rpc := &fakeRPC{
+		login: loginResponse("42"),
+		loginMeta: &httpmeta.ResponseMeta{
+			Version: httpmeta.CurrentVersion,
+			Cookies: []httpmeta.CookieMutation{
+				{Action: httpmeta.CookieSet, Name: "access_token", Value: "access-secret", ExpiresAtUnix: 4102444800},
+				{Action: httpmeta.CookieSet, Name: "refresh_token", Value: "refresh-secret", ExpiresAtUnix: 4102448400},
+			},
+		},
+	}
+	client := NewWithRPC(rpc)
+
+	resp, err := client.Login(
+		context.Background(),
+		authclient.LoginRequest{Email: "alice.com", Code: "123456"},
+	)
+	if err != nil {
+		t.Fatalf("Login() error = %v", err)
+	}
+	if resp.Tokens.AccessToken != "access-secret" ||
+		resp.Tokens.RefreshToken != "refresh-secret" ||
+		resp.Tokens.AccessExpiresAtUnix != 4102444800 ||
+		resp.Tokens.RefreshExpiresAtUnix != 4102448400 {
+		t.Fatalf("unexpected login tokens: %+v", resp.Tokens)
 	}
 }
 

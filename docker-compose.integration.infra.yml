@@ -65,6 +65,7 @@ services:
     environment:
       NATS_CONTROL_PASSWORD: "${NATS_CONTROL_PASSWORD:-local-control}"
       NATS_MAINTENANCE_PASSWORD: "${NATS_MAINTENANCE_PASSWORD:-local-maintenance}"
+      NATS_AUTH_PASSWORD: "${NATS_AUTH_PASSWORD:-local-auth}"
       NATS_GATEWAY_1_PASSWORD: "${NATS_GATEWAY_1_PASSWORD:-local-gateway-1}"
       NATS_GATEWAY_2_PASSWORD: "${NATS_GATEWAY_2_PASSWORD:-local-gateway-2}"
       NATS_ROOMHOST_1_PASSWORD: "${NATS_ROOMHOST_1_PASSWORD:-local-roomhost-1}"

@@ -86,6 +86,7 @@ services:
     environment:
       NATS_CONTROL_PASSWORD: "${NATS_CONTROL_PASSWORD:-local-control}"
       NATS_MAINTENANCE_PASSWORD: "${NATS_MAINTENANCE_PASSWORD:-local-maintenance}"
+      NATS_AUTH_PASSWORD: "${NATS_AUTH_PASSWORD:-local-auth}"
       NATS_GATEWAY_1_PASSWORD: "${NATS_GATEWAY_1_PASSWORD:-local-gateway-1}"
       NATS_GATEWAY_2_PASSWORD: "${NATS_GATEWAY_2_PASSWORD:-local-gateway-2}"
       NATS_ROOMHOST_1_PASSWORD: "${NATS_ROOMHOST_1_PASSWORD:-local-roomhost-1}"
@@ -120,6 +121,7 @@ services:
       REDIS_ADDR: redis:6379
       REDIS_PASSWORD: "${REDIS_PASSWORD:-local-redis}"
       REDIS_DB: 2
+      PAM_NATS_URL: "nats://auth:${NATS_AUTH_PASSWORD:-local-auth}@nats:4222"
       AUTH_DEV_CODE_LOG: "${AUTH_DEV_CODE_LOG:-false}"
       AUTH_DEV_CODE_RESPONSE: "${AUTH_DEV_CODE_RESPONSE:-false}"
       JWT_PRIVATE_PATH: /run/secrets/jwt_private.pem

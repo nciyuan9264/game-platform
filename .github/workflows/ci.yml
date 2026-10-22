@@ -94,6 +94,7 @@ jobs:
           WS_ALLOWED_ORIGINS: https://board.example.com
           NATS_CONTROL_PASSWORD: ci-control
           NATS_MAINTENANCE_PASSWORD: ci-maintenance
+          NATS_AUTH_PASSWORD: ci-auth
           NATS_GATEWAY_1_PASSWORD: ci-gateway-1
           NATS_GATEWAY_2_PASSWORD: ci-gateway-2
           NATS_ROOMHOST_1_PASSWORD: ci-roomhost-1

@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/bytedance/gopkg/cloud/metainfo"
 	kitexclient "github.com/cloudwego/kitex/client"
 	"github.com/cloudwego/kitex/pkg/transmeta"
 	kitextransport "github.com/cloudwego/kitex/transport"
@@ -13,6 +14,7 @@ import (
 	"github.com/nciyuan9264/game-platform/internal/servicediscovery"
 	auth "github.com/nciyuan9264/game-platform/kitex_gen/pam/auth/v1"
 	authservice "github.com/nciyuan9264/game-platform/kitex_gen/pam/auth/v1/authservice"
+	"github.com/nciyuan9264/pam-protocol/httpmeta"
 )
 
 type Client struct {
@@ -72,27 +74,29 @@ func (c *Client) SendCode(ctx context.Context, email string) (authclient.SendCod
 }
 
 func (c *Client) Login(ctx context.Context, req authclient.LoginRequest) (authclient.LoginResponse, error) {
+	callCtx := metainfo.WithBackwardValues(ctx)
 	var (
 		resp *auth.UserResp
 		err  error
 	)
 	if req.Code != "" {
-		resp, err = c.rpc.LoginByCode(ctx, &auth.LoginByCodeReq{Email: req.Email, Code: req.Code})
+		resp, err = c.rpc.LoginByCode(callCtx, &auth.LoginByCodeReq{Email: req.Email, Code: req.Code})
 	} else {
-		resp, err = c.rpc.LoginByPassword(ctx, &auth.LoginByPasswordReq{Email: req.Email, Password: req.Password})
+		resp, err = c.rpc.LoginByPassword(callCtx, &auth.LoginByPasswordReq{Email: req.Email, Password: req.Password})
 	}
 	if err != nil {
 		return authclient.LoginResponse{}, err
 	}
-	return fromRPCLogin(resp), nil
+	return loginResponseWithMetadata(callCtx, resp)
 }
 
 func (c *Client) RefreshToken(ctx context.Context, refreshToken string) (authclient.LoginResponse, error) {
-	resp, err := c.rpc.RefreshToken(ctx, &auth.RefreshTokenReq{RefreshToken: refreshToken})
+	callCtx := metainfo.WithBackwardValues(ctx)
+	resp, err := c.rpc.RefreshToken(callCtx, &auth.RefreshTokenReq{RefreshToken: refreshToken})
 	if err != nil {
 		return authclient.LoginResponse{}, err
 	}
-	return fromRPCLogin(resp), nil
+	return loginResponseWithMetadata(callCtx, resp)
 }
 
 func (c *Client) VerifyToken(ctx context.Context, req authclient.VerifyTokenRequest) (authclient.VerifyTokenResponse, error) {
@@ -235,6 +239,31 @@ func fromRPCLogin(resp *auth.UserResp) authclient.LoginResponse {
 		return authclient.LoginResponse{}
 	}
 	return authclient.LoginResponse{User: fromRPCUser(resp.GetData())}
+}
+
+func loginResponseWithMetadata(ctx context.Context, resp *auth.UserResp) (authclient.LoginResponse, error) {
+	result := fromRPCLogin(resp)
+	meta, exists, err := httpmeta.Receive(ctx)
+	if err != nil {
+		return authclient.LoginResponse{}, err
+	}
+	if !exists {
+		return result, nil
+	}
+	for _, cookie := range meta.Cookies {
+		if cookie.Action != httpmeta.CookieSet {
+			continue
+		}
+		switch cookie.Name {
+		case "access_token":
+			result.Tokens.AccessToken = cookie.Value
+			result.Tokens.AccessExpiresAtUnix = cookie.ExpiresAtUnix
+		case "refresh_token":
+			result.Tokens.RefreshToken = cookie.Value
+			result.Tokens.RefreshExpiresAtUnix = cookie.ExpiresAtUnix
+		}
+	}
+	return result, nil
 }
 
 func fromRPCUser(user *auth.UserIdentity) contracts.UserIdentity {

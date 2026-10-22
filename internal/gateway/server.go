@@ -269,6 +269,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	}
 	identity, err := s.identity(ctx, r)
 	if err != nil {
+		observability.Warn("websocket identity verification failed", "roomID", roomID, "error", err)
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}

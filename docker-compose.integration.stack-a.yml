@@ -57,6 +57,7 @@ services:
       REDIS_ADDR: redis:6379
       REDIS_PASSWORD: "${REDIS_PASSWORD:-local-redis}"
       REDIS_DB: 2
+      PAM_NATS_URL: "nats://auth:${NATS_AUTH_PASSWORD:-local-auth}@nats:4222"
       AUTH_DEV_CODE_LOG: "true"
       AUTH_DEV_CODE_RESPONSE: "true"
       JWT_PRIVATE_PATH: /run/secrets/jwt_private.pem

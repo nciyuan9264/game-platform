@@ -32,8 +32,9 @@ func main() {
 		return
 	}
 
-	aliceSession := login(authURL, "alice")
-	bobSession := login(authURL, "bob")
+	runID := fmt.Sprintf("%d", time.Now().UnixNano())
+	aliceSession := login(authURL, "alice-"+runID)
+	bobSession := login(authURL, "bob-"+runID)
 
 	room := createRoom(controlURL, aliceSession.Cookie, contracts.GameDaVinci, 2)
 	fmt.Println("room", room.RoomID, "owner", room.OwnerNode)
@@ -88,7 +89,7 @@ func main() {
 }
 
 func runAcquireScenario(authURL, controlURL, gatewayURL string) {
-	aliceSession := login(authURL, "acquire-alice")
+	aliceSession := login(authURL, fmt.Sprintf("acquire-alice-%d", time.Now().UnixNano()))
 	room := createRoom(controlURL, aliceSession.Cookie, contracts.GameAcquire, 2)
 	fmt.Println("acquire room", room.RoomID, "owner", room.OwnerNode)
 
@@ -126,7 +127,7 @@ func runAcquireScenario(authURL, controlURL, gatewayURL string) {
 }
 
 func runAIScenario(authURL, controlURL, gatewayURL string) {
-	aliceSession := login(authURL, "alice")
+	aliceSession := login(authURL, fmt.Sprintf("ai-alice-%d", time.Now().UnixNano()))
 	room := createRoom(controlURL, aliceSession.Cookie, contracts.GameDaVinci, 2)
 	fmt.Println("room", room.RoomID, "owner", room.OwnerNode)
 
@@ -281,9 +282,26 @@ func connectWithLastSeq(base, roomID, matchID, cookieHeader string, lastSeq int6
 	)
 	header := http.Header{}
 	header.Set("Cookie", cookieHeader)
-	conn, _, err := websocket.DefaultDialer.Dial(url, header)
+	for _, item := range strings.Split(cookieHeader, ";") {
+		name, value, ok := strings.Cut(strings.TrimSpace(item), "=")
+		if ok && name == "access_token" && value != "" {
+			header.Set("Authorization", "Bearer "+value)
+			break
+		}
+	}
+	conn, response, err := websocket.DefaultDialer.Dial(url, header)
 	if err != nil {
-		panic(err)
+		if response == nil {
+			panic(err)
+		}
+		defer response.Body.Close()
+		body, _ := io.ReadAll(response.Body)
+		panic(fmt.Sprintf(
+			"websocket handshake failed: status=%d body=%q error=%v",
+			response.StatusCode,
+			strings.TrimSpace(string(body)),
+			err,
+		))
 	}
 	return conn
 }

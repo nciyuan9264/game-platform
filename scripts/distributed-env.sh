@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
+export GOWORK=off
 
 PRIMARY_HOST="${PRIMARY_HOST:-10.37.223.1}"
 SECONDARY_HOST="${SECONDARY_HOST:-10.37.4.66}"
