@@ -76,6 +76,13 @@ func TestPluginSnapshotDoesNotExposeHiddenCards(t *testing.T) {
 	}
 	view, err := plugin.BuildPlayerView(ctx, state, game.ViewRequest{
 		RoomID: state.RoomID, MatchID: "match-1", PlayerID: "7", Seq: 1,
+		PlayerProfiles: map[string]game.PlayerProfile{
+			"7": {
+				UserID:      "user-7",
+				DisplayName: "Alice",
+				Avatar:      "https://example.com/alice.png",
+			},
+		},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -88,6 +95,11 @@ func TestPluginSnapshotDoesNotExposeHiddenCards(t *testing.T) {
 	}
 	if visible != 12 {
 		t.Fatalf("visible cards = %d, want 12", visible)
+	}
+	players := roomData["players"].(map[string]any)
+	player := players["7"].(map[string]any)
+	if player["userID"] != "user-7" || player["displayName"] != "Alice" || player["avatar"] != "https://example.com/alice.png" {
+		t.Fatalf("player profile = %+v", player)
 	}
 }
 

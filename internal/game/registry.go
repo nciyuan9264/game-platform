@@ -28,14 +28,32 @@ type RoomConfig struct {
 	Visibility    string
 }
 
+type PlayerProfile struct {
+	UserID      string
+	DisplayName string
+	Avatar      string
+}
+
 type ViewRequest struct {
-	RoomID     string
-	MatchID    string
-	GameType   string
-	PlayerID   string
-	Visibility string
-	MaxPlayers int
-	Seq        int64
+	RoomID         string
+	MatchID        string
+	GameType       string
+	PlayerID       string
+	Visibility     string
+	MaxPlayers     int
+	Seq            int64
+	PlayerProfiles map[string]PlayerProfile
+}
+
+func (r ViewRequest) PlayerProfile(playerID string) PlayerProfile {
+	profile := r.PlayerProfiles[playerID]
+	if profile.UserID == "" {
+		profile.UserID = playerID
+	}
+	if profile.DisplayName == "" {
+		profile.DisplayName = playerID
+	}
+	return profile
 }
 
 type AIRequest struct {

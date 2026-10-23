@@ -67,6 +67,13 @@ func TestBuildMatchSyncIncludesRequiredRoomMetadata(t *testing.T) {
 		PlayerID:   "alice-1",
 		Visibility: contracts.VisibilityPrivate,
 		MaxPlayers: 4,
+		PlayerProfiles: map[string]game.PlayerProfile{
+			"alice-1": {
+				UserID:      "user-1",
+				DisplayName: "Alice",
+				Avatar:      "https://example.com/alice.png",
+			},
+		},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -77,6 +84,10 @@ func TestBuildMatchSyncIncludesRequiredRoomMetadata(t *testing.T) {
 	}
 	if !reflect.DeepEqual(view.PlayerOrder, []string{"alice-1", "bob-2"}) {
 		t.Fatalf("player order = %v", view.PlayerOrder)
+	}
+	player := view.Players["alice-1"]
+	if player.UserID != "user-1" || player.DisplayName != "Alice" || player.Avatar != "https://example.com/alice.png" {
+		t.Fatalf("player profile = %+v", player)
 	}
 	state.PlayerSeq[0] = "changed"
 	if view.PlayerOrder[0] != "alice-1" {

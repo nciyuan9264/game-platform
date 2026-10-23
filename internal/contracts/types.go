@@ -346,11 +346,14 @@ func (m *OutboundMessage) UnmarshalJSON(data []byte) error {
 }
 
 type RoomPlayer struct {
-	PlayerID  string `json:"playerID"`
-	Online    bool   `json:"online"`
-	AI        bool   `json:"ai"`
-	Ready     bool   `json:"ready"`
-	SeatIndex int    `json:"seatIndex"`
+	UserID      string `json:"userID,omitempty"`
+	PlayerID    string `json:"playerID"`
+	DisplayName string `json:"displayName,omitempty"`
+	Avatar      string `json:"avatar,omitempty"`
+	Online      bool   `json:"online"`
+	AI          bool   `json:"ai"`
+	Ready       bool   `json:"ready"`
+	SeatIndex   int    `json:"seatIndex"`
 }
 
 type MatchSync struct {

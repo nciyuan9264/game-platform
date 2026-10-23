@@ -57,6 +57,7 @@ type storeClient interface {
 	AppendGameLogEvents(context.Context, []contracts.GameLogEvent) error
 	SaveOutboundMessage(context.Context, contracts.OutboundMessage) error
 	SyncMatchRoster(context.Context, string, []contracts.MatchPlayerRecord) error
+	ListMatchPlayers(context.Context, string) ([]contracts.MatchPlayerRecord, error)
 	StartHistoryGame(context.Context, history.Game, []history.Player) (int64, error)
 	OpenHistoryGame(context.Context, string, string) (int64, int, error)
 	ResetOpenHistoryGame(context.Context, string, string) error
@@ -1953,6 +1954,10 @@ func (r *RoomActor) deliverEffects(ctx context.Context, traceID string, effects 
 	if err != nil {
 		return err
 	}
+	playerProfiles, err := r.loadPlayerProfiles(ctx)
+	if err != nil {
+		observability.Warn("load player profiles for effects failed", "roomID", r.record.RoomID, "error", err)
+	}
 	for _, effect := range effects {
 		for _, presence := range presences {
 			if !presence.Online {
@@ -1972,13 +1977,14 @@ func (r *RoomActor) deliverEffects(ctx context.Context, traceID string, effects 
 				payload = typed
 			default:
 				view, viewErr := r.definition.Engine.BuildPlayerView(ctx, r.state, game.ViewRequest{
-					RoomID:     r.record.RoomID,
-					MatchID:    r.match.MatchID,
-					GameType:   r.record.GameType,
-					PlayerID:   presence.PlayerID,
-					Visibility: r.record.Visibility,
-					MaxPlayers: r.record.MaxPlayers,
-					Seq:        r.seq,
+					RoomID:         r.record.RoomID,
+					MatchID:        r.match.MatchID,
+					GameType:       r.record.GameType,
+					PlayerID:       presence.PlayerID,
+					Visibility:     r.record.Visibility,
+					MaxPlayers:     r.record.MaxPlayers,
+					Seq:            r.seq,
+					PlayerProfiles: playerProfiles,
 				})
 				if viewErr != nil {
 					return viewErr
@@ -2159,6 +2165,10 @@ func (r *RoomActor) broadcast(ctx context.Context, traceID string) error {
 		return err
 	}
 	var outboundErr error
+	playerProfiles, err := r.loadPlayerProfiles(ctx)
+	if err != nil {
+		observability.Warn("load player profiles for broadcast failed", "roomID", r.record.RoomID, "error", err)
+	}
 	if err := r.syncRosterLocked(ctx, presences); err != nil {
 		observability.Warn("sync match roster failed", "roomID", r.record.RoomID, "error", err)
 		outboundErr = errors.Join(outboundErr, err)
@@ -2172,13 +2182,14 @@ func (r *RoomActor) broadcast(ctx context.Context, traceID string) error {
 			continue
 		}
 		payload, err := r.definition.Engine.BuildPlayerView(ctx, r.state, game.ViewRequest{
-			RoomID:     r.record.RoomID,
-			MatchID:    r.match.MatchID,
-			GameType:   r.record.GameType,
-			PlayerID:   p.PlayerID,
-			Visibility: r.record.Visibility,
-			MaxPlayers: r.record.MaxPlayers,
-			Seq:        r.seq,
+			RoomID:         r.record.RoomID,
+			MatchID:        r.match.MatchID,
+			GameType:       r.record.GameType,
+			PlayerID:       p.PlayerID,
+			Visibility:     r.record.Visibility,
+			MaxPlayers:     r.record.MaxPlayers,
+			Seq:            r.seq,
+			PlayerProfiles: playerProfiles,
 		})
 		if err != nil {
 			observability.Warn("build player view failed", "roomID", r.record.RoomID, "playerID", p.PlayerID, "error", err)
@@ -2243,6 +2254,32 @@ func (r *RoomActor) broadcast(ctx context.Context, traceID string) error {
 	return outboundErr
 }
 
+func (r *RoomActor) loadPlayerProfiles(ctx context.Context) (map[string]game.PlayerProfile, error) {
+	if r.match.MatchID == "" {
+		return map[string]game.PlayerProfile{}, nil
+	}
+	players, err := r.host.store.ListMatchPlayers(ctx, r.match.MatchID)
+	if err != nil {
+		return nil, err
+	}
+	profiles := make(map[string]game.PlayerProfile, len(players))
+	for _, player := range players {
+		if player.PlayerID == "" {
+			continue
+		}
+		displayName := player.DisplayName
+		if displayName == "" {
+			displayName = player.Name
+		}
+		profiles[player.PlayerID] = game.PlayerProfile{
+			UserID:      player.UserID,
+			DisplayName: displayName,
+			Avatar:      player.Avatar,
+		}
+	}
+	return profiles, nil
+}
+
 func (r *RoomActor) syncRosterLocked(ctx context.Context, presences []contracts.PresenceRecord) error {
 	provider, ok := r.definition.Engine.(game.RosterProvider)
 	if !ok {
@@ -2261,9 +2298,19 @@ func (r *RoomActor) syncRosterLocked(ctx context.Context, presences []contracts.
 	}
 	players := make([]contracts.MatchPlayerRecord, 0, len(roster))
 	now := time.Now().UTC()
+	presenceUserIDs := make(map[string]string, len(presences))
+	for _, presence := range presences {
+		if presence.PlayerID != "" && presence.UserID != "" {
+			presenceUserIDs[presence.PlayerID] = presence.UserID
+		}
+	}
 	for _, player := range roster {
+		userID := player.UserID
+		if !player.IsAI && presenceUserIDs[player.PlayerID] != "" {
+			userID = presenceUserIDs[player.PlayerID]
+		}
 		players = append(players, contracts.MatchPlayerRecord{
-			UserID:      player.UserID,
+			UserID:      userID,
 			PlayerID:    player.PlayerID,
 			DisplayName: player.DisplayName,
 			Online:      player.Online,

@@ -272,7 +272,7 @@ func (p *Plugin) BuildPlayerView(_ context.Context, state game.State, req game.V
 	if typed.Roster[req.PlayerID] == nil {
 		return nil, errors.New("player is not in room")
 	}
-	players := playerViews(typed)
+	players := playerViews(typed, req.PlayerProfiles)
 	if typed.RoomStatus == domain.RoomStatusMatch {
 		return map[string]any{
 			"type":        contracts.MessageTypeMatchSync,
@@ -698,15 +698,32 @@ func maxScore(state *domain.GameState) int {
 	return max
 }
 
-func playerViews(state *domain.GameState) map[string]any {
+func playerViews(state *domain.GameState, profiles map[string]game.PlayerProfile) map[string]any {
 	result := make(map[string]any, len(state.Roster))
 	for playerID, player := range state.Roster {
 		if player == nil {
 			continue
 		}
+		userID := player.UserID
+		displayName := displayName(player)
+		avatar := player.Avatar
+		if profile, ok := profiles[playerID]; ok {
+			if profile.UserID != "" {
+				userID = profile.UserID
+			}
+			if profile.DisplayName != "" {
+				displayName = profile.DisplayName
+			}
+			if profile.Avatar != "" {
+				avatar = profile.Avatar
+			}
+		}
+		if userID == "" {
+			userID = playerID
+		}
 		result[playerID] = map[string]any{
-			"userID": player.UserID, "playerID": playerID, "displayName": displayName(player),
-			"avatar": player.Avatar, "seatIndex": player.SeatIndex, "online": player.Online,
+			"userID": userID, "playerID": playerID, "displayName": displayName,
+			"avatar": avatar, "seatIndex": player.SeatIndex, "online": player.Online,
 			"ai": player.AI, "ready": player.Ready,
 		}
 	}

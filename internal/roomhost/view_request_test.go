@@ -3,6 +3,7 @@ package roomhost
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/nciyuan9264/game-platform/internal/contracts"
@@ -59,6 +60,12 @@ func TestRoomActorPassesRoomMetadataToPlayerViews(t *testing.T) {
 			PlayerID: "player-1",
 			Online:   true,
 		}},
+		matchPlayers: []contracts.MatchPlayerRecord{{
+			UserID:      "user-1",
+			PlayerID:    "player-1",
+			DisplayName: "Alice",
+			Avatar:      "https://example.com/alice.png",
+		}},
 	}
 	router := &fakeRoomhostRouter{}
 	engine := &metadataCaptureEngine{}
@@ -98,12 +105,19 @@ func TestRoomActorPassesRoomMetadataToPlayerViews(t *testing.T) {
 		Visibility: contracts.VisibilityPrivate,
 		MaxPlayers: 6,
 		Seq:        8,
+		PlayerProfiles: map[string]game.PlayerProfile{
+			"player-1": {
+				UserID:      "user-1",
+				DisplayName: "Alice",
+				Avatar:      "https://example.com/alice.png",
+			},
+		},
 	}
 	if len(engine.requests) != 2 {
 		t.Fatalf("BuildPlayerView request count = %d, want 2", len(engine.requests))
 	}
 	for index, request := range engine.requests {
-		if request != want {
+		if !reflect.DeepEqual(request, want) {
 			t.Fatalf("BuildPlayerView request %d = %+v, want %+v", index, request, want)
 		}
 	}

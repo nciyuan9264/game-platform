@@ -248,14 +248,14 @@ func (p *Plugin) BuildPlayerView(ctx context.Context, state game.State, req game
 		return nil, err
 	}
 	if typed.Status == contracts.RoomStatusMatch {
-		view := p.engine.BuildMatchSync(typed, req.PlayerID)
+		view := p.engine.BuildMatchSync(typed, req)
 		view.MatchID = req.MatchID
 		view.Visibility = req.Visibility
 		view.MaxPlayers = req.MaxPlayers
 		view.PlayerOrder = append([]string{}, typed.PlayerSeq...)
 		return view, nil
 	}
-	view := p.engine.BuildRoomSync(typed, req.PlayerID)
+	view := p.engine.BuildRoomSync(typed, req)
 	view.MatchID = req.MatchID
 	view.Seq = req.Seq
 	return view, nil
@@ -730,21 +730,25 @@ func (e *Engine) allCardsRevealed(state *State, playerID string) bool {
 	return true
 }
 
-func (e *Engine) BuildMatchSync(state *State, playerID string) contracts.MatchSync {
+func (e *Engine) BuildMatchSync(state *State, req game.ViewRequest) contracts.MatchSync {
 	players := map[string]contracts.RoomPlayer{}
 	for id, p := range state.Players {
+		profile := req.PlayerProfile(id)
 		players[id] = contracts.RoomPlayer{
-			PlayerID:  id,
-			Online:    p.Online,
-			AI:        p.AI,
-			Ready:     p.Ready,
-			SeatIndex: p.SeatIndex,
+			UserID:      profile.UserID,
+			PlayerID:    id,
+			DisplayName: profile.DisplayName,
+			Avatar:      profile.Avatar,
+			Online:      p.Online,
+			AI:          p.AI,
+			Ready:       p.Ready,
+			SeatIndex:   p.SeatIndex,
 		}
 	}
-	return contracts.MatchSync{Type: contracts.MessageTypeMatchSync, RoomID: state.RoomID, OwnerID: state.OwnerID, Status: state.Status, PlayerID: playerID, Players: players}
+	return contracts.MatchSync{Type: contracts.MessageTypeMatchSync, RoomID: state.RoomID, OwnerID: state.OwnerID, Status: state.Status, PlayerID: req.PlayerID, Players: players}
 }
 
-func (e *Engine) BuildRoomSync(state *State, playerID string) contracts.RoomSync {
+func (e *Engine) BuildRoomSync(state *State, req game.ViewRequest) contracts.RoomSync {
 	players := map[string]contracts.RoomPlayer{}
 	boardCards := map[string]map[string]any{}
 	self := []Card{}
@@ -753,15 +757,19 @@ func (e *Engine) BuildRoomSync(state *State, playerID string) contracts.RoomSync
 		boardCards[c.ID] = map[string]any{"id": c.ID, "color": c.Color}
 	}
 	for id, p := range state.Players {
+		profile := req.PlayerProfile(id)
 		players[id] = contracts.RoomPlayer{
-			PlayerID:  id,
-			Online:    p.Online,
-			AI:        p.AI,
-			Ready:     p.Ready,
-			SeatIndex: p.SeatIndex,
+			UserID:      profile.UserID,
+			PlayerID:    id,
+			DisplayName: profile.DisplayName,
+			Avatar:      profile.Avatar,
+			Online:      p.Online,
+			AI:          p.AI,
+			Ready:       p.Ready,
+			SeatIndex:   p.SeatIndex,
 		}
 		for _, c := range p.Cards {
-			if id == playerID {
+			if id == req.PlayerID {
 				self = append(self, c)
 				continue
 			}
@@ -775,7 +783,7 @@ func (e *Engine) BuildRoomSync(state *State, playerID string) contracts.RoomSync
 	return contracts.RoomSync{
 		Type:     contracts.MessageTypeRoomSync,
 		RoomID:   state.RoomID,
-		PlayerID: playerID,
+		PlayerID: req.PlayerID,
 		OwnerID:  state.OwnerID,
 		Seq:      state.Seq,
 		RoomData: map[string]any{

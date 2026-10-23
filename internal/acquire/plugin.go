@@ -342,12 +342,16 @@ func (p *Plugin) BuildPlayerView(ctx context.Context, state game.State, req game
 		if player == nil {
 			continue
 		}
+		profile := req.PlayerProfile(playerID)
 		players[playerID] = contracts.RoomPlayer{
-			PlayerID:  playerID,
-			Online:    player.Online,
-			AI:        player.AI,
-			Ready:     player.Ready,
-			SeatIndex: player.SeatIndex,
+			UserID:      profile.UserID,
+			PlayerID:    playerID,
+			DisplayName: profile.DisplayName,
+			Avatar:      profile.Avatar,
+			Online:      player.Online,
+			AI:          player.AI,
+			Ready:       player.Ready,
+			SeatIndex:   player.SeatIndex,
 		}
 	}
 	if room.State.RoomStatus == domain.RoomStatusMatch {

@@ -155,6 +155,8 @@ type fakeRoomhostStore struct {
 	setRooms        []contracts.RoomRecord
 	rosterMatchID   string
 	rosterPlayers   []contracts.MatchPlayerRecord
+	matchPlayers    []contracts.MatchPlayerRecord
+	matchPlayersErr error
 	operationEvents []contracts.GameLogEvent
 	visibilityErr   error
 	visibilityCalls []string
@@ -299,6 +301,13 @@ func (s *fakeRoomhostStore) SyncMatchRoster(_ context.Context, matchID string, p
 	s.rosterMatchID = matchID
 	s.rosterPlayers = append([]contracts.MatchPlayerRecord(nil), players...)
 	return nil
+}
+
+func (s *fakeRoomhostStore) ListMatchPlayers(context.Context, string) ([]contracts.MatchPlayerRecord, error) {
+	if s.matchPlayersErr != nil {
+		return nil, s.matchPlayersErr
+	}
+	return append([]contracts.MatchPlayerRecord(nil), s.matchPlayers...), nil
 }
 
 func (s *fakeRoomhostStore) StartHistoryGame(context.Context, history.Game, []history.Player) (int64, error) {

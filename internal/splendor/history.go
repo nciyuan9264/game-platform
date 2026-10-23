@@ -150,7 +150,7 @@ func (p *Plugin) BuildReplaySnapshot(
 			"currentPlayer": typed.CurrentPlayer,
 			"gameStatus":    typed.RoomStatus,
 			"lastData":      typed.LastData,
-			"players":       playerViews(typed),
+			"players":       playerViews(typed, nil),
 		},
 		"playersData": typed.Players,
 		"result":      result,

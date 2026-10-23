@@ -95,6 +95,13 @@ func TestBuildMatchSyncIncludesRequiredRoomMetadata(t *testing.T) {
 		PlayerID:   "alice-1",
 		Visibility: contracts.VisibilityPrivate,
 		MaxPlayers: 6,
+		PlayerProfiles: map[string]game.PlayerProfile{
+			"alice-1": {
+				UserID:      "user-1",
+				DisplayName: "Alice",
+				Avatar:      "https://example.com/alice.png",
+			},
+		},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -105,6 +112,10 @@ func TestBuildMatchSyncIncludesRequiredRoomMetadata(t *testing.T) {
 	}
 	if len(view.PlayerOrder) != 1 || view.PlayerOrder[0] != "alice-1" {
 		t.Fatalf("player order = %v, want [alice-1]", view.PlayerOrder)
+	}
+	player := view.Players["alice-1"]
+	if player.UserID != "user-1" || player.DisplayName != "Alice" || player.Avatar != "https://example.com/alice.png" {
+		t.Fatalf("player profile = %+v", player)
 	}
 
 	encoded, err := json.Marshal(view)
