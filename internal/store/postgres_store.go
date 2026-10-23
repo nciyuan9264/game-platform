@@ -445,6 +445,11 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 }
 
 func (s *PostgresStore) SetRoom(ctx context.Context, r contracts.RoomRecord) error {
+	visibility, err := normalizeRoomVisibility(r.Visibility)
+	if err != nil {
+		return err
+	}
+	r.Visibility = visibility
 	now := time.Now().UTC()
 	if r.CreatedAt.IsZero() {
 		r.CreatedAt = now
@@ -455,12 +460,13 @@ func (s *PostgresStore) SetRoom(ctx context.Context, r contracts.RoomRecord) err
 		return err
 	}
 	defer tx.Rollback()
+	// Existing visibility is updated only through the owner-fenced projection.
 	result, err := tx.ExecContext(ctx, `
 		INSERT INTO rooms (
-			room_id, game_type, owner_user_id, owner_player_id, owner_node,
+			room_id, game_type, visibility, owner_user_id, owner_player_id, owner_node,
 				epoch, status, max_players, player_count, progress_current, progress_total, last_applied_seq, engine_version,
 			current_match_id, next_round_no, created_at, updated_at, lease_expires_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
 		ON CONFLICT (room_id) DO UPDATE SET
 			game_type = EXCLUDED.game_type,
 			owner_user_id = EXCLUDED.owner_user_id,
@@ -486,7 +492,7 @@ func (s *PostgresStore) SetRoom(ctx context.Context, r contracts.RoomRecord) err
 				rooms.status <> 'closed'
 				OR EXCLUDED.status = 'closed'
 			)`,
-		r.RoomID, r.GameType, r.OwnerUserID, r.OwnerPlayerID, r.OwnerNode,
+		r.RoomID, r.GameType, r.Visibility, r.OwnerUserID, r.OwnerPlayerID, r.OwnerNode,
 		r.Epoch, r.Status, r.MaxPlayers, r.PlayerCount, r.ProgressCurrent, r.ProgressTotal, r.LastAppliedSeq, r.EngineVersion,
 		r.CurrentMatchID, r.NextRoundNo, r.CreatedAt, r.UpdatedAt, nullableTime(r.LeaseExpiresAt),
 	)
@@ -520,6 +526,11 @@ func (s *PostgresStore) SetRoom(ctx context.Context, r contracts.RoomRecord) err
 }
 
 func (s *PostgresStore) ReserveRoomCreation(ctx context.Context, rec contracts.RoomRecord, requestID, requestHash string, maxOwnedRooms int) (contracts.RoomRecord, bool, error) {
+	visibility, err := normalizeRoomVisibility(rec.Visibility)
+	if err != nil {
+		return contracts.RoomRecord{}, false, err
+	}
+	rec.Visibility = visibility
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return contracts.RoomRecord{}, false, err
@@ -572,12 +583,12 @@ func (s *PostgresStore) ReserveRoomCreation(ctx context.Context, rec contracts.R
 	rec.UpdatedAt = now
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO rooms (
-			room_id, game_type, owner_user_id, owner_player_id, owner_node,
+			room_id, game_type, visibility, owner_user_id, owner_player_id, owner_node,
 			epoch, status, max_players, player_count, progress_current, progress_total,
 				last_applied_seq, engine_version, current_match_id, next_round_no,
 				created_at, updated_at, lease_expires_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
-		rec.RoomID, rec.GameType, rec.OwnerUserID, rec.OwnerPlayerID, rec.OwnerNode,
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
+		rec.RoomID, rec.GameType, rec.Visibility, rec.OwnerUserID, rec.OwnerPlayerID, rec.OwnerNode,
 		rec.Epoch, rec.Status, rec.MaxPlayers, rec.PlayerCount, rec.ProgressCurrent, rec.ProgressTotal,
 		rec.LastAppliedSeq, rec.EngineVersion, rec.CurrentMatchID, rec.NextRoundNo,
 		rec.CreatedAt, rec.UpdatedAt, nullableTime(rec.LeaseExpiresAt)); err != nil {
@@ -643,13 +654,11 @@ func (s *PostgresStore) GetRoom(ctx context.Context, roomID string) (contracts.R
 }
 
 func (s *PostgresStore) SetRoomVisibility(ctx context.Context, roomID, visibility string) error {
-	if visibility == "" {
-		visibility = contracts.VisibilityPublic
+	visibility, err := normalizeRoomVisibility(visibility)
+	if err != nil {
+		return err
 	}
-	if visibility != contracts.VisibilityPublic && visibility != contracts.VisibilityPrivate {
-		return errors.New("invalid room visibility")
-	}
-	_, err := s.db.ExecContext(ctx, `
+	_, err = s.db.ExecContext(ctx, `
 		UPDATE rooms
 		SET visibility = $2, updated_at = clock_timestamp()
 		WHERE room_id = $1`, roomID, visibility)
@@ -663,8 +672,9 @@ func (s *PostgresStore) SetRoomVisibilityIfOwner(
 	ownerNode string,
 	epoch int64,
 ) error {
-	if visibility != contracts.VisibilityPublic && visibility != contracts.VisibilityPrivate {
-		return errors.New("invalid room visibility")
+	visibility, err := requireRoomVisibility(visibility)
+	if err != nil {
+		return err
 	}
 	result, err := s.db.ExecContext(ctx, `
 		UPDATE rooms AS r
@@ -691,6 +701,20 @@ func (s *PostgresStore) SetRoomVisibilityIfOwner(
 		return ErrStaleOwnerWrite
 	}
 	return nil
+}
+
+func normalizeRoomVisibility(visibility string) (string, error) {
+	if visibility == "" {
+		return contracts.VisibilityPublic, nil
+	}
+	return requireRoomVisibility(visibility)
+}
+
+func requireRoomVisibility(visibility string) (string, error) {
+	if visibility != contracts.VisibilityPublic && visibility != contracts.VisibilityPrivate {
+		return "", errors.New("invalid room visibility")
+	}
+	return visibility, nil
 }
 
 func (s *PostgresStore) RoomVisibility(ctx context.Context, roomID string) (string, error) {
@@ -1422,6 +1446,7 @@ func (s *PostgresStore) UpdateRoom(ctx context.Context, roomID string, fn func(*
 		return contracts.RoomRecord{}, err
 	}
 	rec.UpdatedAt = time.Now().UTC()
+	// Runtime visibility changes must use SetRoomVisibilityIfOwner.
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE rooms SET
 			game_type = $2,

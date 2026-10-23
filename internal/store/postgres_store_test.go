@@ -5,6 +5,8 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/nciyuan9264/game-platform/internal/contracts"
 )
 
 type roomScannerFunc func(dest ...any) error
@@ -28,6 +30,37 @@ func TestScanRoomIncludesVisibility(t *testing.T) {
 	}
 	if record.Visibility != "private" {
 		t.Fatalf("visibility = %q, want private", record.Visibility)
+	}
+}
+
+func TestNormalizeRoomVisibility(t *testing.T) {
+	tests := []struct {
+		name       string
+		visibility string
+		want       string
+		wantError  bool
+	}{
+		{name: "default", want: contracts.VisibilityPublic},
+		{name: "public", visibility: contracts.VisibilityPublic, want: contracts.VisibilityPublic},
+		{name: "private", visibility: contracts.VisibilityPrivate, want: contracts.VisibilityPrivate},
+		{name: "invalid", visibility: "hidden", wantError: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := normalizeRoomVisibility(tt.visibility)
+			if (err != nil) != tt.wantError {
+				t.Fatalf("normalizeRoomVisibility() error = %v, wantError %v", err, tt.wantError)
+			}
+			if got != tt.want {
+				t.Fatalf("normalizeRoomVisibility() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRequireRoomVisibilityRejectsEmpty(t *testing.T) {
+	if _, err := requireRoomVisibility(""); err == nil {
+		t.Fatal("requireRoomVisibility() accepted an empty value")
 	}
 }
 

@@ -29,6 +29,7 @@ func TestPostgresRoomMatchLifecycleIntegration(t *testing.T) {
 	room := contracts.RoomRecord{
 		RoomID:        roomID,
 		GameType:      contracts.GameAcquire,
+		Visibility:    contracts.VisibilityPrivate,
 		OwnerUserID:   "integration-owner",
 		OwnerPlayerID: "integration-owner",
 		OwnerNode:     "roomhost-integration",
@@ -41,6 +42,13 @@ func TestPostgresRoomMatchLifecycleIntegration(t *testing.T) {
 	}
 	if _, _, err := store.ReserveRoomCreation(ctx, room, "create", "hash", 0); err != nil {
 		t.Fatal(err)
+	}
+	storedRoom, err := store.GetRoom(ctx, roomID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if storedRoom.Visibility != contracts.VisibilityPrivate {
+		t.Fatalf("stored visibility = %q, want private", storedRoom.Visibility)
 	}
 	room.LeaseExpiresAt = time.Now().UTC().Add(time.Minute)
 	if err := store.SetRoom(ctx, room); err != nil {
