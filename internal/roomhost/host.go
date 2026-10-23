@@ -60,6 +60,7 @@ type storeClient interface {
 	ListMatchPlayers(context.Context, string) ([]contracts.MatchPlayerRecord, error)
 	StartHistoryGame(context.Context, history.Game, []history.Player) (int64, error)
 	OpenHistoryGame(context.Context, string, string) (int64, int, error)
+	FindHistoryGameByStart(context.Context, string, string, time.Time) (int64, int, bool, error)
 	ResetOpenHistoryGame(context.Context, string, string) error
 	AppendHistoryEvent(context.Context, history.Event) error
 	FinishHistoryGame(context.Context, int64, history.FinalizeInput) error
@@ -914,6 +915,7 @@ type RoomActor struct {
 	timerGen       uint64
 	historyID      int64
 	historySeq     int
+	historyRebuild bool
 	historyDirty   bool
 	operationDirty bool
 	outboundDirty  bool
@@ -1633,6 +1635,9 @@ func (r *RoomActor) syncHistoryLocked(ctx context.Context, cmd contracts.RoomCom
 	if err != nil || !projection.Started {
 		return err
 	}
+	if projection.Finished && r.historyID == 0 && !r.historyRebuild {
+		return nil
+	}
 	if err := r.ensureHistoryLocked(ctx, projection); err != nil {
 		return err
 	}
@@ -1712,6 +1717,10 @@ func (r *RoomActor) reconcileHistoryLocked(ctx context.Context) error {
 		"matchID", r.match.MatchID,
 		"commandCount", expectedSeq-1,
 	)
+	r.historyRebuild = true
+	defer func() {
+		r.historyRebuild = false
+	}()
 	if err := r.host.store.ResetOpenHistoryGame(ctx, r.record.RoomID, r.record.GameType); err != nil {
 		return err
 	}
@@ -1811,6 +1820,27 @@ func (r *RoomActor) ensureHistoryLocked(ctx context.Context, projection game.His
 	if err == nil {
 		r.historyID = gameID
 		r.historySeq = nextSeq
+		return nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+	gameID, nextSeq, finished, err := r.host.store.FindHistoryGameByStart(
+		ctx,
+		r.record.RoomID,
+		r.record.GameType,
+		projection.StartedAt,
+	)
+	if err == nil {
+		if finished && !r.historyRebuild && !projection.Finished {
+			return fmt.Errorf("history game %d is already finished", gameID)
+		}
+		r.historyID = gameID
+		if finished {
+			r.historySeq = 0
+		} else {
+			r.historySeq = nextSeq
+		}
 		return nil
 	}
 	if !errors.Is(err, sql.ErrNoRows) {

@@ -69,6 +69,38 @@ func (s *PostgresStore) OpenHistoryGame(ctx context.Context, roomID, gameType st
 	return gameID, nextSeq, nil
 }
 
+func (s *PostgresStore) FindHistoryGameByStart(
+	ctx context.Context,
+	roomID string,
+	gameType string,
+	startedAt time.Time,
+) (int64, int, bool, error) {
+	var gameID int64
+	var nextSeq int
+	var finished bool
+	err := s.db.QueryRowContext(ctx, `
+		SELECT
+			g.id,
+			COALESCE(MAX(ge.seq) + 1, 0),
+			g.ended_at IS NOT NULL
+		FROM games g
+		LEFT JOIN game_events ge ON ge.game_id = g.id
+		WHERE g.room_id = $1
+			AND g.game_type = $2
+			AND g.started_at = $3
+		GROUP BY g.id, g.ended_at
+		ORDER BY COUNT(ge.id) DESC, g.id ASC
+		LIMIT 1`,
+		roomID,
+		gameType,
+		startedAt,
+	).Scan(&gameID, &nextSeq, &finished)
+	if err != nil {
+		return 0, 0, false, err
+	}
+	return gameID, nextSeq, finished, nil
+}
+
 func (s *PostgresStore) ResetOpenHistoryGame(ctx context.Context, roomID, gameType string) error {
 	_, err := s.db.ExecContext(ctx, `
 		DELETE FROM games

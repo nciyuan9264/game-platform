@@ -138,6 +138,14 @@ func (e *loggingEngine) BuildSpectatorView(_ context.Context, state game.State, 
 	return map[string]any{"seq": seq, "state": state}, nil
 }
 
+type fakeHistoryLookup struct {
+	id       int64
+	nextSeq  int
+	finished bool
+	err      error
+	calls    []time.Time
+}
+
 type fakeRoomhostStore struct {
 	snapshot        contracts.SnapshotRecord
 	snapshotErr     error
@@ -158,6 +166,9 @@ type fakeRoomhostStore struct {
 	matchPlayers    []contracts.MatchPlayerRecord
 	matchPlayersErr error
 	operationEvents []contracts.GameLogEvent
+	startedHistory  []history.Game
+	finishedHistory []int64
+	historyLookup   fakeHistoryLookup
 	visibilityErr   error
 	visibilityCalls []string
 }
@@ -310,12 +321,29 @@ func (s *fakeRoomhostStore) ListMatchPlayers(context.Context, string) ([]contrac
 	return append([]contracts.MatchPlayerRecord(nil), s.matchPlayers...), nil
 }
 
-func (s *fakeRoomhostStore) StartHistoryGame(context.Context, history.Game, []history.Player) (int64, error) {
-	return 1, nil
+func (s *fakeRoomhostStore) StartHistoryGame(_ context.Context, game history.Game, _ []history.Player) (int64, error) {
+	s.startedHistory = append(s.startedHistory, game)
+	return int64(len(s.startedHistory) + 100), nil
 }
 
 func (s *fakeRoomhostStore) OpenHistoryGame(context.Context, string, string) (int64, int, error) {
 	return 0, 0, sql.ErrNoRows
+}
+
+func (s *fakeRoomhostStore) FindHistoryGameByStart(
+	_ context.Context,
+	_ string,
+	_ string,
+	startedAt time.Time,
+) (int64, int, bool, error) {
+	s.historyLookup.calls = append(s.historyLookup.calls, startedAt)
+	if s.historyLookup.err != nil {
+		return 0, 0, false, s.historyLookup.err
+	}
+	if s.historyLookup.id == 0 {
+		return 0, 0, false, sql.ErrNoRows
+	}
+	return s.historyLookup.id, s.historyLookup.nextSeq, s.historyLookup.finished, nil
 }
 
 func (s *fakeRoomhostStore) ResetOpenHistoryGame(context.Context, string, string) error {
@@ -326,7 +354,8 @@ func (s *fakeRoomhostStore) AppendHistoryEvent(context.Context, history.Event) e
 	return nil
 }
 
-func (s *fakeRoomhostStore) FinishHistoryGame(context.Context, int64, history.FinalizeInput) error {
+func (s *fakeRoomhostStore) FinishHistoryGame(_ context.Context, gameID int64, _ history.FinalizeInput) error {
+	s.finishedHistory = append(s.finishedHistory, gameID)
 	return nil
 }
 
@@ -820,6 +849,97 @@ func TestRoomActorRestoreReplaysCommandLogAfterLatestSnapshot(t *testing.T) {
 	}
 	if engine.resetCount != 1 {
 		t.Fatalf("automation reset count = %d, want 1", engine.resetCount)
+	}
+}
+
+func TestRoomActorPostEndCommandDoesNotReopenFinishedHistory(t *testing.T) {
+	ctx := context.Background()
+	plugin := &acquiregame.Plugin{}
+	state, err := plugin.InitRoom(ctx, game.RoomConfig{
+		RoomID:        "finished-history-room",
+		GameType:      acquiregame.GameType,
+		OwnerPlayerID: "1",
+		MaxPlayers:    1,
+		RandomSeed:    1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	room := state.(*acquiredomain.Room)
+	room.Connections["1"] = &acquiredomain.PlayerConn{PlayerID: "1", Online: true, SeatIndex: 0}
+	room.PlayerSeq = []string{"1"}
+	room.State.Players["1"] = &acquiredomain.PlayerState{Money: 6000, Stocks: map[string]int{}}
+	room.State.GameStartTime = time.Now().Add(-time.Minute)
+	room.State.RoomStatus = acquiredomain.RoomStatusEnd
+
+	st := &fakeRoomhostStore{}
+	actor := &RoomActor{
+		host:       &Host{store: st},
+		record:     contracts.RoomRecord{RoomID: room.ID, GameType: acquiregame.GameType},
+		match:      contracts.MatchRecord{MatchID: room.ID + "-r1"},
+		definition: acquiregame.Definition(),
+		state:      state,
+		historyID:  42,
+	}
+	if err := actor.syncHistoryLocked(ctx, contracts.RoomCommand{
+		RoomID:   room.ID,
+		MatchID:  actor.match.MatchID,
+		PlayerID: "1",
+		Type:     "game_end_vote",
+		Payload:  map[string]any{"allow": true},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := actor.syncHistoryLocked(ctx, contracts.RoomCommand{
+		RoomID:   room.ID,
+		MatchID:  actor.match.MatchID,
+		PlayerID: "1",
+		Type:     "disconnect",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(st.startedHistory) != 0 {
+		t.Fatalf("post-end command started %d duplicate histories, want 0", len(st.startedHistory))
+	}
+	if len(st.finishedHistory) != 1 || st.finishedHistory[0] != 42 {
+		t.Fatalf("finished history IDs = %v, want [42]", st.finishedHistory)
+	}
+	if len(st.historyLookup.calls) != 0 {
+		t.Fatalf("post-end command performed %d history identity lookups, want 0", len(st.historyLookup.calls))
+	}
+}
+
+func TestRoomActorHistoryRebuildReusesFinishedGameByStart(t *testing.T) {
+	startedAt := time.Date(2026, time.October, 23, 20, 52, 40, 0, time.UTC)
+	st := &fakeRoomhostStore{
+		historyLookup: fakeHistoryLookup{
+			id:       598,
+			nextSeq:  87,
+			finished: true,
+		},
+	}
+	actor := &RoomActor{
+		host:           &Host{store: st},
+		record:         contracts.RoomRecord{RoomID: "acquire-room", GameType: acquiregame.GameType},
+		definition:     acquiregame.Definition(),
+		historyRebuild: true,
+	}
+	projection := game.HistoryProjection{StartedAt: startedAt}
+
+	if err := actor.ensureHistoryLocked(context.Background(), projection); err != nil {
+		t.Fatal(err)
+	}
+	if actor.historyID != 598 {
+		t.Fatalf("history ID = %d, want 598", actor.historyID)
+	}
+	if actor.historySeq != 0 {
+		t.Fatalf("history seq = %d, want 0 for deterministic rebuild", actor.historySeq)
+	}
+	if len(st.startedHistory) != 0 {
+		t.Fatalf("rebuild started %d duplicate histories, want 0", len(st.startedHistory))
+	}
+	if len(st.historyLookup.calls) != 1 || !st.historyLookup.calls[0].Equal(startedAt) {
+		t.Fatalf("history identity lookups = %v, want [%v]", st.historyLookup.calls, startedAt)
 	}
 }
 

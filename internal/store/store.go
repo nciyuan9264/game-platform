@@ -288,6 +288,15 @@ func (s *Store) OpenHistoryGame(ctx context.Context, roomID, gameType string) (i
 	return s.Postgres.OpenHistoryGame(ctx, roomID, gameType)
 }
 
+func (s *Store) FindHistoryGameByStart(
+	ctx context.Context,
+	roomID string,
+	gameType string,
+	startedAt time.Time,
+) (int64, int, bool, error) {
+	return s.Postgres.FindHistoryGameByStart(ctx, roomID, gameType, startedAt)
+}
+
 func (s *Store) ResetOpenHistoryGame(ctx context.Context, roomID, gameType string) error {
 	return s.Postgres.ResetOpenHistoryGame(ctx, roomID, gameType)
 }
