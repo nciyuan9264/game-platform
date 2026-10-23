@@ -1,9 +1,12 @@
 package acquire
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
+	"strings"
 	"testing"
 
 	"github.com/nciyuan9264/game-platform/internal/acquire/domain/domain"
@@ -406,6 +409,124 @@ func TestPluginSerializesMergeSettlementByTurnOrder(t *testing.T) {
 	}
 	if room.State.RoomStatus != domain.RoomStatusBuyStock {
 		t.Fatalf("room status = %q, want buyStock", room.State.RoomStatus)
+	}
+}
+
+func TestPluginReplaysLegacyMergeSettlementOrder(t *testing.T) {
+	ctx := context.Background()
+	plugin := &Plugin{}
+	state, err := plugin.InitRoom(ctx, game.RoomConfig{
+		RoomID:        "acquire-legacy-merge-replay",
+		OwnerPlayerID: "alice",
+		MaxPlayers:    2,
+		RandomSeed:    testRandomSeed,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	room, err := asRoom(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	room.Connections["alice"] = &domain.PlayerConn{PlayerID: "alice", Online: true, SeatIndex: 0}
+	room.Connections["bob"] = &domain.PlayerConn{PlayerID: "bob", Online: true, SeatIndex: 1}
+	room.PlayerSeq = []string{"alice", "bob"}
+	room.State.CurrentPlayer = "alice"
+	room.State.RoomStatus = domain.RoomStatusMergingSettle
+	room.State.MergeMainCompany = "Tower"
+	room.State.MergeSettleData = map[string]domain.SettleData{
+		"American": {Hoders: []string{"alice", "bob"}, Dividends: map[string]int{}},
+	}
+	room.State.Companies["Tower"] = &domain.CompanyState{Name: "Tower", Tiles: 3, StockTotal: 10, StockPrice: 300}
+	room.State.Companies["American"] = &domain.CompanyState{Name: "American", Tiles: 2, StockTotal: 21, StockPrice: 200}
+	room.State.Players = map[string]*domain.PlayerState{
+		"alice": {Stocks: map[string]int{"American": 2}},
+		"bob":   {Stocks: map[string]int{"American": 2}},
+	}
+
+	_, replayErr := plugin.ApplyCommand(ctx, state, contracts.RoomCommand{
+		PlayerID: "bob",
+		Type:     "game_merging_settle",
+		Payload: map[string]any{"actions": []map[string]any{{
+			"company": "American", "exchangeAmount": 0, "sellAmount": 1,
+		}}},
+		Replay: true,
+	})
+	if replayErr != nil {
+		t.Fatalf("replay legacy settlement: %v", replayErr)
+	}
+	if rules.IsPendingMergeSettlePlayer(room, "bob") {
+		t.Fatal("legacy shareholder remains pending after replay")
+	}
+	if got := rules.CurrentMergeSettlePlayer(room); got != "alice" {
+		t.Fatalf("current settlement player = %q, want alice", got)
+	}
+}
+
+func TestPluginLabelsLiveAndReplayOperationLogs(t *testing.T) {
+	previousWriter := log.Writer()
+	previousFlags := log.Flags()
+	var output bytes.Buffer
+	log.SetOutput(&output)
+	log.SetFlags(0)
+	defer func() {
+		log.SetOutput(previousWriter)
+		log.SetFlags(previousFlags)
+	}()
+
+	plugin := &Plugin{}
+	apply := func(roomID, commandID string, replay bool) {
+		t.Helper()
+		state, err := plugin.InitRoom(context.Background(), game.RoomConfig{
+			RoomID:        roomID,
+			OwnerPlayerID: "alice",
+			MaxPlayers:    1,
+			RandomSeed:    testRandomSeed,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		room, err := asRoom(state)
+		if err != nil {
+			t.Fatal(err)
+		}
+		room.Connections["alice"] = &domain.PlayerConn{PlayerID: "alice", Online: true, SeatIndex: 0}
+		room.PlayerSeq = []string{"alice"}
+		room.State.CurrentPlayer = "alice"
+		room.State.RoomStatus = domain.RoomStatusBuyStock
+		room.State.BoardTiles = map[string]*domain.Tile{"1A": {ID: "1A"}}
+		room.State.Players = map[string]*domain.PlayerState{
+			"alice": {Money: 6000, Stocks: map[string]int{}},
+		}
+
+		if _, err := plugin.ApplyCommand(context.Background(), state, contracts.RoomCommand{
+			CommandID: commandID,
+			RoomID:    roomID,
+			MatchID:   roomID + "-r1",
+			PlayerID:  "alice",
+			Type:      "game_buy_stock",
+			Payload:   map[string]any{"stocks": map[string]int{}},
+			Replay:    replay,
+		}); err != nil {
+			t.Fatalf("apply command: %v", err)
+		}
+		if room.CommandLogger != nil {
+			t.Fatal("command logger scope was not restored")
+		}
+	}
+
+	apply("live-room", "live-command", false)
+	apply("replay-room", "replay-command", true)
+	logs := output.String()
+	liveTagged := strings.Contains(logs, `"command_id":"live-command"`) &&
+		strings.Contains(logs, `"execution_mode":"live"`) &&
+		strings.Contains(logs, `"is_replay":false`)
+	replayTagged := strings.Contains(logs, `"command_id":"replay-command"`) &&
+		strings.Contains(logs, `"execution_mode":"replay"`) &&
+		strings.Contains(logs, `"is_replay":true`)
+
+	if !liveTagged || !replayTagged {
+		t.Fatalf("operation logs are not distinctly tagged:\n%s", logs)
 	}
 }
 

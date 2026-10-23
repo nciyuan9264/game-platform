@@ -3,6 +3,7 @@ package domain
 import (
 	"time"
 
+	"github.com/nciyuan9264/game-platform/internal/acquire/logger"
 	"github.com/nciyuan9264/game-platform/internal/acquire/roomcore"
 )
 
@@ -68,5 +69,13 @@ type GameState struct {
 type Room struct {
 	*roomcore.Base
 
-	State *GameState `json:"state"`
+	State         *GameState     `json:"state"`
+	CommandLogger *logger.Logger `json:"-"`
+}
+
+func (r *Room) Log() *logger.Logger {
+	if r == nil || r.CommandLogger == nil {
+		return logger.DefaultLogger
+	}
+	return r.CommandLogger
 }

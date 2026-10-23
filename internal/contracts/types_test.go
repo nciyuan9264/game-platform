@@ -39,6 +39,7 @@ func TestRoomCommandConnectionRefJSONCompatibility(t *testing.T) {
 		RoomID:        "r1",
 		PlayerID:      "p1",
 		ConnectionRef: ConnectionRef{GatewayNode: "gateway-a", SessionID: "session-a"},
+		Replay:        true,
 	}
 	data, err := json.Marshal(cmd)
 	if err != nil {
@@ -51,12 +52,18 @@ func TestRoomCommandConnectionRefJSONCompatibility(t *testing.T) {
 	if raw["gatewayNode"] != "gateway-a" || raw["sessionID"] != "session-a" {
 		t.Fatalf("legacy command fields missing: %s", data)
 	}
+	if _, ok := raw["replay"]; ok {
+		t.Fatalf("internal replay flag was serialized: %s", data)
+	}
 
 	var legacy RoomCommand
-	if err := json.Unmarshal([]byte(`{"gatewayNode":"gateway-b","sessionID":"session-b"}`), &legacy); err != nil {
+	if err := json.Unmarshal([]byte(`{"gatewayNode":"gateway-b","sessionID":"session-b","replay":true}`), &legacy); err != nil {
 		t.Fatalf("unmarshal legacy command: %v", err)
 	}
 	if legacy.ConnectionRef.GatewayNode != "gateway-b" || legacy.ConnectionRef.SessionID != "session-b" {
 		t.Fatalf("legacy command did not populate connection ref: %+v", legacy.ConnectionRef)
+	}
+	if legacy.Replay {
+		t.Fatal("external command enabled internal replay mode")
 	}
 }

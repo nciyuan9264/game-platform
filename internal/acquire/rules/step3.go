@@ -15,13 +15,13 @@ func GiveRandomTileToPlayer(r *domain.Room, playerID string) error {
 	}
 
 	if len(selected) == 0 {
-		logger.Warn("没有可用的 tiles")
+		r.Log().Warn("没有可用的 tiles")
 		return nil
 	}
 
 	// 添加到玩家 tiles 中
 	r.State.Players[playerID].Tiles = append(r.State.Players[playerID].Tiles, selected[0])
 
-	logger.Info("玩家获得 tile", logger.F("room_id", r.ID), logger.F("player_id", playerID), logger.F("tile", selected[0]))
+	r.Log().Info("玩家获得 tile", logger.F("room_id", r.ID), logger.F("player_id", playerID), logger.F("tile", selected[0]))
 	return nil
 }

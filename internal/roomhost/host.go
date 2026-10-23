@@ -203,7 +203,14 @@ func (h *Host) HandleCommand(ctx context.Context, cmd contracts.RoomCommand) con
 			Message:   err.Error(),
 		}
 	}
-	observability.Info("room command received", "nodeID", h.nodeID, "roomID", cmd.RoomID, "type", cmd.Type, "playerID", cmd.PlayerID)
+	observability.Info(
+		"room command received",
+		"execution_mode", contracts.ExecutionModeLive,
+		"nodeID", h.nodeID,
+		"roomID", cmd.RoomID,
+		"type", cmd.Type,
+		"playerID", cmd.PlayerID,
+	)
 	_ = h.store.SaveRuntimeEvent(ctx, contracts.RuntimeEvent{
 		RoomID:    cmd.RoomID,
 		TraceID:   cmd.TraceID,
@@ -218,6 +225,7 @@ func (h *Host) HandleCommand(ctx context.Context, cmd contracts.RoomCommand) con
 			"sessionID":   cmd.SessionID,
 			"gatewayNode": cmd.GatewayNode,
 			"epoch":       cmd.Epoch,
+			"execution_mode": contracts.ExecutionModeLive,
 		},
 	})
 	if cmd.Type == contracts.RuntimeCommandRoomCreate {
@@ -667,7 +675,13 @@ func (h *Host) projectionRetryLoop(ctx context.Context) {
 						if room.suppressIrrecoverableHistoryProjectionLocked(err, "history projection retry skipped") {
 							// The projection cannot be rebuilt from the current command log shape.
 						} else {
-							observability.Warn("history projection retry failed", "roomID", room.record.RoomID, "error", err)
+							observability.Warn(
+								"history projection retry failed",
+								"execution_mode", contracts.ExecutionModeReplay,
+								"roomID", room.record.RoomID,
+								"matchID", room.match.MatchID,
+								"error", err,
+							)
 						}
 					}
 				}
@@ -1230,7 +1244,7 @@ func (r *RoomActor) restore(ctx context.Context) error {
 		if rec.Seq != expectedSeq {
 			return fmt.Errorf("command log gap for room %s: got seq %d, want %d", r.record.RoomID, rec.Seq, expectedSeq)
 		}
-		cmd := contracts.RoomCommand{SchemaVersion: 1, CommandID: rec.CommandID, RoomID: rec.RoomID, MatchID: rec.MatchID, GameType: r.record.GameType, Epoch: rec.Epoch, PlayerID: rec.PlayerID, Type: rec.Type, Payload: rec.Payload, SentAt: rec.CreatedAt}
+		cmd := contracts.RoomCommand{SchemaVersion: 1, CommandID: rec.CommandID, RoomID: rec.RoomID, MatchID: rec.MatchID, GameType: r.record.GameType, Epoch: rec.Epoch, PlayerID: rec.PlayerID, Type: rec.Type, Payload: rec.Payload, SentAt: rec.CreatedAt, Replay: true}
 		if _, err := r.definition.Engine.ApplyCommand(gamelog.WithSink(ctx, gamelog.NopSink{}), r.state, cmd); err != nil {
 			return err
 		}
@@ -1470,7 +1484,16 @@ func (r *RoomActor) Apply(ctx context.Context, cmd contracts.RoomCommand) contra
 	} else {
 		r.spectatorDirty = false
 	}
-	observability.Info("command applied", "nodeID", r.host.nodeID, "roomID", cmd.RoomID, "commandID", cmd.CommandID, "type", cmd.Type, "playerID", cmd.PlayerID, "seq", r.seq)
+	observability.Info(
+		"command applied",
+		"execution_mode", contracts.ExecutionModeLive,
+		"nodeID", r.host.nodeID,
+		"roomID", cmd.RoomID,
+		"commandID", cmd.CommandID,
+		"type", cmd.Type,
+		"playerID", cmd.PlayerID,
+		"seq", r.seq,
+	)
 	_ = r.host.store.SaveRuntimeEvent(ctx, contracts.RuntimeEvent{
 		RoomID:    cmd.RoomID,
 		MatchID:   cmd.MatchID,
@@ -1485,6 +1508,7 @@ func (r *RoomActor) Apply(ctx context.Context, cmd contracts.RoomCommand) contra
 			"playerID":  cmd.PlayerID,
 			"seq":       r.seq,
 			"epoch":     r.record.Epoch,
+			"execution_mode": contracts.ExecutionModeLive,
 		},
 	})
 	if err := r.syncHistoryLocked(ctx, cmd); err != nil {
@@ -1681,6 +1705,13 @@ func (r *RoomActor) reconcileHistoryLocked(ctx context.Context) error {
 		}
 		expectedSeq++
 	}
+	observability.Info(
+		"history projection replay started",
+		"execution_mode", contracts.ExecutionModeReplay,
+		"roomID", r.record.RoomID,
+		"matchID", r.match.MatchID,
+		"commandCount", expectedSeq-1,
+	)
 	if err := r.host.store.ResetOpenHistoryGame(ctx, r.record.RoomID, r.record.GameType); err != nil {
 		return err
 	}
@@ -1733,16 +1764,30 @@ func (r *RoomActor) reconcileHistoryLocked(ctx context.Context) error {
 			Type:          record.Type,
 			Payload:       record.Payload,
 			SentAt:        record.CreatedAt,
+			Replay:        true,
 		}
 		if _, err := r.definition.Engine.ApplyCommand(gamelog.WithSink(ctx, gamelog.NopSink{}), r.state, cmd); err != nil {
-			return err
+			return fmt.Errorf(
+				"history replay command failed at seq %d type %s player %s: %w",
+				record.Seq,
+				record.Type,
+				record.PlayerID,
+				err,
+			)
 		}
 		if err := r.syncHistoryLocked(ctx, cmd); err != nil {
-			return err
+			return fmt.Errorf("history projection failed after replay seq %d: %w", record.Seq, err)
 		}
 	}
 	succeeded = true
 	r.historyDirty = false
+	observability.Info(
+		"history projection replay completed",
+		"execution_mode", contracts.ExecutionModeReplay,
+		"roomID", r.record.RoomID,
+		"matchID", r.match.MatchID,
+		"commandCount", expectedSeq-1,
+	)
 	return nil
 }
 

@@ -23,6 +23,7 @@ type Command struct {
 	PlayerID string          `json:"playerID"`
 	Payload  json.RawMessage `json:"payload"`
 	Conn     ReadWriteConn   `json:"-"`
+	Replay   bool            `json:"-"`
 }
 
 // PlayerConn 描述房间中的一个玩家连接。

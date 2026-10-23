@@ -155,7 +155,10 @@ func validateAcquireCommand(room *domain.Room, command contracts.RoomCommand, pa
 			return errors.New("当前阶段不允许此操作")
 		}
 		if command.Type == "game_merging_settle" {
-			if command.PlayerID != rules.CurrentMergeSettlePlayer(room) {
+			if command.Replay && !rules.IsPendingMergeSettlePlayer(room, command.PlayerID) {
+				return errors.New("玩家不在并购结算队列中")
+			}
+			if !command.Replay && command.PlayerID != rules.CurrentMergeSettlePlayer(room) {
 				return errors.New("请等待当前股东完成并购结算")
 			}
 		} else if command.PlayerID != state.CurrentPlayer {

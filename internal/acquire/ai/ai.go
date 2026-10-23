@@ -714,11 +714,11 @@ func AutoSettleDisconnectedHolder(r *domain.Room) {
 		actions := chooseMergingSettleForAI(r, target)
 		payload, err := json.Marshal(map[string]interface{}{"actions": actions})
 		if err != nil {
-			logger.Error("自动结算编码失败", logger.F("room_id", r.ID), logger.F("player_id", target), logger.F("error", err))
+			r.Log().Error("自动结算编码失败", logger.F("room_id", r.ID), logger.F("player_id", target), logger.F("error", err))
 			return
 		}
 
-		logger.Info("玩家离线，自动替其完成并购结算", logger.F("room_id", r.ID), logger.F("player_id", target))
+		r.Log().Info("玩家离线，自动替其完成并购结算", logger.F("room_id", r.ID), logger.F("player_id", target))
 		rules.HandleMergingSettleMessage(r, domain.Command{
 			Type:     "game_merging_settle",
 			PlayerID: target,
@@ -815,7 +815,7 @@ func buildAIActionMsg(r *domain.Room, playerID string, status domain.RoomStatus,
 	searchConfig, searchConfigName, aiPlayers := onlineAISearchConfigForRoom(r)
 	if action, found := chooseBestActionBySearch(r, playerID, status, explicitMainCompany, searchConfig); found {
 		if cmdType, payload, ok := payloadForAction(action); ok {
-			logger.Info("AI 使用搜索策略出手",
+			r.Log().Info("AI 使用搜索策略出手",
 				logger.F("room_id", r.ID),
 				logger.F("player_id", playerID),
 				logger.F("status", status),
@@ -833,7 +833,7 @@ func buildAIActionMsg(r *domain.Room, playerID string, status domain.RoomStatus,
 	}
 	cmdType, payload, ok = buildAIActionMsgByHeuristic(r, playerID, status, explicitMainCompany)
 	if ok {
-		logger.Info("AI 使用启发式策略出手",
+		r.Log().Info("AI 使用启发式策略出手",
 			logger.F("room_id", r.ID),
 			logger.F("player_id", playerID),
 			logger.F("status", status),
@@ -955,7 +955,7 @@ func BuildTurnTimeoutCommand(r *domain.Room, playerID string) (roomcore.Command,
 func MaybeRunAIIfNeeded(r *domain.Room, message []byte) bool {
 	var msg map[string]interface{}
 	if err := json.Unmarshal(message, &msg); err != nil {
-		logger.Error("AI 消息格式错误", logger.F("room_id", r.ID), logger.F("error", err))
+		r.Log().Error("AI 消息格式错误", logger.F("room_id", r.ID), logger.F("error", err))
 		return false
 	}
 
@@ -992,21 +992,21 @@ func MaybeRunAIIfNeeded(r *domain.Room, message []byte) bool {
 		}
 
 		if !isAI {
-			logger.Info("当前玩家 %s 不是 AI 玩家", logger.F("player_id", currentPlayerID))
+			r.Log().Info("当前玩家 %s 不是 AI 玩家", logger.F("player_id", currentPlayerID))
 			return false
 		}
 	}
 
 	// 检查是否已经有 AI 行动在运行，防止多个 AI 玩家同时触发
 	if r.AIRunning {
-		logger.Info("AI 行动已在运行中，跳过重复触发", logger.F("room_id", r.ID), logger.F("player_id", playerId))
+		r.Log().Info("AI 行动已在运行中，跳过重复触发", logger.F("room_id", r.ID), logger.F("player_id", playerId))
 		return false
 	}
 
 	// 提取临时数据（合并选择）
 	tempData, ok := msg["tempData"].(map[string]interface{})
 	if !ok {
-		logger.Error("tempData 类型错误", logger.F("room_id", r.ID))
+		r.Log().Error("tempData 类型错误", logger.F("room_id", r.ID))
 		return false
 	}
 
@@ -1038,12 +1038,12 @@ func MaybeRunAIIfNeeded(r *domain.Room, message []byte) bool {
 		}
 	}
 	if isAllTileUsed {
-		logger.Error("所有 tile 已被使用", logger.F("room_id", r.ID), logger.F("player_id", playerId))
+		r.Log().Error("所有 tile 已被使用", logger.F("room_id", r.ID), logger.F("player_id", playerId))
 	}
 
 	// 标记 AI 行动已开始
 	r.AIRunning = true
-	logger.Info("当前是 AI 玩家的回合，准备延迟执行 AI 行动", logger.F("room_id", r.ID), logger.F("player_id", playerId), logger.F("game_status", gameStatus))
+	r.Log().Info("当前是 AI 玩家的回合，准备延迟执行 AI 行动", logger.F("room_id", r.ID), logger.F("player_id", playerId), logger.F("game_status", gameStatus))
 
 	// ---------- 在协程中延迟执行 ----------
 	go func() {
@@ -1058,7 +1058,7 @@ func MaybeRunAIIfNeeded(r *domain.Room, message []byte) bool {
 
 		cmdType, payload, ok := buildAIActionMsg(r, playerId, gameStatus, mainCompany)
 		if !ok {
-			logger.Warn("AI 未生成有效动作，发送 turn_timeout 兜底",
+			r.Log().Warn("AI 未生成有效动作，发送 turn_timeout 兜底",
 				logger.F("room_id", r.ID),
 				logger.F("player_id", playerId),
 				logger.F("game_status", gameStatus))
@@ -1070,7 +1070,7 @@ func MaybeRunAIIfNeeded(r *domain.Room, message []byte) bool {
 			}
 			return
 		}
-		logger.Info("AI 发送消息", logger.F("room_id", r.ID), logger.F("player_id", playerId), logger.F("type", cmdType), logger.F("payload", string(payload)))
+		r.Log().Info("AI 发送消息", logger.F("room_id", r.ID), logger.F("player_id", playerId), logger.F("type", cmdType), logger.F("payload", string(payload)))
 
 		// 向房间的命令通道发送消息，和玩家一样的处理方式
 		r.CmdCh <- domain.Command{

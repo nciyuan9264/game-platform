@@ -809,6 +809,9 @@ func TestRoomActorRestoreReplaysCommandLogAfterLatestSnapshot(t *testing.T) {
 	if len(engine.applied) != 2 || engine.applied[0].CommandID != "cmd-3" || engine.applied[1].CommandID != "cmd-4" {
 		t.Fatalf("unexpected replayed commands: %+v", engine.applied)
 	}
+	if !engine.applied[0].Replay || !engine.applied[1].Replay {
+		t.Fatalf("restored commands are not marked as replay: %+v", engine.applied)
+	}
 	if ack, ok := actor.processed["cmd-4"]; !ok || !ack.Accepted || ack.Seq != 4 {
 		t.Fatalf("replayed command was not restored into idempotency cache: %+v", actor.processed)
 	}

@@ -21,11 +21,19 @@ func F(key string, value any) Field {
 // Logger 结构化日志记录器
 type Logger struct {
 	Module string
+	fields []Field
 }
 
 // NewLogger 创建新的日志记录器
 func NewLogger(module string) *Logger {
 	return &Logger{Module: module}
+}
+
+func (l *Logger) With(fields ...Field) *Logger {
+	scoped := &Logger{Module: l.Module, fields: make([]Field, 0, len(l.fields)+len(fields))}
+	scoped.fields = append(scoped.fields, l.fields...)
+	scoped.fields = append(scoped.fields, fields...)
+	return scoped
 }
 
 // 预定义的模块日志记录器
@@ -46,6 +54,9 @@ func (l *Logger) log(level, msg string, fields ...Field) {
 		"msg":    msg,
 	}
 
+	for _, f := range l.fields {
+		m[f.Key] = f.Value
+	}
 	for _, f := range fields {
 		m[f.Key] = f.Value
 	}

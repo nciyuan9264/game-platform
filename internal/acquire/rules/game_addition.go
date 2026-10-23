@@ -62,7 +62,7 @@ func SwitchToNextPlayer(r *domain.Room, currentPlayerID string) error {
 
 	r.State.CurrentPlayer = nextPlayerID
 
-	logger.Info(
+	r.Log().Info(
 		"房间当前玩家切换",
 		logger.F("current_player_id", currentPlayerID),
 		logger.F("room_id", r.ID),
@@ -85,24 +85,24 @@ func HandleTurnTimeoutMessage(r *domain.Room, cmd domain.Command) {
 		return
 	}
 	if r.State.RoomStatus == domain.RoomStatusEnd {
-		logger.Info("turn_timeout 房间已结束，忽略",
+		r.Log().Info("turn_timeout 房间已结束，忽略",
 			logger.F("room_id", r.ID),
 			logger.F("player_id", cmd.PlayerID))
 		return
 	}
 	if r.State.CurrentPlayer != cmd.PlayerID {
-		logger.Info("turn_timeout 已过期，忽略",
+		r.Log().Info("turn_timeout 已过期，忽略",
 			logger.F("room_id", r.ID),
 			logger.F("cmd_player", cmd.PlayerID),
 			logger.F("current_player", r.State.CurrentPlayer))
 		return
 	}
-	logger.Warn("turn_timeout 兜底切人",
+	r.Log().Warn("turn_timeout 兜底切人",
 		logger.F("room_id", r.ID),
 		logger.F("player_id", cmd.PlayerID),
 		logger.F("status", r.State.RoomStatus))
 	if err := SwitchToNextPlayer(r, cmd.PlayerID); err != nil {
-		logger.Error("turn_timeout 切人失败", logger.F("room_id", r.ID), logger.F("error", err))
+		r.Log().Error("turn_timeout 切人失败", logger.F("room_id", r.ID), logger.F("error", err))
 		return
 	}
 	r.State.RoomStatus = domain.RoomStatusSetTile
@@ -114,7 +114,7 @@ func HandleTurnTimeoutMessage(r *domain.Room, cmd domain.Command) {
 func HandlePlayAudioMessage(r *domain.Room, cmd domain.Command) {
 	var p PlayAudioPayload
 	if err := json.Unmarshal(cmd.Payload, &p); err != nil {
-		logger.Error("消息格式错误", logger.F("room_id", r.ID), logger.F("player_id", cmd.PlayerID), logger.F("error", err))
+		r.Log().Error("消息格式错误", logger.F("room_id", r.ID), logger.F("player_id", cmd.PlayerID), logger.F("error", err))
 		return
 	}
 	audioType := p.AudioType
@@ -125,7 +125,7 @@ func HandlePlayAudioMessage(r *domain.Room, cmd domain.Command) {
 	}
 	data, err := json.Marshal(msg)
 	if err != nil {
-		logger.Error("编码 JSON 失败", logger.F("room_id", r.ID), logger.F("player_id", cmd.PlayerID), logger.F("error", err))
+		r.Log().Error("编码 JSON 失败", logger.F("room_id", r.ID), logger.F("player_id", cmd.PlayerID), logger.F("error", err))
 		return
 	}
 
@@ -133,7 +133,7 @@ func HandlePlayAudioMessage(r *domain.Room, cmd domain.Command) {
 		if pc.Online && pc.Conn != nil {
 			err := pc.Conn.WriteMessage(websocket.TextMessage, data)
 			if err != nil {
-				logger.Error("向玩家 %s 发送音频消息失败", logger.F("room_id", r.ID), logger.F("player_id", pc.PlayerID), logger.F("error", err))
+				r.Log().Error("向玩家 %s 发送音频消息失败", logger.F("room_id", r.ID), logger.F("player_id", pc.PlayerID), logger.F("error", err))
 			}
 		}
 	}
@@ -162,7 +162,7 @@ func HandleRestartGameMessage(r *domain.Room, cmd domain.Command) {
 		// 2. 设置初始资金
 		playerTiles, err := data.GenerateAvailableTiles(r, 6)
 		if err != nil {
-			logger.Error("生成可用 tile 失败", logger.F("room_id", r.ID), logger.F("player_id", playerID), logger.F("error", err))
+			r.Log().Error("生成可用 tile 失败", logger.F("room_id", r.ID), logger.F("player_id", playerID), logger.F("error", err))
 			return
 		}
 

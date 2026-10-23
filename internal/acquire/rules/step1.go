@@ -3,7 +3,6 @@ package game
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"sort"
 
 	"github.com/nciyuan9264/game-platform/internal/acquire/arrayutil"
@@ -21,7 +20,7 @@ func placeTile(r *domain.Room, playerID, tileKey string) error {
 	r.State.Players[playerID].Tiles = arrayutil.SafeSliceRemove(r.State.Players[playerID].Tiles, tileKey)
 	// Step 3: 设置LastTileKey
 	r.State.LastTileKey = tileKey
-	logger.Info("玩家放置棋子成功", logger.F("room_id", r.ID), logger.F("player_id", playerID), logger.F("tile_key", tileKey))
+	r.Log().Info("玩家放置棋子成功", logger.F("room_id", r.ID), logger.F("player_id", playerID), logger.F("tile_key", tileKey))
 	return nil
 }
 
@@ -156,7 +155,7 @@ func handleMergeProcess(
 	if !hasPendingHolder {
 		completeMergeSettlement(r)
 	}
-	logger.Info("完成酒店并入红利计算和状态更新", logger.F("room_id", r.ID), logger.F("other_hotel", otherHotel), logger.F("main_hotel", mainHotel))
+	r.Log().Info("完成酒店并入红利计算和状态更新", logger.F("room_id", r.ID), logger.F("other_hotel", otherHotel), logger.F("main_hotel", mainHotel))
 	return nil
 }
 
@@ -179,7 +178,7 @@ func HandlePostTilePlacement(r *domain.Room, playerID string) error {
 
 	// 切换玩家
 	if err := SwitchToNextPlayer(r, playerID); err != nil {
-		logger.Error("切换玩家失败", logger.F("room_id", r.ID), logger.F("player_id", playerID), logger.F("error", err))
+		r.Log().Error("切换玩家失败", logger.F("room_id", r.ID), logger.F("player_id", playerID), logger.F("error", err))
 	}
 	return nil
 }
@@ -217,7 +216,7 @@ func handleMergingLogic(r *domain.Room, hotelSet map[string]struct{}) error {
 		}
 		if len(otherHotel) == 0 && maxCount >= 11 {
 			r.State.RoomStatus = domain.RoomStatusBuyStock
-			log.Println("没有其他可以合并的公司")
+			r.Log().Info("没有其他可以合并的公司")
 			return nil
 		}
 		r.State.MergingSelection = domain.MergingSelection{
@@ -239,7 +238,7 @@ func handleMergingLogic(r *domain.Room, hotelSet map[string]struct{}) error {
 		}
 		if len(otherHotel) == 0 {
 			r.State.RoomStatus = domain.RoomStatusBuyStock
-			log.Println("没有其他可以合并的公司")
+			r.Log().Info("没有其他可以合并的公司")
 			return nil
 		}
 		err := handleMergeProcess(r, mainHotel, otherHotel, hotelTileCount)
@@ -269,7 +268,7 @@ func checkTileTriggerRules(r *domain.Room, playerID string, tileKey string) erro
 	}
 
 	if len(companySet) >= 2 {
-		logger.Warn("触发并购规则", logger.F("companies", companySet))
+		r.Log().Warn("触发并购规则", logger.F("companies", companySet))
 		err := handleMergingLogic(r, companySet)
 		if err != nil {
 			return err
@@ -278,7 +277,7 @@ func checkTileTriggerRules(r *domain.Room, playerID string, tileKey string) erro
 	}
 
 	if len(companySet) == 1 {
-		logger.Warn("触发扩建公司规则", logger.F("company_set", companySet))
+		r.Log().Warn("触发扩建公司规则", logger.F("company_set", companySet))
 		var hotelList []string
 		for key := range companySet {
 			hotelList = append(hotelList, key)
@@ -293,11 +292,11 @@ func checkTileTriggerRules(r *domain.Room, playerID string, tileKey string) erro
 		// 统计公司 tiles 数量
 		connectedTiles = data.GetConnectedTiles(r, tileKey)
 		r.State.Companies[company].Tiles = len(connectedTiles)
-		logger.Info("公司数据已更新", logger.F("room_id", r.ID), logger.F("company", r.State.Companies[company]))
+		r.Log().Info("公司数据已更新", logger.F("room_id", r.ID), logger.F("company", r.State.Companies[company]))
 
 		err := HandlePostTilePlacement(r, playerID)
 		if err != nil {
-			logger.Warn("处理玩家放置 tile 后逻辑失败", logger.F("error", err))
+			r.Log().Warn("处理玩家放置 tile 后逻辑失败", logger.F("error", err))
 		}
 		return nil
 	}
@@ -313,11 +312,11 @@ func checkTileTriggerRules(r *domain.Room, playerID string, tileKey string) erro
 		}
 		if !flag {
 			r.State.RoomStatus = domain.RoomStatusBuyStock
-			logger.Warn("没有可以创建的公司")
+			r.Log().Warn("没有可以创建的公司")
 			return nil
 		}
 
-		logger.Warn("触发创建公司规则")
+		r.Log().Warn("触发创建公司规则")
 		// Step 1: 修改房间状态为“创建公司状态”
 		r.State.RoomStatus = domain.RoomStatusCreateCompany
 		return nil
@@ -325,7 +324,7 @@ func checkTileTriggerRules(r *domain.Room, playerID string, tileKey string) erro
 
 	err := HandlePostTilePlacement(r, playerID)
 	if err != nil {
-		logger.Warn("处理玩家放置 tile 后逻辑失败", logger.F("error", err))
+		r.Log().Warn("处理玩家放置 tile 后逻辑失败", logger.F("error", err))
 	}
 	return nil
 }
@@ -338,31 +337,31 @@ type PlaceTilePayload struct {
 func HandlePlaceTileMessage(r *domain.Room, cmd domain.Command) {
 	var p PlaceTilePayload
 	if err := json.Unmarshal(cmd.Payload, &p); err != nil {
-		logger.Warn("无效的 payload", logger.F("error", err))
+		r.Log().Warn("无效的 payload", logger.F("error", err))
 		return
 	}
 	tileKey := p.TileKey
 
 	currentPlayer := r.State.CurrentPlayer
 	if currentPlayer != cmd.PlayerID {
-		logger.Warn("不是当前玩家的回合", logger.F("player_id", cmd.PlayerID), logger.F("current_player", currentPlayer))
+		r.Log().Warn("不是当前玩家的回合", logger.F("player_id", cmd.PlayerID), logger.F("current_player", currentPlayer))
 		return
 	}
 	if r.State.RoomStatus != domain.RoomStatusSetTile {
-		logger.Warn("不是放置 tile 的状态", logger.F("status", r.State.RoomStatus))
+		r.Log().Warn("不是放置 tile 的状态", logger.F("status", r.State.RoomStatus))
 		return
 	}
 
 	// Step1: 放置棋子
 	err := placeTile(r, cmd.PlayerID, tileKey)
 	if err != nil {
-		logger.Error("放置棋子失败", logger.F("room_id", r.ID), logger.F("player_id", cmd.PlayerID), logger.F("tile_key", tileKey), logger.F("error", err))
+		r.Log().Error("放置棋子失败", logger.F("room_id", r.ID), logger.F("player_id", cmd.PlayerID), logger.F("tile_key", tileKey), logger.F("error", err))
 		return
 	}
 	// Step2: 检查 创建公司/并购公司
 	err = checkTileTriggerRules(r, cmd.PlayerID, tileKey)
 	if err != nil {
-		logger.Error("检查棋子规则失败", logger.F("room_id", r.ID), logger.F("player_id", cmd.PlayerID), logger.F("error", err))
+		r.Log().Error("检查棋子规则失败", logger.F("room_id", r.ID), logger.F("player_id", cmd.PlayerID), logger.F("error", err))
 		return
 	}
 }
@@ -374,19 +373,19 @@ type MergingSelectionPayload struct {
 func HandleMergingSelectionMessage(r *domain.Room, cmd domain.Command) {
 	var p MergingSelectionPayload
 	if err := json.Unmarshal(cmd.Payload, &p); err != nil {
-		logger.Warn("无效的 payload", logger.F("error", err))
+		r.Log().Warn("无效的 payload", logger.F("error", err))
 		return
 	}
 	maincompany := p.MainCompany
 
 	currentPlayer := r.State.CurrentPlayer
 	if currentPlayer != cmd.PlayerID {
-		logger.Warn("不是当前玩家的回合", logger.F("player_id", cmd.PlayerID), logger.F("current_player", currentPlayer))
+		r.Log().Warn("不是当前玩家的回合", logger.F("player_id", cmd.PlayerID), logger.F("current_player", currentPlayer))
 		return
 	}
 
 	if r.State.RoomStatus != domain.RoomStatusMergingSelection {
-		logger.Warn("不是 merging_selection 的状态")
+		r.Log().Warn("不是 merging_selection 的状态")
 		return
 	}
 
@@ -416,7 +415,7 @@ func HandleMergingSelectionMessage(r *domain.Room, cmd domain.Command) {
 
 	err := handleMergeProcess(r, maincompany, mergeSelectionTemp.OtherCompany, hotelTileCount)
 	if err != nil {
-		logger.Error("处理合并过程失败", logger.F("room_id", r.ID), logger.F("player_id", cmd.PlayerID), logger.F("error", err))
+		r.Log().Error("处理合并过程失败", logger.F("room_id", r.ID), logger.F("player_id", cmd.PlayerID), logger.F("error", err))
 		return
 	}
 }
@@ -468,17 +467,17 @@ func completeMergeSettlement(r *domain.Room) {
 func HandleMergingSettleMessage(r *domain.Room, cmd domain.Command) {
 	var p MergingSettlePayload
 	if err := json.Unmarshal(cmd.Payload, &p); err != nil {
-		logger.Error("无效的 payload", logger.F("room_id", r.ID), logger.F("player_id", cmd.PlayerID), logger.F("error", err))
+		r.Log().Error("无效的 payload", logger.F("room_id", r.ID), logger.F("player_id", cmd.PlayerID), logger.F("error", err))
 		return
 	}
 
 	settleActions := p.Actions
 	if r.State.RoomStatus != domain.RoomStatusMergingSettle {
-		logger.Error("不是合并的状态", logger.F("room_id", r.ID), logger.F("player_id", cmd.PlayerID))
+		r.Log().Error("不是合并的状态", logger.F("room_id", r.ID), logger.F("player_id", cmd.PlayerID))
 		return
 	}
-	if currentPlayer := CurrentMergeSettlePlayer(r); currentPlayer == "" || currentPlayer != cmd.PlayerID {
-		logger.Warn("尚未轮到该股东结算",
+	if currentPlayer := CurrentMergeSettlePlayer(r); !cmd.Replay && (currentPlayer == "" || currentPlayer != cmd.PlayerID) {
+		r.Log().Warn("尚未轮到该股东结算",
 			logger.F("room_id", r.ID),
 			logger.F("player_id", cmd.PlayerID),
 			logger.F("current_settle_player", currentPlayer))
@@ -497,7 +496,7 @@ func HandleMergingSettleMessage(r *domain.Room, cmd domain.Command) {
 		}
 	}
 	if !playerInHoder {
-		logger.Warn("玩家不在任何合并中", logger.F("player_id", cmd.PlayerID))
+		r.Log().Warn("玩家不在任何合并中", logger.F("player_id", cmd.PlayerID))
 		return
 	}
 
@@ -508,7 +507,7 @@ func HandleMergingSettleMessage(r *domain.Room, cmd domain.Command) {
 	for _, item := range settleActions {
 		companyData, ok := r.State.Companies[item.Company]
 		if !ok {
-			logger.Warn("找不到公司信息", logger.F("company", item.Company))
+			r.Log().Warn("找不到公司信息", logger.F("company", item.Company))
 			continue
 		}
 
@@ -575,33 +574,33 @@ type CreateCompanyPayload struct {
 func HandleCreateCompanyMessage(r *domain.Room, cmd domain.Command) {
 	var p CreateCompanyPayload
 	if err := json.Unmarshal(cmd.Payload, &p); err != nil {
-		logger.Warn("无效的 payload", logger.F("error", err))
+		r.Log().Warn("无效的 payload", logger.F("error", err))
 		return
 	}
 	company := p.Company
-	logger.Info("收到 create_company 消息", logger.F("company", company))
+	r.Log().Info("收到 create_company 消息", logger.F("company", company))
 
 	if r.State.CurrentPlayer != cmd.PlayerID {
-		logger.Warn("不是当前玩家的回合", logger.F("room_id", r.ID), logger.F("player_id", cmd.PlayerID), logger.F("current_player", r.State.CurrentPlayer))
+		r.Log().Warn("不是当前玩家的回合", logger.F("room_id", r.ID), logger.F("player_id", cmd.PlayerID), logger.F("current_player", r.State.CurrentPlayer))
 		return
 	}
 
 	if r.State.RoomStatus != domain.RoomStatusCreateCompany {
-		logger.Warn("不是创建公司的状态", logger.F("room_id", r.ID))
+		r.Log().Warn("不是创建公司的状态", logger.F("room_id", r.ID))
 		return
 	}
 
-	logger.Info("创建公司使用的 tileKey", logger.F("tile_key", r.State.LastTileKey))
+	r.Log().Info("创建公司使用的 tileKey", logger.F("tile_key", r.State.LastTileKey))
 	// 统计公司 tiles 数量
 	connectedTiles := data.GetConnectedTiles(r, r.State.LastTileKey)
 	r.State.Companies[company].Tiles = len(connectedTiles)
 	r.State.Companies[company].StockTotal--
-	logger.Info("公司数据已更新", logger.F("room_id", r.ID), logger.F("company", company))
+	r.Log().Info("公司数据已更新", logger.F("room_id", r.ID), logger.F("company", company))
 
 	for _, tileKey := range connectedTiles {
 		tile, ok := r.State.BoardTiles[tileKey]
 		if !ok {
-			logger.Warn("tileKey 不存在，跳过", logger.F("room_id", r.ID), logger.F("tile_key", tileKey))
+			r.Log().Warn("tileKey 不存在，跳过", logger.F("room_id", r.ID), logger.F("tile_key", tileKey))
 			continue
 		}
 
@@ -613,7 +612,7 @@ func HandleCreateCompanyMessage(r *domain.Room, cmd domain.Command) {
 	}
 	// Step 3: 增加玩家的股票数据
 	r.State.Players[cmd.PlayerID].Stocks[company]++
-	logger.Info("玩家获得股票", logger.F("room_id", r.ID), logger.F("player_id", cmd.PlayerID), logger.F("company", company), logger.F("count", 1))
+	r.Log().Info("玩家获得股票", logger.F("room_id", r.ID), logger.F("player_id", cmd.PlayerID), logger.F("company", company), logger.F("count", 1))
 
 	r.State.RoomStatus = domain.RoomStatusBuyStock
 }

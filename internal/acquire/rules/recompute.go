@@ -59,8 +59,8 @@ func RecomputeDerivedState(r *domain.Room) (map[string]interface{}, bool) {
 			money := playerInfo.Money
 			result[pc.PlayerID] = map[string]interface{}{
 				"money":  money,
-				"stocks": CalculateTotalValue(playerStocks, companyInfoMap),
-				"total":  CalculateTotalValue(playerStocks, companyInfoMap) + money,
+				"stocks": CalculateTotalValue(playerStocks, companyInfoMap, r.Log()),
+				"total":  CalculateTotalValue(playerStocks, companyInfoMap, r.Log()) + money,
 			}
 		}
 	}

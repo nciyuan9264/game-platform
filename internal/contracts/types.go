@@ -43,6 +43,9 @@ const (
 
 	CommandLogKindCommand    = "COMMAND"
 	CommandLogKindOwnerFence = "OWNER_FENCE"
+
+	ExecutionModeLive   = "live"
+	ExecutionModeReplay = "replay"
 )
 
 const SpectatorDelay = 5 * time.Minute
@@ -238,6 +241,7 @@ type RoomCommand struct {
 	Type    string      `json:"type"`
 	Payload interface{} `json:"payload,omitempty"`
 	SentAt  time.Time   `json:"sentAt"`
+	Replay  bool        `json:"-"`
 }
 
 func (c RoomCommand) MarshalJSON() ([]byte, error) {

@@ -16,7 +16,7 @@ func UpdateCompanyStockAndTiles(r *domain.Room, company string) error {
 		return fmt.Errorf("公司股票已售罄")
 	}
 	r.State.Companies[company].StockTotal--
-	logger.Info("公司已更新", logger.F("room_id", r.ID), logger.F("company", company), logger.F("stockTotal", r.State.Companies[company].StockTotal))
+	r.Log().Info("公司已更新", logger.F("room_id", r.ID), logger.F("company", company), logger.F("stockTotal", r.State.Companies[company].StockTotal))
 	return nil
 }
 
@@ -59,20 +59,20 @@ type BuyStockPayload struct {
 func HandleBuyStockMessage(r *domain.Room, cmd domain.Command) {
 	var p BuyStockPayload
 	if err := json.Unmarshal(cmd.Payload, &p); err != nil {
-		logger.Warn("无效的 buy_stock payload", logger.F("error", err))
+		r.Log().Warn("无效的 buy_stock payload", logger.F("error", err))
 		return
 	}
 
 	stocks := p.Stocks
 	currentPlayer := r.State.CurrentPlayer
 	if currentPlayer != cmd.PlayerID {
-		logger.Warn("不是当前玩家的回合", logger.F("player_id", cmd.PlayerID), logger.F("current_player", currentPlayer))
+		r.Log().Warn("不是当前玩家的回合", logger.F("player_id", cmd.PlayerID), logger.F("current_player", currentPlayer))
 		return
 	}
 
 	roomInfo := r.State.RoomStatus
 	if roomInfo != domain.RoomStatusBuyStock {
-		logger.Warn("不是 buyStock 的状态", logger.F("status", roomInfo))
+		r.Log().Warn("不是 buyStock 的状态", logger.F("status", roomInfo))
 		return
 	}
 
@@ -93,7 +93,7 @@ func HandleBuyStockMessage(r *domain.Room, cmd domain.Command) {
 		count := countVal
 		for i := 0; i < count; i++ {
 			if err := UpdateCompanyStockAndTiles(r, company); err != nil {
-				logger.Error("更新公司失败", logger.F("room_id", r.ID), logger.F("player_id", cmd.PlayerID), logger.F("company", company), logger.F("error", err))
+				r.Log().Error("更新公司失败", logger.F("room_id", r.ID), logger.F("player_id", cmd.PlayerID), logger.F("company", company), logger.F("error", err))
 				return
 			}
 		}
@@ -103,21 +103,21 @@ func HandleBuyStockMessage(r *domain.Room, cmd domain.Command) {
 	for company, countVal := range stocks {
 		count := countVal
 		if err := UpdatePlayerStockAndMoney(r, cmd.PlayerID, company, count, priceMap[company]*count); err != nil {
-			logger.Error("更新玩家失败", logger.F("room_id", r.ID), logger.F("player_id", cmd.PlayerID), logger.F("company", company), logger.F("error", err))
+			r.Log().Error("更新玩家失败", logger.F("room_id", r.ID), logger.F("player_id", cmd.PlayerID), logger.F("company", company), logger.F("error", err))
 			return
 		}
 	}
 
 	err := GiveRandomTileToPlayer(r, cmd.PlayerID)
 	if err != nil {
-		logger.Warn("发牌失败", logger.F("room_id", r.ID), logger.F("player_id", cmd.PlayerID), logger.F("error", err))
+		r.Log().Warn("发牌失败", logger.F("room_id", r.ID), logger.F("player_id", cmd.PlayerID), logger.F("error", err))
 	}
 	// 切换玩家
 	if err := SwitchToNextPlayer(r, cmd.PlayerID); err != nil {
-		logger.Error("切换玩家失败", logger.F("room_id", r.ID), logger.F("player_id", cmd.PlayerID), logger.F("error", err))
+		r.Log().Error("切换玩家失败", logger.F("room_id", r.ID), logger.F("player_id", cmd.PlayerID), logger.F("error", err))
 	}
 	// 最后设置房间状态为 setTile
 	r.State.RoomStatus = domain.RoomStatusSetTile
 
-	logger.Info("玩家购买股票成功", logger.F("room_id", r.ID), logger.F("player_id", cmd.PlayerID), logger.F("total_price", totalPrice))
+	r.Log().Info("玩家购买股票成功", logger.F("room_id", r.ID), logger.F("player_id", cmd.PlayerID), logger.F("total_price", totalPrice))
 }

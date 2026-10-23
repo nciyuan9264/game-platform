@@ -13,6 +13,7 @@ import (
 	acquireai "github.com/nciyuan9264/game-platform/internal/acquire/ai"
 	"github.com/nciyuan9264/game-platform/internal/acquire/domain/data"
 	"github.com/nciyuan9264/game-platform/internal/acquire/domain/domain"
+	"github.com/nciyuan9264/game-platform/internal/acquire/logger"
 	"github.com/nciyuan9264/game-platform/internal/acquire/roomcore"
 	rules "github.com/nciyuan9264/game-platform/internal/acquire/rules"
 	"github.com/nciyuan9264/game-platform/internal/contracts"
@@ -212,6 +213,22 @@ func (p *Plugin) ApplyCommand(ctx context.Context, state game.State, cmd contrac
 	if err != nil {
 		return game.ApplyResult{}, err
 	}
+	executionMode := contracts.ExecutionModeLive
+	if cmd.Replay {
+		executionMode = contracts.ExecutionModeReplay
+	}
+	previousLogger := room.CommandLogger
+	room.CommandLogger = logger.DefaultLogger.With(
+		logger.F("execution_mode", executionMode),
+		logger.F("is_replay", cmd.Replay),
+		logger.F("room_id", room.ID),
+		logger.F("match_id", cmd.MatchID),
+		logger.F("command_id", cmd.CommandID),
+		logger.F("command_type", cmd.Type),
+	)
+	defer func() {
+		room.CommandLogger = previousLogger
+	}()
 	commandTime := cmd.SentAt.UTC()
 	if commandTime.IsZero() {
 		commandTime = time.Now().UTC()
@@ -223,7 +240,7 @@ func (p *Plugin) ApplyCommand(ctx context.Context, state game.State, cmd contrac
 	if err := validateAcquireCommand(room, cmd, payload); err != nil {
 		return game.ApplyResult{}, err
 	}
-	legacy := domain.Command{Type: cmd.Type, PlayerID: cmd.PlayerID, Payload: payload}
+	legacy := domain.Command{Type: cmd.Type, PlayerID: cmd.PlayerID, Payload: payload, Replay: cmd.Replay}
 	result := game.ApplyResult{}
 	previousStatus := room.State.RoomStatus
 	previousPlayer := room.State.CurrentPlayer
@@ -536,7 +553,7 @@ func (p *Plugin) ProjectHistory(ctx context.Context, state game.State) (game.His
 		if player == nil {
 			continue
 		}
-		stockValue := rules.CalculateTotalValue(player.Stocks, room.State.Companies)
+		stockValue := rules.CalculateTotalValue(player.Stocks, room.State.Companies, room.Log())
 		scores = append(scores, score{playerID: playerID, money: player.Money, stocks: stockValue, total: player.Money + stockValue})
 	}
 	sort.Slice(scores, func(i, j int) bool {

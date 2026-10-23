@@ -49,3 +49,17 @@ func CurrentMergeSettlePlayer(room *domain.Room) string {
 	sort.Strings(players)
 	return players[0]
 }
+
+func IsPendingMergeSettlePlayer(room *domain.Room, playerID string) bool {
+	if room == nil || room.State == nil || room.State.RoomStatus != domain.RoomStatusMergingSettle {
+		return false
+	}
+	for _, settlement := range room.State.MergeSettleData {
+		for _, pendingPlayerID := range settlement.Hoders {
+			if pendingPlayerID == playerID {
+				return true
+			}
+		}
+	}
+	return false
+}
