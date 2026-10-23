@@ -637,8 +637,9 @@ func chooseStocksToBuyForAI(r *domain.Room, playerID string) map[string]int {
 func chooseMergingSettleForAI(r *domain.Room, playerID string) []domain.MergingSettleItem {
 	result := []domain.MergingSettleItem{}
 	mainCompanyInfo := r.State.Companies[r.State.MergeMainCompany]
+	remainingMainStock := mainCompanyInfo.StockTotal
 
-	for companyKey := range r.State.MergeSettleData {
+	for _, companyKey := range mergeSettlementCompanies(r) {
 		count := r.State.Players[playerID].Stocks[companyKey]
 		if count == 0 {
 			continue
@@ -652,7 +653,7 @@ func chooseMergingSettleForAI(r *domain.Room, playerID string) []domain.MergingS
 		if maxEven%2 != 0 {
 			maxEven--
 		}
-		maxCanExchange := mainCompanyInfo.StockTotal * 2
+		maxCanExchange := remainingMainStock * 2
 		maxEven = min2(maxEven, maxCanExchange)
 		beforeRank := holderRankValue(r, playerID, r.State.MergeMainCompany)
 		afterRank := rankValueAfterStockDelta(r, playerID, r.State.MergeMainCompany, maxEven/2)
@@ -672,6 +673,7 @@ func chooseMergingSettleForAI(r *domain.Room, playerID string) []domain.MergingS
 		if shouldExchange && maxEven > 0 {
 			exchangeAmount = maxEven
 			sellAmount = count - exchangeAmount
+			remainingMainStock -= exchangeAmount / 2
 		}
 
 		result = append(result, domain.MergingSettleItem{
@@ -682,6 +684,15 @@ func chooseMergingSettleForAI(r *domain.Room, playerID string) []domain.MergingS
 	}
 
 	return result
+}
+
+func mergeSettlementCompanies(r *domain.Room) []string {
+	companies := make([]string, 0, len(r.State.MergeSettleData))
+	for company := range r.State.MergeSettleData {
+		companies = append(companies, company)
+	}
+	sort.Strings(companies)
+	return companies
 }
 
 // AutoSettleDisconnectedHolder 在并购结算阶段，自动替所有"已离线的真人持股玩家"完成结算，

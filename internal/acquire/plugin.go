@@ -480,6 +480,15 @@ func (p *Plugin) PendingCommands(ctx context.Context, state game.State) ([]game.
 	}}, nil
 }
 
+func (p *Plugin) ResetAutomationState(ctx context.Context, state game.State) error {
+	room, err := asRoom(state)
+	if err != nil {
+		return err
+	}
+	room.AIRunning = false
+	return nil
+}
+
 func (p *Plugin) IsRecordableCommand(commandType string) bool {
 	switch commandType {
 	case "game_place_tile", "game_create_company", "game_merging_selection", "game_merging_settle", "game_buy_stock", "game_end_vote", "turn_timeout":

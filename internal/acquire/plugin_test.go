@@ -360,6 +360,32 @@ func TestPluginPendingCommandsRecoverMergeSettleAIHolder(t *testing.T) {
 	}
 }
 
+func TestPluginResetAutomationStateReleasesAIRunning(t *testing.T) {
+	ctx := context.Background()
+	plugin := &Plugin{}
+	state, err := plugin.InitRoom(ctx, game.RoomConfig{
+		RoomID:        "acquire-reset-automation",
+		OwnerPlayerID: "alice-1",
+		MaxPlayers:    2,
+		RandomSeed:    testRandomSeed,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	room, err := asRoom(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	room.AIRunning = true
+
+	if err := plugin.ResetAutomationState(ctx, state); err != nil {
+		t.Fatal(err)
+	}
+	if room.AIRunning {
+		t.Fatal("AIRunning remained true after automation reset")
+	}
+}
+
 func testAcquireBoard(belongs map[string]string) map[string]*domain.Tile {
 	board := make(map[string]*domain.Tile, 108)
 	for column := 1; column <= 12; column++ {

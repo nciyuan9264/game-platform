@@ -106,6 +106,16 @@ func (e *countingEngine) BuildPlayerView(ctx context.Context, state game.State, 
 	return state, nil
 }
 
+type automationResetEngine struct {
+	countingEngine
+	resetCount int
+}
+
+func (e *automationResetEngine) ResetAutomationState(context.Context, game.State) error {
+	e.resetCount++
+	return nil
+}
+
 type loggingEngine struct {
 	countingEngine
 }
@@ -739,7 +749,7 @@ func TestSyncRosterUsesLogicalPlayersInsteadOfPresenceSessions(t *testing.T) {
 }
 
 func TestRoomActorRestoreReplaysCommandLogAfterLatestSnapshot(t *testing.T) {
-	engine := &countingEngine{}
+	engine := &automationResetEngine{}
 	snapshotState, err := json.Marshal(countingState{Count: 2})
 	if err != nil {
 		t.Fatalf("marshal snapshot: %v", err)
@@ -791,6 +801,9 @@ func TestRoomActorRestoreReplaysCommandLogAfterLatestSnapshot(t *testing.T) {
 	}
 	if ack, ok := actor.processed["cmd-2"]; !ok || !ack.Accepted || ack.Seq != 2 {
 		t.Fatalf("snapshot-covered command was not restored into idempotency cache: %+v", actor.processed)
+	}
+	if engine.resetCount != 1 {
+		t.Fatalf("automation reset count = %d, want 1", engine.resetCount)
 	}
 }
 

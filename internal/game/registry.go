@@ -127,6 +127,10 @@ type Scheduler interface {
 	PendingCommands(ctx context.Context, state State) ([]ScheduledCommand, error)
 }
 
+type AutomationStateResetter interface {
+	ResetAutomationState(ctx context.Context, state State) error
+}
+
 type RoomMetadata struct {
 	Visibility string
 }

@@ -1267,6 +1267,10 @@ func (r *RoomActor) restore(ctx context.Context) error {
 		}
 	}
 	r.mu.Lock()
+	if err := r.resetAutomationStateLocked(ctx); err != nil {
+		r.mu.Unlock()
+		return fmt.Errorf("reset automation state after restore: %w", err)
+	}
 	r.rearmScheduledLocked(ctx, "restore")
 	r.mu.Unlock()
 	return nil
@@ -2066,6 +2070,7 @@ func (r *RoomActor) runAI(ctx context.Context, req game.AIRequest, traceID strin
 	aiCmd, err := r.decideAI(aiCtx, req)
 	if err != nil {
 		observability.Warn("ai decision failed", "roomID", req.RoomID, "playerID", req.PlayerID, "error", err)
+		r.recoverAutomation(r.ctx, traceID, "decision_failed")
 		return
 	}
 	aiCmd.SchemaVersion = 1
@@ -2095,7 +2100,18 @@ func (r *RoomActor) runAI(ctx context.Context, req game.AIRequest, traceID strin
 			"delayMs":   delay.Milliseconds(),
 		},
 	})
-	_ = r.Apply(ctx, aiCmd)
+	ack := r.Apply(ctx, aiCmd)
+	if !ack.Accepted {
+		observability.Warn(
+			"ai command rejected",
+			"roomID", req.RoomID,
+			"playerID", req.PlayerID,
+			"type", aiCmd.Type,
+			"errorCode", ack.ErrorCode,
+			"message", ack.Message,
+		)
+		r.recoverAutomation(r.ctx, traceID, "command_rejected")
+	}
 }
 
 func (r *RoomActor) decideAI(ctx context.Context, req game.AIRequest) (contracts.RoomCommand, error) {
@@ -2113,6 +2129,28 @@ func (r *RoomActor) decideAI(ctx context.Context, req game.AIRequest) (contracts
 		return *req.FallbackCommand, nil
 	}
 	return contracts.RoomCommand{}, errors.New("game has no ai planner")
+}
+
+func (r *RoomActor) resetAutomationStateLocked(ctx context.Context) error {
+	resetter, ok := r.definition.Engine.(game.AutomationStateResetter)
+	if !ok {
+		return nil
+	}
+	return resetter.ResetAutomationState(ctx, r.state)
+}
+
+func (r *RoomActor) recoverAutomation(ctx context.Context, traceID, reason string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed {
+		return
+	}
+	if err := r.resetAutomationStateLocked(ctx); err != nil {
+		observability.Warn("reset automation state failed", "roomID", r.record.RoomID, "reason", reason, "error", err)
+		return
+	}
+	observability.Info("automation state reset", "roomID", r.record.RoomID, "reason", reason)
+	r.rearmScheduledLocked(ctx, traceID)
 }
 
 func (r *RoomActor) broadcast(ctx context.Context, traceID string) error {

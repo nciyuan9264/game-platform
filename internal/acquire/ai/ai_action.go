@@ -292,7 +292,8 @@ func buildMergeSettleVariant(r *domain.Room, playerID string, exchange bool) []d
 		return nil
 	}
 	result := []domain.MergingSettleItem{}
-	for company := range r.State.MergeSettleData {
+	remainingMainStock := main.StockTotal
+	for _, company := range mergeSettlementCompanies(r) {
 		count := r.State.Players[playerID].Stocks[company]
 		if count <= 0 {
 			continue
@@ -303,8 +304,9 @@ func buildMergeSettleVariant(r *domain.Room, playerID string, exchange bool) []d
 			if maxEven%2 != 0 {
 				maxEven--
 			}
-			item.ExchangeAmount = min2(maxEven, main.StockTotal*2)
+			item.ExchangeAmount = min2(maxEven, remainingMainStock*2)
 			item.SellAmount = count - item.ExchangeAmount
+			remainingMainStock -= item.ExchangeAmount / 2
 		} else {
 			item.SellAmount = count
 		}

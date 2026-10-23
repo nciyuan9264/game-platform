@@ -163,3 +163,34 @@ func TestBuildTurnTimeoutCommandIgnoresEndedRoom(t *testing.T) {
 		t.Fatalf("BuildTurnTimeoutCommand returned command for ended room: %+v", cmd)
 	}
 }
+
+func TestMergeSettleActionsShareMainCompanyInventory(t *testing.T) {
+	r := newAITestRoom()
+	r.State.RoomStatus = domain.RoomStatusMergingSettle
+	r.State.MergeMainCompany = "Imperial"
+	r.State.Companies["Imperial"] = &domain.CompanyState{Name: "Imperial", StockTotal: 1, StockPrice: 1200}
+	r.State.Companies["American"] = &domain.CompanyState{Name: "American", StockTotal: 21, StockPrice: 300}
+	r.State.Companies["Sackson"].StockPrice = 300
+	r.State.Players["ai_001"].Stocks["American"] = 4
+	r.State.Players["ai_001"].Stocks["Sackson"] = 4
+	r.State.MergeSettleData = map[string]domain.SettleData{
+		"American": {Hoders: []string{"ai_001"}},
+		"Sackson":  {Hoders: []string{"ai_001"}},
+	}
+
+	tests := map[string][]domain.MergingSettleItem{
+		"heuristic":        chooseMergingSettleForAI(r, "ai_001"),
+		"exchange variant": buildMergeSettleVariant(r, "ai_001", true),
+	}
+	for name, actions := range tests {
+		t.Run(name, func(t *testing.T) {
+			exchanged := 0
+			for _, action := range actions {
+				exchanged += action.ExchangeAmount / 2
+			}
+			if exchanged != r.State.Companies["Imperial"].StockTotal {
+				t.Fatalf("exchanged main stock = %d, want inventory %d, actions = %+v", exchanged, r.State.Companies["Imperial"].StockTotal, actions)
+			}
+		})
+	}
+}
