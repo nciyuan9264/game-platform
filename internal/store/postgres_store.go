@@ -36,7 +36,7 @@ func NewPostgresStore(ctx context.Context, dsn string) (*PostgresStore, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Four long-running services share the same direct production endpoint.
+	// Four long-running services share the same managed PostgreSQL instance.
 	db.SetMaxOpenConns(8)
 	db.SetMaxIdleConns(4)
 	db.SetConnMaxLifetime(30 * time.Minute)

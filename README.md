@@ -332,8 +332,8 @@ docker compose -f docker-compose.prod.yml up -d
 `POSTGRES_DSN` 和 `WS_ALLOWED_ORIGINS`。该数据库账号需要
 同时具备 Schema Migration 和运行期读写权限。Redis 默认使用 `global-redis:6379`，
 NATS 默认使用 `nats://global-nats:4222`，Auth RPC 由独立 Auth 服务提供。
-Neon 必须使用不含 `-pooler` 的 direct endpoint；当前 `lib/pq` 参数查询不兼容
-Neon PgBouncer transaction pooling 的 backend multiplexing。
+生产数据库统一使用阿里云 RDS `gamebus_prod`，连接串必须启用
+`sslmode=require`。部署前校验会拒绝旧 Neon、本地主机和非目标数据库连接。
 
 生产基线默认不返回开发验证码、不配置默认管理员、不开启 Acquire 压测接口。
 本地调试需要开发验证码时必须同时显式设置
