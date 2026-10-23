@@ -403,10 +403,11 @@ func (p *Plugin) BuildPlayerView(ctx context.Context, state game.State, req game
 			"endGame":       room.State.EndGame,
 		},
 		"tempData": map[string]any{
-			"last_tile_key":           room.State.LastTileKey,
-			"merge_main_company_temp": room.State.MergeMainCompany,
-			"merge_selection_temp":    room.State.MergingSelection,
-			"mergeSettleData":         room.State.MergeSettleData,
+			"last_tile_key":               room.State.LastTileKey,
+			"merge_main_company_temp":     room.State.MergeMainCompany,
+			"merge_selection_temp":        room.State.MergingSelection,
+			"mergeSettleData":             room.State.MergeSettleData,
+			"merge_settle_current_player": rules.CurrentMergeSettlePlayer(room),
 		},
 	}, nil
 }
@@ -878,24 +879,13 @@ func nextAIPlayer(room *domain.Room) string {
 }
 
 func pendingMergeSettleAIHolder(room *domain.Room) string {
-	if room == nil || room.State == nil || room.State.RoomStatus != domain.RoomStatusMergingSettle {
+	playerID := rules.CurrentMergeSettlePlayer(room)
+	if playerID == "" {
 		return ""
 	}
-	companies := make([]string, 0, len(room.State.MergeSettleData))
-	for company := range room.State.MergeSettleData {
-		companies = append(companies, company)
-	}
-	sort.Strings(companies)
-	for _, company := range companies {
-		settle := room.State.MergeSettleData[company]
-		if len(settle.Hoders) == 0 {
-			continue
-		}
-		playerID := settle.Hoders[0]
-		player := room.Connections[playerID]
-		if player != nil && player.AI {
-			return playerID
-		}
+	player := room.Connections[playerID]
+	if player != nil && player.AI {
+		return playerID
 	}
 	return ""
 }
@@ -954,12 +944,15 @@ func removeString(values []string, target string) []string {
 }
 
 func userIDFromPlayerID(playerID string) (string, bool) {
-	index := strings.LastIndex(playerID, "-")
-	if index < 0 || index == len(playerID)-1 {
-		return "", false
+	value := playerID
+	if index := strings.LastIndex(playerID, "-"); index >= 0 {
+		if index == len(playerID)-1 {
+			return "", false
+		}
+		value = playerID[index+1:]
 	}
-	value := playerID[index+1:]
-	if _, err := strconv.ParseInt(value, 10, 64); err != nil {
+	parsed, err := strconv.ParseInt(value, 10, 64)
+	if err != nil || parsed <= 0 {
 		return "", false
 	}
 	return value, true

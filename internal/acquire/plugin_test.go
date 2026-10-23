@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/nciyuan9264/game-platform/internal/acquire/domain/domain"
+	rules "github.com/nciyuan9264/game-platform/internal/acquire/rules"
 	"github.com/nciyuan9264/game-platform/internal/contracts"
 	"github.com/nciyuan9264/game-platform/internal/game"
 )
@@ -324,6 +325,87 @@ func TestPluginSchedulesAIForMergeSettleHolder(t *testing.T) {
 	}
 	if aiCommand.Type != "game_merging_settle" {
 		t.Fatalf("AI command type = %q, want game_merging_settle", aiCommand.Type)
+	}
+}
+
+func TestPluginSerializesMergeSettlementByTurnOrder(t *testing.T) {
+	ctx := context.Background()
+	plugin := &Plugin{}
+	state, err := plugin.InitRoom(ctx, game.RoomConfig{
+		RoomID:        "acquire-serial-merge",
+		OwnerPlayerID: "alice",
+		MaxPlayers:    2,
+		RandomSeed:    testRandomSeed,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	room, err := asRoom(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	room.Connections["alice"] = &domain.PlayerConn{PlayerID: "alice", Online: true, SeatIndex: 0}
+	room.Connections["bob"] = &domain.PlayerConn{PlayerID: "bob", Online: true, SeatIndex: 1}
+	room.PlayerSeq = []string{"alice", "bob"}
+	room.State.CurrentPlayer = "alice"
+	room.State.RoomStatus = domain.RoomStatusMergingSettle
+	room.State.LastTileKey = "2A"
+	room.State.MergeMainCompany = "Tower"
+	room.State.MergeSettleData = map[string]domain.SettleData{
+		"American": {Hoders: []string{"bob", "alice"}, Dividends: map[string]int{}},
+	}
+	room.State.Companies["Tower"] = &domain.CompanyState{Name: "Tower", Tiles: 3, StockTotal: 1, StockPrice: 300}
+	room.State.Companies["American"] = &domain.CompanyState{Name: "American", Tiles: 2, StockTotal: 21, StockPrice: 200}
+	room.State.Players = map[string]*domain.PlayerState{
+		"alice": {Stocks: map[string]int{"American": 2, "Tower": 12}},
+		"bob":   {Stocks: map[string]int{"American": 2, "Tower": 12}},
+	}
+	view, err := plugin.BuildPlayerView(ctx, state, game.ViewRequest{PlayerID: "alice"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tempData := view.(map[string]any)["tempData"].(map[string]any)
+	if tempData["merge_settle_current_player"] != "alice" {
+		t.Fatalf("view current settlement player = %v, want alice", tempData["merge_settle_current_player"])
+	}
+
+	exchange := map[string]any{"actions": []map[string]any{{
+		"company": "American", "exchangeAmount": 2, "sellAmount": 0,
+	}}}
+	if _, err := plugin.ApplyCommand(ctx, state, contracts.RoomCommand{
+		PlayerID: "bob", Type: "game_merging_settle", Payload: exchange,
+	}); err == nil || err.Error() != "请等待当前股东完成并购结算" {
+		t.Fatalf("early bob settlement error = %v", err)
+	}
+	if _, err := plugin.ApplyCommand(ctx, state, contracts.RoomCommand{
+		PlayerID: "alice", Type: "game_merging_settle", Payload: exchange,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if room.State.Companies["Tower"].StockTotal != 0 || rules.CurrentMergeSettlePlayer(room) != "bob" {
+		t.Fatalf("after alice settlement: stock=%d current=%q",
+			room.State.Companies["Tower"].StockTotal, rules.CurrentMergeSettlePlayer(room))
+	}
+	if _, err := plugin.ApplyCommand(ctx, state, contracts.RoomCommand{
+		PlayerID: "bob", Type: "game_merging_settle", Payload: exchange,
+	}); err == nil || err.Error() != "存续公司库存已变化，请调整兑换数量" {
+		t.Fatalf("stale bob settlement error = %v", err)
+	}
+	if room.State.Companies["Tower"].StockTotal != 0 || rules.CurrentMergeSettlePlayer(room) != "bob" {
+		t.Fatalf("stale settlement changed state: stock=%d current=%q",
+			room.State.Companies["Tower"].StockTotal, rules.CurrentMergeSettlePlayer(room))
+	}
+
+	sell := map[string]any{"actions": []map[string]any{{
+		"company": "American", "exchangeAmount": 0, "sellAmount": 2,
+	}}}
+	if _, err := plugin.ApplyCommand(ctx, state, contracts.RoomCommand{
+		PlayerID: "bob", Type: "game_merging_settle", Payload: sell,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if room.State.RoomStatus != domain.RoomStatusBuyStock {
+		t.Fatalf("room status = %q, want buyStock", room.State.RoomStatus)
 	}
 }
 

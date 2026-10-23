@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/nciyuan9264/game-platform/internal/acquire/domain/domain"
+	"github.com/nciyuan9264/game-platform/internal/acquire/roomcore"
 )
 
 func TestPayloadForActionMatchesExistingSchema(t *testing.T) {
@@ -192,5 +193,25 @@ func TestMergeSettleActionsShareMainCompanyInventory(t *testing.T) {
 				t.Fatalf("exchanged main stock = %d, want inventory %d, actions = %+v", exchanged, r.State.Companies["Imperial"].StockTotal, actions)
 			}
 		})
+	}
+}
+
+func TestMergeAutomationFollowsSerialSettlementPlayer(t *testing.T) {
+	r := newAITestRoom()
+	r.PlayerSeq = []string{"human_001", "offline_001"}
+	r.Connections["offline_001"] = &roomcore.PlayerConn{PlayerID: "offline_001", Online: false}
+	r.State.Players["offline_001"] = &domain.PlayerState{Stocks: map[string]int{"Sackson": 1}}
+	r.State.RoomStatus = domain.RoomStatusMergingSettle
+	r.State.CurrentPlayer = "human_001"
+	r.State.MergeSettleData = map[string]domain.SettleData{
+		"Sackson": {Hoders: []string{"offline_001", "human_001"}},
+	}
+
+	if got := CurrentTimeoutPlayer(r); got != "human_001" {
+		t.Fatalf("timeout player = %q, want human_001", got)
+	}
+	AutoSettleDisconnectedHolder(r)
+	if holders := r.State.MergeSettleData["Sackson"].Hoders; len(holders) != 2 {
+		t.Fatalf("offline settlement skipped active human: holders=%v", holders)
 	}
 }

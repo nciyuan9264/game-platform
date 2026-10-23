@@ -243,6 +243,21 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 			is_winner BOOLEAN NOT NULL DEFAULT false,
 			created_at TIMESTAMPTZ NOT NULL
 		)`,
+		`UPDATE game_players
+		SET user_id = CASE
+			WHEN player_id ~ '^[0-9]+$' THEN player_id::BIGINT
+			ELSE substring(player_id FROM '([0-9]+)$')::BIGINT
+		END
+		WHERE user_id IS NULL
+			AND NOT is_ai
+			AND (player_id ~ '^[0-9]+$' OR player_id ~ '-[0-9]+$')`,
+		`UPDATE games AS game
+		SET winner_user_id = player.user_id
+		FROM game_players AS player
+		WHERE game.winner_user_id IS NULL
+			AND player.game_id = game.id
+			AND player.is_winner
+			AND player.user_id IS NOT NULL`,
 		`CREATE INDEX IF NOT EXISTS idx_game_players_game ON game_players (game_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_game_players_user ON game_players (user_id, game_id)`,
 		`CREATE TABLE IF NOT EXISTS game_events (

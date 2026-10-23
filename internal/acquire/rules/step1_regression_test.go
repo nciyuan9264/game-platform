@@ -94,3 +94,25 @@ func TestHandleMergingSettleRecordsReceipt(t *testing.T) {
 		t.Fatalf("settlement receipt = %+v", receipt)
 	}
 }
+
+func TestCurrentMergeSettlePlayerFollowsTurnOrder(t *testing.T) {
+	room := mergeTestRoom()
+	room.PlayerSeq = []string{"alice", "bob", "carol"}
+	room.State.CurrentPlayer = "bob"
+	room.State.RoomStatus = domain.RoomStatusMergingSettle
+	room.State.MergeSettleData = map[string]domain.SettleData{
+		"American": {Hoders: []string{"alice", "bob"}},
+		"Festival": {Hoders: []string{"carol"}},
+	}
+
+	if got := CurrentMergeSettlePlayer(room); got != "bob" {
+		t.Fatalf("current settlement player = %q, want bob", got)
+	}
+
+	american := room.State.MergeSettleData["American"]
+	american.Hoders = []string{"alice"}
+	room.State.MergeSettleData["American"] = american
+	if got := CurrentMergeSettlePlayer(room); got != "carol" {
+		t.Fatalf("next settlement player = %q, want carol", got)
+	}
+}

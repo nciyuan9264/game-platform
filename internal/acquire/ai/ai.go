@@ -12,7 +12,7 @@ import (
 	"github.com/nciyuan9264/game-platform/internal/acquire/domain/domain"
 	"github.com/nciyuan9264/game-platform/internal/acquire/logger"
 	"github.com/nciyuan9264/game-platform/internal/acquire/roomcore"
-	"github.com/nciyuan9264/game-platform/internal/acquire/rules"
+	rules "github.com/nciyuan9264/game-platform/internal/acquire/rules"
 	"github.com/nciyuan9264/game-platform/internal/acquire/utils"
 
 	"math/rand/v2"
@@ -695,30 +695,19 @@ func mergeSettlementCompanies(r *domain.Room) []string {
 	return companies
 }
 
-// AutoSettleDisconnectedHolder 在并购结算阶段，自动替所有"已离线的真人持股玩家"完成结算，
-// 避免结算队列因其离线而永久卡死。无论玩家是"结算期间断线"还是"并购触发前就已离线"，
-// 都在此统一兜底处理：循环扫描待结算队列，按默认规则替每个离线真人结算，直至无离线持股玩家。
-// AI 持股玩家由广播自驱、在线真人由思考超时定时器驱动，均不在此处理。
+// AutoSettleDisconnectedHolder settles consecutive offline shareholders at
+// the head of the merger queue without skipping an online player or AI.
 func AutoSettleDisconnectedHolder(r *domain.Room) {
 	if r == nil || r.State == nil || r.State.RoomStatus != domain.RoomStatusMergingSettle {
 		return
 	}
 	for r.State.RoomStatus == domain.RoomStatusMergingSettle {
-		target := ""
-		for _, d := range r.State.MergeSettleData {
-			for _, h := range d.Hoders {
-				pc, ok := r.Connections[h]
-				if !ok || pc == nil || pc.AI || pc.Online {
-					continue
-				}
-				target = h
-				break
-			}
-			if target != "" {
-				break
-			}
-		}
+		target := rules.CurrentMergeSettlePlayer(r)
 		if target == "" {
+			return
+		}
+		player := r.Connections[target]
+		if player != nil && (player.AI || player.Online) {
 			return
 		}
 
@@ -730,7 +719,7 @@ func AutoSettleDisconnectedHolder(r *domain.Room) {
 		}
 
 		logger.Info("玩家离线，自动替其完成并购结算", logger.F("room_id", r.ID), logger.F("player_id", target))
-		game.HandleMergingSettleMessage(r, domain.Command{
+		rules.HandleMergingSettleMessage(r, domain.Command{
 			Type:     "game_merging_settle",
 			PlayerID: target,
 			Payload:  payload,
@@ -738,25 +727,17 @@ func AutoSettleDisconnectedHolder(r *domain.Room) {
 	}
 }
 
-// CurrentTimeoutPlayer 返回思考超时定时器应跟随的玩家。
-// 并购结算阶段由持股玩家依次结算，CurrentPlayer 仍是放置 tile 的玩家（可能是 AI），
-// 因此定时器需改为跟随"当前待结算的在线真人持股玩家"，从而给真人玩家倒计时，
-// 超时后由 BuildTurnTimeoutCommand 自动替其结算；其余阶段沿用 CurrentPlayer。
+// CurrentTimeoutPlayer follows the active online human shareholder during a
+// merger and the normal turn owner in every other phase.
 func CurrentTimeoutPlayer(r *domain.Room) string {
 	if r == nil || r.State == nil {
 		return ""
 	}
 	if r.State.RoomStatus == domain.RoomStatusMergingSettle {
-		for _, d := range r.State.MergeSettleData {
-			if len(d.Hoders) == 0 {
-				continue
-			}
-			head := d.Hoders[0]
-			pc, ok := r.Connections[head]
-			if !ok || pc == nil || pc.AI || !pc.Online {
-				continue
-			}
-			return head
+		playerID := rules.CurrentMergeSettlePlayer(r)
+		player := r.Connections[playerID]
+		if player != nil && !player.AI && player.Online {
+			return playerID
 		}
 		return ""
 	}
@@ -1045,20 +1026,7 @@ func MaybeRunAIIfNeeded(r *domain.Room, message []byte) bool {
 
 	// mergingSettle 特殊校验
 	if gameStatus == domain.RoomStatusMergingSettle {
-		mergeSettleData := r.State.MergeSettleData
-
-		// 仅当玩家在合并对象中时才进行 AI 操作
-		playerInHoder := false
-		for _, data := range mergeSettleData {
-			if (len(data.Hoders)) == 0 {
-				continue
-			}
-			if data.Hoders[0] == playerId {
-				playerInHoder = true
-				break
-			}
-		}
-		if !playerInHoder {
+		if rules.CurrentMergeSettlePlayer(r) != playerId {
 			return false
 		}
 	}

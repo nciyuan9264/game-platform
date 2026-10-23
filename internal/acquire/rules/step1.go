@@ -477,6 +477,13 @@ func HandleMergingSettleMessage(r *domain.Room, cmd domain.Command) {
 		logger.Error("不是合并的状态", logger.F("room_id", r.ID), logger.F("player_id", cmd.PlayerID))
 		return
 	}
+	if currentPlayer := CurrentMergeSettlePlayer(r); currentPlayer == "" || currentPlayer != cmd.PlayerID {
+		logger.Warn("尚未轮到该股东结算",
+			logger.F("room_id", r.ID),
+			logger.F("player_id", cmd.PlayerID),
+			logger.F("current_settle_player", currentPlayer))
+		return
+	}
 
 	playerInHoder := false
 	holdingsBefore := make(map[string]int)

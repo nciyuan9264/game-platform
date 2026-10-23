@@ -154,7 +154,11 @@ func validateAcquireCommand(room *domain.Room, command contracts.RoomCommand, pa
 		if state.RoomStatus != phase {
 			return errors.New("当前阶段不允许此操作")
 		}
-		if command.Type != "game_merging_settle" && command.PlayerID != state.CurrentPlayer {
+		if command.Type == "game_merging_settle" {
+			if command.PlayerID != rules.CurrentMergeSettlePlayer(room) {
+				return errors.New("请等待当前股东完成并购结算")
+			}
+		} else if command.PlayerID != state.CurrentPlayer {
 			return errors.New("请等待你的回合")
 		}
 		if state.Players[command.PlayerID] == nil {
