@@ -136,6 +136,7 @@ type fakeRoomhostStore struct {
 	session         contracts.SessionRecord
 	sessionErr      error
 	presences       []contracts.PresenceRecord
+	presenceErr     error
 	outboundErr     error
 	savedOutbound   []contracts.OutboundMessage
 	savedSnapshots  []contracts.SnapshotRecord
@@ -232,6 +233,9 @@ func (s *fakeRoomhostStore) GetSession(context.Context, string) (contracts.Sessi
 }
 
 func (s *fakeRoomhostStore) ListPresence(context.Context, string) ([]contracts.PresenceRecord, error) {
+	if s.presenceErr != nil {
+		return nil, s.presenceErr
+	}
 	return append([]contracts.PresenceRecord(nil), s.presences...), nil
 }
 
@@ -1106,6 +1110,104 @@ func TestHostRoomRejectsTerminalRoom(t *testing.T) {
 	)
 	if _, err := host.room(context.Background(), contracts.RoomCommand{RoomID: "room-1"}); err == nil {
 		t.Fatal("terminal room was lazily loaded")
+	}
+}
+
+func TestShouldRecover(t *testing.T) {
+	presenceErr := errors.New("presence unavailable")
+	tests := []struct {
+		name        string
+		room        contracts.RoomRecord
+		presences   []contracts.PresenceRecord
+		presenceErr error
+		want        bool
+	}{
+		{
+			name: "empty open room",
+			room: contracts.RoomRecord{RoomID: "empty-open-room", Status: contracts.RoomStatusOpen},
+			want: true,
+		},
+		{
+			name: "terminal room",
+			room: contracts.RoomRecord{RoomID: "closed-room", Status: contracts.RoomStatusClosed},
+		},
+		{
+			name: "active player count",
+			room: contracts.RoomRecord{RoomID: "active-room", Status: contracts.RoomStatusCreating, PlayerCount: 1},
+			want: true,
+		},
+		{
+			name:      "online presence",
+			room:      contracts.RoomRecord{RoomID: "online-room", Status: contracts.RoomStatusCreating},
+			presences: []contracts.PresenceRecord{{Online: true}},
+			want:      true,
+		},
+		{
+			name:        "presence unavailable",
+			room:        contracts.RoomRecord{RoomID: "unknown-room", Status: contracts.RoomStatusOpen},
+			presenceErr: presenceErr,
+		},
+		{
+			name: "empty non-open room",
+			room: contracts.RoomRecord{RoomID: "creating-room", Status: contracts.RoomStatusCreating},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			host := NewHost(
+				"roomhost-a",
+				&fakeRoomhostStore{presences: tt.presences, presenceErr: tt.presenceErr},
+				fakeRoomhostCoordinator{},
+				&fakeRoomhostRouter{},
+				nil,
+			)
+			if got := host.shouldRecover(context.Background(), tt.room); got != tt.want {
+				t.Fatalf("shouldRecover() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCleanupRoomsClosesExpiredEmptyRoom(t *testing.T) {
+	now := time.Now().UTC()
+	st := &fakeRoomhostStore{}
+	coord := &shutdownCoordinator{}
+	engine := &roomhostTestEngine{gameType: "test-game", version: "test-v1"}
+	host := NewHost("roomhost-a", st, coord, &fakeRoomhostRouter{}, nil)
+	actor := &RoomActor{
+		host: host,
+		record: contracts.RoomRecord{
+			RoomID:        "empty-open-room",
+			GameType:      "test-game",
+			OwnerNode:     "roomhost-a",
+			Epoch:         7,
+			Status:        contracts.RoomStatusOpen,
+			EngineVersion: "test-v1",
+		},
+		definition: game.Definition{GameType: "test-game", Version: "test-v1", Engine: engine},
+		state:      map[string]any{},
+		processed:  map[string]contracts.CommandAck{},
+	}
+	host.rooms[actor.record.RoomID] = actor
+	host.emptySince[actor.record.RoomID] = now.Add(-3 * time.Minute)
+
+	host.cleanupRooms(context.Background(), now)
+
+	if host.ActiveRooms() != 0 {
+		t.Fatalf("active rooms = %d, want 0", host.ActiveRooms())
+	}
+	if _, tracked := host.emptySince[actor.record.RoomID]; tracked {
+		t.Fatal("empty room remained in cleanup tracking")
+	}
+	if coord.deletedRoomID != actor.record.RoomID || coord.deletedNodeID != host.nodeID || coord.deletedEpoch != actor.record.Epoch {
+		t.Fatalf("released owner = %+v", coord)
+	}
+	if len(st.setRooms) != 1 || st.setRooms[0].Status != contracts.RoomStatusClosed {
+		t.Fatalf("persisted rooms = %+v, want one closed room record", st.setRooms)
+	}
+	if !actor.closed {
+		t.Fatal("room actor was not closed")
 	}
 }
 

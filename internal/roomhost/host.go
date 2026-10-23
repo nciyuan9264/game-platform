@@ -685,7 +685,7 @@ func (h *Host) shouldRecover(ctx context.Context, rec contracts.RoomRecord) bool
 			return true
 		}
 	}
-	return false
+	return rec.Status == contracts.RoomStatusOpen
 }
 
 func (h *Host) leaseLoop(ctx context.Context) {
@@ -753,57 +753,61 @@ func (h *Host) cleanupLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case now := <-ticker.C:
-			h.mu.Lock()
-			rooms := make([]*RoomActor, 0, len(h.rooms))
-			for _, room := range h.rooms {
-				rooms = append(rooms, room)
-			}
-			h.mu.Unlock()
-			for _, room := range rooms {
-				presences, err := h.store.ListPresence(ctx, room.record.RoomID)
-				if err != nil {
-					continue
-				}
-				hasHuman := false
-				for _, presence := range presences {
-					if presence.Online {
-						hasHuman = true
-						break
-					}
-				}
-				if _, ok := room.definition.Engine.(game.HumanPresenceObserver); ok {
-					check, err := room.observeHumanPresence(ctx, hasHuman)
-					if err != nil {
-						observability.Warn("observe room human presence failed", "roomID", room.record.RoomID, "error", err)
-						continue
-					}
-					if !hasHuman {
-						observability.Info("room has no human presence", "roomID", room.record.RoomID, "count", check.ConsecutiveEmpty, "limit", check.Limit)
-					}
-					if check.ShouldClose {
-						h.closeRoomForNoHumans(ctx, room, now, "no_human_3_checks")
-					}
-					continue
-				}
-				h.mu.Lock()
-				if hasHuman {
-					delete(h.emptySince, room.record.RoomID)
-					h.mu.Unlock()
-					continue
-				}
-				since := h.emptySince[room.record.RoomID]
-				if since.IsZero() {
-					h.emptySince[room.record.RoomID] = now
-					h.mu.Unlock()
-					continue
-				}
-				h.mu.Unlock()
-				if now.Sub(since) < 3*time.Minute {
-					continue
-				}
-				h.closeRoomForNoHumans(ctx, room, now, "no_human_180s")
+			h.cleanupRooms(ctx, now)
+		}
+	}
+}
+
+func (h *Host) cleanupRooms(ctx context.Context, now time.Time) {
+	h.mu.Lock()
+	rooms := make([]*RoomActor, 0, len(h.rooms))
+	for _, room := range h.rooms {
+		rooms = append(rooms, room)
+	}
+	h.mu.Unlock()
+	for _, room := range rooms {
+		presences, err := h.store.ListPresence(ctx, room.record.RoomID)
+		if err != nil {
+			continue
+		}
+		hasHuman := false
+		for _, presence := range presences {
+			if presence.Online {
+				hasHuman = true
+				break
 			}
 		}
+		if _, ok := room.definition.Engine.(game.HumanPresenceObserver); ok {
+			check, err := room.observeHumanPresence(ctx, hasHuman)
+			if err != nil {
+				observability.Warn("observe room human presence failed", "roomID", room.record.RoomID, "error", err)
+				continue
+			}
+			if !hasHuman {
+				observability.Info("room has no human presence", "roomID", room.record.RoomID, "count", check.ConsecutiveEmpty, "limit", check.Limit)
+			}
+			if check.ShouldClose {
+				h.closeRoomForNoHumans(ctx, room, now, "no_human_3_checks")
+			}
+			continue
+		}
+		h.mu.Lock()
+		if hasHuman {
+			delete(h.emptySince, room.record.RoomID)
+			h.mu.Unlock()
+			continue
+		}
+		since := h.emptySince[room.record.RoomID]
+		if since.IsZero() {
+			h.emptySince[room.record.RoomID] = now
+			h.mu.Unlock()
+			continue
+		}
+		h.mu.Unlock()
+		if now.Sub(since) < 3*time.Minute {
+			continue
+		}
+		h.closeRoomForNoHumans(ctx, room, now, "no_human_180s")
 	}
 }
 
