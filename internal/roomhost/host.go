@@ -570,12 +570,48 @@ func (h *Host) recoveryLoop(ctx context.Context) {
 				}
 				h.mu.Unlock()
 				if loadErr != nil || renewErr != nil {
+					if renewErr == nil && errors.Is(loadErr, sql.ErrNoRows) {
+						closed, closeErr := h.closeOrphanedEmptyRoom(ctx, reserved)
+						if closeErr != nil {
+							observability.Warn("close orphaned empty room failed", "roomID", reserved.RoomID, "epoch", reserved.Epoch, "error", closeErr)
+						}
+						if closed {
+							continue
+						}
+					}
 					_ = h.coord.DeleteRoomOwner(ctx, reserved.RoomID, h.nodeID, reserved.Epoch)
 					observability.Warn("room recovery failed", "roomID", reserved.RoomID, "epoch", reserved.Epoch, "loadError", loadErr, "leaseError", renewErr)
 				}
 			}
 		}
 	}
+}
+
+func (h *Host) closeOrphanedEmptyRoom(ctx context.Context, rec contracts.RoomRecord) (bool, error) {
+	if rec.Status != contracts.RoomStatusOpen || rec.PlayerCount > 0 {
+		return false, nil
+	}
+	presences, err := h.store.ListPresence(ctx, rec.RoomID)
+	if err != nil {
+		return false, err
+	}
+	for _, presence := range presences {
+		if presence.Online {
+			return false, nil
+		}
+	}
+	rec.Status = contracts.RoomStatusClosed
+	rec.UpdatedAt = time.Now().UTC()
+	if err := h.store.SetRoom(ctx, rec); err != nil {
+		return false, err
+	}
+	observability.Info("orphaned empty room closed", "nodeID", h.nodeID, "roomID", rec.RoomID, "epoch", rec.Epoch)
+	if h.coord != nil {
+		if err := h.coord.DeleteRoomOwner(ctx, rec.RoomID, h.nodeID, rec.Epoch); err != nil {
+			return true, err
+		}
+	}
+	return true, nil
 }
 
 func (h *Host) renewCandidateLease(ctx context.Context, rec contracts.RoomRecord, done chan<- error) {

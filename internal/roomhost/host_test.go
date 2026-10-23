@@ -1211,6 +1211,83 @@ func TestCleanupRoomsClosesExpiredEmptyRoom(t *testing.T) {
 	}
 }
 
+func TestCloseOrphanedEmptyRoom(t *testing.T) {
+	st := &fakeRoomhostStore{}
+	coord := &shutdownCoordinator{}
+	host := NewHost("roomhost-a", st, coord, &fakeRoomhostRouter{}, nil)
+	room := contracts.RoomRecord{
+		RoomID:      "orphaned-open-room",
+		OwnerNode:   "roomhost-a",
+		Epoch:       9,
+		Status:      contracts.RoomStatusOpen,
+		PlayerCount: 0,
+	}
+
+	closed, err := host.closeOrphanedEmptyRoom(context.Background(), room)
+	if err != nil {
+		t.Fatalf("closeOrphanedEmptyRoom() error = %v", err)
+	}
+	if !closed {
+		t.Fatal("orphaned empty room was not closed")
+	}
+	if len(st.setRooms) != 1 || st.setRooms[0].Status != contracts.RoomStatusClosed {
+		t.Fatalf("persisted rooms = %+v, want one closed room record", st.setRooms)
+	}
+	if coord.deletedRoomID != room.RoomID || coord.deletedNodeID != host.nodeID || coord.deletedEpoch != room.Epoch {
+		t.Fatalf("released owner = %+v", coord)
+	}
+}
+
+func TestCloseOrphanedEmptyRoomRejectsUnsafeCandidates(t *testing.T) {
+	presenceErr := errors.New("presence unavailable")
+	tests := []struct {
+		name        string
+		room        contracts.RoomRecord
+		presences   []contracts.PresenceRecord
+		presenceErr error
+		wantErr     bool
+	}{
+		{
+			name: "non-open room",
+			room: contracts.RoomRecord{RoomID: "creating-room", Status: contracts.RoomStatusCreating},
+		},
+		{
+			name: "room with projected players",
+			room: contracts.RoomRecord{RoomID: "occupied-room", Status: contracts.RoomStatusOpen, PlayerCount: 1},
+		},
+		{
+			name:      "room with online presence",
+			room:      contracts.RoomRecord{RoomID: "online-room", Status: contracts.RoomStatusOpen},
+			presences: []contracts.PresenceRecord{{Online: true}},
+		},
+		{
+			name:        "presence unavailable",
+			room:        contracts.RoomRecord{RoomID: "unknown-room", Status: contracts.RoomStatusOpen},
+			presenceErr: presenceErr,
+			wantErr:     true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			st := &fakeRoomhostStore{presences: tt.presences, presenceErr: tt.presenceErr}
+			coord := &shutdownCoordinator{}
+			host := NewHost("roomhost-a", st, coord, &fakeRoomhostRouter{}, nil)
+
+			closed, err := host.closeOrphanedEmptyRoom(context.Background(), tt.room)
+			if closed {
+				t.Fatal("unsafe orphan candidate was closed")
+			}
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("closeOrphanedEmptyRoom() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if len(st.setRooms) != 0 || coord.deletedRoomID != "" {
+				t.Fatalf("unsafe candidate mutated: rooms=%+v owner=%+v", st.setRooms, coord)
+			}
+		})
+	}
+}
+
 func TestRoomActorRejectsEngineVersionMismatch(t *testing.T) {
 	host := NewHost(
 		"roomhost-a",
