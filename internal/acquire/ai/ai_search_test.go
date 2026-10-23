@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/nciyuan9264/game-platform/internal/acquire/domain/domain"
-	"golang.org/x/exp/rand"
 )
 
 func markCompanyTiles(r *domain.Room, company string, tiles ...string) {
@@ -221,31 +220,5 @@ func TestBuildAIActionMsgLogsHeuristicStrategy(t *testing.T) {
 	}
 	if !strings.Contains(buf.String(), `"ai_strategy":"heuristic"`) {
 		t.Fatalf("log missing heuristic strategy: %s", buf.String())
-	}
-}
-
-func TestSearchDoesNotMutateGlobalRandomSource(t *testing.T) {
-	const seed = 12345
-	rand.Seed(seed)
-	t.Cleanup(func() { rand.Seed(1) })
-	expected := rand.New(rand.NewSource(seed)).Int63()
-
-	r := newAITestRoom()
-	r.State.CurrentPlayer = "ai_001"
-	r.State.RoomStatus = domain.RoomStatusBuyStock
-	r.State.Players["ai_001"].Money = 600
-	r.State.Companies["Tower"].StockPrice = 200
-	r.State.Companies["Tower"].StockTotal = 21
-	markCompanyTiles(r, "Tower", "5A", "5B")
-
-	_, _ = chooseBestActionBySearch(r, "ai_001", domain.RoomStatusBuyStock, nil, AISearchConfig{
-		Depth:       1,
-		BeamWidth:   6,
-		ActionLimit: 20,
-		Weights:     defaultAIWeights,
-	})
-
-	if got := rand.Int63(); got != expected {
-		t.Fatalf("global random source mutated: got next=%d, want %d", got, expected)
 	}
 }

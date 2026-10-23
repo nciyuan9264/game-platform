@@ -39,10 +39,9 @@ unchanged.
 ## AI
 
 - Heuristic policy migrated.
-- Search, simulator, evaluator, weights, multiplayer presets migrated.
+- Runtime search, simulator, evaluator, and fixed online weights migrated.
 - AI delay is requested by the plugin and executed by RoomHost.
 - Search failure falls back to `turn_timeout`.
-- Arena and tuning CLI is available at `cmd/acquire-ai-arena`.
 
 ## Timers And Lifecycle
 
@@ -77,7 +76,6 @@ unchanged.
 
 ## Tooling
 
-- AI arena/tuning is migrated.
 - Go load runner and k6 scripts are copied under `loadtest/acquire`.
 - Loadtest helper APIs use the normal Control Plane scheduler and are guarded
   by `ACQUIRE_LOADTEST_ENABLED` plus `ACQUIRE_LOADTEST_TOKEN`.
@@ -94,5 +92,5 @@ unchanged.
 | snapshot codec | rules + plugin round trip |
 | RoomService actor tests | plugin + RoomHost tests |
 | replay tests | history state blob/API tests |
-| AI arena tests | `cmd/acquire-ai-arena` and `internal/acquire/ai` |
+| AI search/evaluator tests | `internal/acquire/ai` |
 | load runner tests | `loadtest/acquire/runner` |

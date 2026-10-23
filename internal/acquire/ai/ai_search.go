@@ -41,10 +41,10 @@ func onlineAIPlayerCountForRoom(r *domain.Room) int {
 		return 2
 	}
 	if r.State.MaxPlayers > 0 {
-		return normalizeArenaPlayers(r.State.MaxPlayers)
+		return normalizeAIPlayerCount(r.State.MaxPlayers)
 	}
 	if len(r.State.Players) > 0 {
-		return normalizeArenaPlayers(len(r.State.Players))
+		return normalizeAIPlayerCount(len(r.State.Players))
 	}
 	return 2
 }
@@ -213,49 +213,6 @@ func nextActionPlayerID(r *domain.Room) string {
 		}
 	}
 	return ""
-}
-
-func estimateOpponentBestResponseCost(r *domain.Room, playerID string, cfg AISearchConfig) int {
-	opponent := chooseSearchOpponent(r, playerID)
-	if opponent == "" {
-		return 0
-	}
-	before := evaluateRoomForPlayer(r, playerID, cfg.Weights)
-	actions := enumerateActions(r, opponent, r.State.RoomStatus, nil, cfg.BeamWidth)
-	if len(actions) == 0 {
-		return 0
-	}
-	worst := 0
-	for _, action := range actions {
-		sim, ok := simulateAction(r, opponent, action)
-		if !ok {
-			continue
-		}
-		after := evaluateRoomForPlayer(sim, playerID, cfg.Weights)
-		worst = max(worst, before-after)
-	}
-	return worst * cfg.Weights.OpponentResponseCost
-}
-
-func chooseSearchOpponent(r *domain.Room, playerID string) string {
-	if r == nil || r.State == nil {
-		return ""
-	}
-	if leader, _ := leadingOpponent(r, playerID); leader != "" {
-		return leader
-	}
-	best := ""
-	bestValue := math.MinInt
-	for pid := range r.State.Players {
-		if pid == playerID {
-			continue
-		}
-		if value := estimatePlayerTotalValue(r, pid); value > bestValue {
-			bestValue = value
-			best = pid
-		}
-	}
-	return best
 }
 
 func actionTieBreakKey(action aiAction) string {
