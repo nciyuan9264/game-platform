@@ -86,7 +86,7 @@ jobs:
           GAME_RUNTIME_PASSWORD: ci-game-runtime
           AUTH_MIGRATOR_PASSWORD: ci-auth-migrator
           AUTH_RUNTIME_PASSWORD: ci-auth-runtime
-          POSTGRES_DSN: postgres://ci@db/game?sslmode=require
+          POSTGRES_DSN: postgresql://ci:ci@ci.pg.rds.aliyuncs.com:5432/gamebus_prod?sslmode=require
           AUTH_MIGRATOR_DSN: postgres://ci@db/auth?sslmode=require
           AUTH_RUNTIME_DSN: postgres://ci@db/auth?sslmode=require
           CORS_ALLOWED_ORIGINS: https://board.example.com

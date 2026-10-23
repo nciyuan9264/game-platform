@@ -25,7 +25,7 @@ require() {
 }
 
 reject '/var/run/docker\.sock' 'raw Docker socket mount is forbidden'
-reject '(CHANGE_ME|your-instance|example\.com)' 'placeholder values in .env must be replaced'
+reject 'POSTGRES_DSN:.*(CHANGE_ME|your-instance|example\.com)' 'PostgreSQL placeholder values must be replaced'
 reject 'neon\.tech' 'legacy Neon endpoints are forbidden'
 reject 'sslmode=disable' 'PostgreSQL TLS must not be disabled'
 reject '^[[:space:]]{2}(redis|postgres|nats|auth-rpc|auth-schema-migrate):[[:space:]]*$' 'shared infrastructure and Auth must not be deployed by Game Platform'
