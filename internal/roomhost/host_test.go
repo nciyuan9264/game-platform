@@ -1332,6 +1332,59 @@ func TestShouldRecover(t *testing.T) {
 	}
 }
 
+func TestRoomActorCloseContinuesWhenHistoryReconciliationFails(t *testing.T) {
+	ctx := context.Background()
+	state, err := (&acquiregame.Plugin{}).InitRoom(ctx, game.RoomConfig{
+		RoomID:        "history-dirty-room",
+		GameType:      acquiregame.GameType,
+		OwnerPlayerID: "1",
+		MaxPlayers:    2,
+		RandomSeed:    1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	st := &fakeRoomhostStore{}
+	actor := &RoomActor{
+		host: &Host{
+			nodeID: "roomhost-a",
+			store:  st,
+			router: &fakeRoomhostRouter{listErr: errors.New("history replay unavailable")},
+		},
+		record: contracts.RoomRecord{
+			RoomID:    "history-dirty-room",
+			GameType:  acquiregame.GameType,
+			Status:    contracts.RoomStatusOpen,
+			OwnerNode: "roomhost-a",
+			Epoch:     1,
+		},
+		match:        contracts.MatchRecord{MatchID: "history-dirty-room-r1", Status: contracts.MatchStatusEnded},
+		definition:   acquiregame.Definition(),
+		state:        state,
+		processed:    map[string]contracts.CommandAck{},
+		historyDirty: true,
+	}
+
+	ack := actor.Close(ctx, contracts.RoomCommand{
+		CommandID: "close-empty-room",
+		RoomID:    actor.record.RoomID,
+		MatchID:   actor.match.MatchID,
+		Epoch:     actor.record.Epoch,
+		Type:      contracts.RuntimeCommandRoomClose,
+		Payload:   map[string]any{"status": contracts.RoomStatusClosed},
+	})
+
+	if !ack.Accepted {
+		t.Fatalf("close ack = %+v, want accepted", ack)
+	}
+	if len(st.setRooms) != 1 || st.setRooms[0].Status != contracts.RoomStatusClosed {
+		t.Fatalf("persisted rooms = %+v, want one closed room", st.setRooms)
+	}
+	if !actor.closed {
+		t.Fatal("actor remained open after lifecycle close")
+	}
+}
+
 func TestBootstrapOwnedRoomsSkipsTerminalCurrentMatch(t *testing.T) {
 	st := &fakeRoomhostStore{
 		room: contracts.RoomRecord{
@@ -1400,6 +1453,63 @@ func TestCleanupRoomsClosesExpiredEmptyRoom(t *testing.T) {
 	}
 	if !actor.closed {
 		t.Fatal("room actor was not closed")
+	}
+}
+
+func TestCleanupRoomsClosesAcquireAfterThreeChecksWhenHistoryDirty(t *testing.T) {
+	ctx := context.Background()
+	state, err := (&acquiregame.Plugin{}).InitRoom(ctx, game.RoomConfig{
+		RoomID:        "history-dirty-acquire-room",
+		GameType:      acquiregame.GameType,
+		OwnerPlayerID: "1",
+		MaxPlayers:    2,
+		RandomSeed:    1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	st := &fakeRoomhostStore{}
+	coord := &shutdownCoordinator{}
+	host := NewHost(
+		"roomhost-a",
+		st,
+		coord,
+		&fakeRoomhostRouter{listErr: errors.New("history replay unavailable")},
+		nil,
+	)
+	actor := &RoomActor{
+		host: host,
+		record: contracts.RoomRecord{
+			RoomID:    "history-dirty-acquire-room",
+			GameType:  acquiregame.GameType,
+			Status:    contracts.RoomStatusOpen,
+			OwnerNode: "roomhost-a",
+			Epoch:     1,
+		},
+		match:        contracts.MatchRecord{MatchID: "history-dirty-acquire-room-r1", Status: contracts.MatchStatusEnded},
+		definition:   acquiregame.Definition(),
+		state:        state,
+		processed:    map[string]contracts.CommandAck{},
+		historyDirty: true,
+	}
+	host.rooms[actor.record.RoomID] = actor
+	startedAt := time.Now().UTC()
+
+	for check := 1; check <= 3; check++ {
+		host.cleanupRooms(ctx, startedAt.Add(time.Duration(check)*time.Minute))
+		if check < 3 && host.ActiveRooms() != 1 {
+			t.Fatalf("active rooms after check %d = %d, want 1", check, host.ActiveRooms())
+		}
+	}
+
+	if host.ActiveRooms() != 0 {
+		t.Fatalf("active rooms after third check = %d, want 0", host.ActiveRooms())
+	}
+	if len(st.setRooms) != 1 || st.setRooms[0].Status != contracts.RoomStatusClosed {
+		t.Fatalf("persisted rooms = %+v, want one closed room", st.setRooms)
+	}
+	if coord.deletedRoomID != actor.record.RoomID {
+		t.Fatalf("deleted owner room = %q, want %q", coord.deletedRoomID, actor.record.RoomID)
 	}
 }
 

@@ -900,14 +900,23 @@ func (h *Host) closeRoomForNoHumans(ctx context.Context, room *RoomActor, now ti
 		Payload:       map[string]any{"status": contracts.RoomStatusClosed, "reason": reason},
 		SentAt:        now.UTC(),
 	}
-	if ack := room.Close(ctx, cmd); ack.Accepted {
-		if h.coord != nil {
-			if err := h.coord.DeleteRoomOwner(ctx, room.record.RoomID, h.nodeID, room.record.Epoch); err != nil {
-				observability.Warn("empty room owner release failed", "roomID", room.record.RoomID, "nodeID", h.nodeID, "error", err)
-			}
-		}
-		h.unloadRoom(room.record.RoomID)
+	ack := room.Close(ctx, cmd)
+	if !ack.Accepted {
+		observability.Warn(
+			"empty room close rejected",
+			"roomID", room.record.RoomID,
+			"matchID", room.match.MatchID,
+			"errorCode", ack.ErrorCode,
+			"error", ack.Message,
+		)
+		return
 	}
+	if h.coord != nil {
+		if err := h.coord.DeleteRoomOwner(ctx, room.record.RoomID, h.nodeID, room.record.Epoch); err != nil {
+			observability.Warn("empty room owner release failed", "roomID", room.record.RoomID, "nodeID", h.nodeID, "error", err)
+		}
+	}
+	h.unloadRoom(room.record.RoomID)
 }
 
 type RoomActor struct {
@@ -1140,7 +1149,12 @@ func (r *RoomActor) Close(ctx context.Context, cmd contracts.RoomCommand) contra
 	}
 	if r.historyDirty {
 		if err := r.reconcileHistoryLocked(ctx); err != nil {
-			return contracts.CommandAck{CommandID: cmd.CommandID, RoomID: cmd.RoomID, Accepted: false, ErrorCode: "history_projection_unavailable", Message: err.Error()}
+			observability.Warn(
+				"history reconciliation before room close failed",
+				"roomID", cmd.RoomID,
+				"matchID", r.match.MatchID,
+				"error", err,
+			)
 		}
 	}
 	if err := r.saveSnapshot(ctx); err != nil {
