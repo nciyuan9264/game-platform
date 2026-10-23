@@ -1275,6 +1275,7 @@ func TestShouldRecover(t *testing.T) {
 	tests := []struct {
 		name        string
 		room        contracts.RoomRecord
+		match       contracts.MatchRecord
 		presences   []contracts.PresenceRecord
 		presenceErr error
 		want        bool
@@ -1287,6 +1288,11 @@ func TestShouldRecover(t *testing.T) {
 		{
 			name: "terminal room",
 			room: contracts.RoomRecord{RoomID: "closed-room", Status: contracts.RoomStatusClosed},
+		},
+		{
+			name:  "terminal current match",
+			room:  contracts.RoomRecord{RoomID: "ended-match-room", CurrentMatchID: "match-1", Status: contracts.RoomStatusOpen, PlayerCount: 2},
+			match: contracts.MatchRecord{MatchID: "match-1", Status: contracts.MatchStatusEnded},
 		},
 		{
 			name: "active player count",
@@ -1314,7 +1320,7 @@ func TestShouldRecover(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			host := NewHost(
 				"roomhost-a",
-				&fakeRoomhostStore{presences: tt.presences, presenceErr: tt.presenceErr},
+				&fakeRoomhostStore{match: tt.match, presences: tt.presences, presenceErr: tt.presenceErr},
 				fakeRoomhostCoordinator{},
 				&fakeRoomhostRouter{},
 				nil,

@@ -735,6 +735,15 @@ func (h *Host) shouldRecover(ctx context.Context, rec contracts.RoomRecord) bool
 	if contracts.IsTerminalRoomStatus(rec.Status) {
 		return false
 	}
+	if rec.CurrentMatchID != "" {
+		match, err := h.store.GetMatch(ctx, rec.CurrentMatchID)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return false
+		}
+		if err == nil && contracts.IsTerminalMatchStatus(match.Status) {
+			return false
+		}
+	}
 	if rec.PlayerCount > 0 {
 		return true
 	}
