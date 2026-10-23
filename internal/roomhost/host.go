@@ -38,6 +38,7 @@ type storeClient interface {
 	ListRooms(context.Context, string) ([]contracts.RoomRecord, error)
 	GetMatch(context.Context, string) (contracts.MatchRecord, error)
 	SetRoom(context.Context, contracts.RoomRecord) error
+	SetRoomVisibilityIfOwner(context.Context, string, string, string, int64) error
 	SetMatchRuntime(context.Context, string, string, string, int64, int64, int) error
 	ClaimMatchRuntime(context.Context, string, string, int64) error
 	FinishMatch(context.Context, string, string, string, string, string, int64, int64) error
@@ -422,6 +423,9 @@ func (h *Host) finalizeRoomLocked(ctx context.Context, rec contracts.RoomRecord,
 		room.shutdown()
 		return nil, fmt.Errorf("mark owner ready: %w", err)
 	}
+	if err := room.syncRoomMetadataLocked(ctx); err != nil {
+		observability.Warn("restored room metadata projection failed", "roomID", rec.RoomID, "error", err)
+	}
 	h.rooms[rec.RoomID] = room
 	if err := h.coord.PublishRoomReady(ctx, rec.RoomID, h.nodeID, rec.Epoch); err != nil {
 		delete(h.rooms, rec.RoomID)
@@ -472,6 +476,7 @@ func (h *Host) newRoomActor(ctx context.Context, rec contracts.RoomRecord) (*Roo
 		OwnerPlayerID: rec.OwnerPlayerID,
 		MaxPlayers:    rec.MaxPlayers,
 		RandomSeed:    match.RandomSeed,
+		Visibility:    rec.Visibility,
 	})
 	if err != nil {
 		return nil, err
@@ -684,6 +689,11 @@ func (h *Host) projectionRetryLoop(ctx context.Context) {
 						room.spectatorDirty = false
 					}
 				}
+				if room.metadataDirty {
+					if err := room.syncRoomMetadataLocked(ctx); err != nil {
+						observability.Warn("room metadata projection retry failed", "roomID", room.record.RoomID, "error", err)
+					}
+				}
 				if room.outboundDirty {
 					if err := room.broadcast(ctx, "projection-retry"); err != nil {
 						observability.Warn("outbound projection retry failed", "roomID", room.record.RoomID, "seq", room.seq, "error", err)
@@ -894,6 +904,7 @@ type RoomActor struct {
 	outboundDirty  bool
 	snapshotDirty  bool
 	spectatorDirty bool
+	metadataDirty  bool
 }
 
 type commandLogSink struct {
@@ -1012,6 +1023,7 @@ func (r *RoomActor) StartMatch(ctx context.Context, matchID string) error {
 		OwnerPlayerID: r.record.OwnerPlayerID,
 		MaxPlayers:    r.record.MaxPlayers,
 		RandomSeed:    match.RandomSeed,
+		Visibility:    r.record.Visibility,
 	})
 	if err != nil {
 		return err
@@ -1060,8 +1072,12 @@ func (r *RoomActor) StartMatch(ctx context.Context, matchID string) error {
 	r.outboundDirty = false
 	r.snapshotDirty = false
 	r.spectatorDirty = false
+	r.metadataDirty = false
 	if err := r.saveSnapshot(ctx); err != nil {
 		return err
+	}
+	if err := r.syncRoomMetadataLocked(ctx); err != nil {
+		observability.Warn("new match metadata projection failed", "roomID", r.record.RoomID, "matchID", match.MatchID, "error", err)
 	}
 	if err := r.syncRosterLocked(ctx, presences); err != nil {
 		return err
@@ -1235,6 +1251,7 @@ func (r *RoomActor) restore(ctx context.Context) error {
 	}
 	r.record.LastAppliedSeq = r.seq
 	r.match.LastAppliedSeq = r.seq
+	r.metadataDirty = true
 	r.operationDirty = true
 	if err := r.reconcileOperationEventsLocked(ctx); err != nil {
 		observability.Warn("operation reconciliation after restore deferred", "roomID", r.record.RoomID, "error", err)
@@ -1287,6 +1304,37 @@ func (r *RoomActor) saveSpectatorSnapshot(ctx context.Context) error {
 		CapturedAt:  capturedAt,
 		AvailableAt: capturedAt.Add(contracts.SpectatorDelay),
 	})
+}
+
+func (r *RoomActor) syncRoomMetadataLocked(ctx context.Context) error {
+	provider, ok := r.definition.Engine.(game.RoomMetadataProvider)
+	if !ok {
+		r.metadataDirty = false
+		return nil
+	}
+	metadata, err := provider.RoomMetadata(ctx, r.state)
+	if err != nil {
+		r.metadataDirty = true
+		return err
+	}
+	if metadata.Visibility == "" || metadata.Visibility == r.record.Visibility {
+		r.metadataDirty = false
+		return nil
+	}
+	if err := r.host.store.SetRoomVisibilityIfOwner(
+		ctx,
+		r.record.RoomID,
+		metadata.Visibility,
+		r.host.nodeID,
+		r.record.Epoch,
+	); err != nil {
+		r.metadataDirty = true
+		return err
+	}
+	r.record.Visibility = metadata.Visibility
+	r.metadataDirty = false
+	r.outboundDirty = true
+	return nil
 }
 
 func (r *RoomActor) Apply(ctx context.Context, cmd contracts.RoomCommand) contracts.CommandAck {
@@ -1399,6 +1447,9 @@ func (r *RoomActor) Apply(ctx context.Context, cmd contracts.RoomCommand) contra
 	r.match.LastAppliedSeq = r.seq
 	if !result.Finished && result.Status != "" && result.Status != contracts.RoomStatusMatch {
 		r.match.Status = contracts.MatchStatusRunning
+	}
+	if err := r.syncRoomMetadataLocked(ctx); err != nil {
+		observability.Warn("room metadata projection failed", "roomID", cmd.RoomID, "commandID", cmd.CommandID, "error", err)
 	}
 	ack := contracts.CommandAck{CommandID: cmd.CommandID, RoomID: cmd.RoomID, MatchID: cmd.MatchID, IntentHash: intentHash, Accepted: true, Seq: r.seq}
 	if err := r.persistAck(ctx, ack); err != nil {
@@ -1642,6 +1693,7 @@ func (r *RoomActor) reconcileHistoryLocked(ctx context.Context) error {
 		OwnerPlayerID: r.record.OwnerPlayerID,
 		MaxPlayers:    r.record.MaxPlayers,
 		RandomSeed:    randomSeed,
+		Visibility:    r.record.Visibility,
 	})
 	if err != nil {
 		return err

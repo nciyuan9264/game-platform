@@ -48,6 +48,14 @@ func SwitchToNextPlayer(r *domain.Room, currentPlayerID string) error {
 	var nextPlayerID string
 	if curIdx >= 0 {
 		nextPlayerID = ids[(curIdx+1)%len(ids)]
+		for offset := 1; offset <= len(ids); offset++ {
+			candidate := ids[(curIdx+offset)%len(ids)]
+			player := r.State.Players[candidate]
+			if player != nil && len(player.Tiles) > 0 {
+				nextPlayerID = candidate
+				break
+			}
+		}
 	} else {
 		nextPlayerID = ids[0]
 	}
@@ -132,6 +140,11 @@ func HandlePlayAudioMessage(r *domain.Room, cmd domain.Command) {
 }
 
 func HandleRestartGameMessage(r *domain.Room, cmd domain.Command) {
+	r.State.CurrentPlayer = ""
+	r.State.MergeMainCompany = ""
+	r.State.MergeSettleData = nil
+	r.State.MergingSelection = domain.MergingSelection{}
+	r.State.EndGame = domain.EndGameState{Votes: make(map[string]bool)}
 	// 重置上次落子
 	r.State.LastTileKey = ""
 	// 重置游戏状态
@@ -144,9 +157,10 @@ func HandleRestartGameMessage(r *domain.Room, cmd domain.Command) {
 		r.State.BoardTiles[tileKey] = tileInfo
 	}
 	for _, pc := range r.Connections {
+		pc.Ready = pc.AI || pc.PlayerID == r.State.OwnerID
 		playerID := pc.PlayerID
 		// 2. 设置初始资金
-		playerTiles, err := data.GenerateAvailableTiles(r, 5)
+		playerTiles, err := data.GenerateAvailableTiles(r, 6)
 		if err != nil {
 			logger.Error("生成可用 tile 失败", logger.F("room_id", r.ID), logger.F("player_id", playerID), logger.F("error", err))
 			return

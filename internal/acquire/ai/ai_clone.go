@@ -20,11 +20,12 @@ func cloneRoomForAISimulation(r *domain.Room) *domain.Room {
 			continue
 		}
 		base.Connections[pid] = &roomcore.PlayerConn{
-			PlayerID: pc.PlayerID,
-			Online:   pc.Online,
-			Ready:    pc.Ready,
-			AI:       pc.AI,
-			Conn:     nil,
+			PlayerID:  pc.PlayerID,
+			Online:    pc.Online,
+			Ready:     pc.Ready,
+			AI:        pc.AI,
+			SeatIndex: pc.SeatIndex,
+			Conn:      nil,
 		}
 	}
 	return &domain.Room{
@@ -46,12 +47,14 @@ func cloneGameState(s *domain.GameState) *domain.GameState {
 		MaxPlayers:       s.MaxPlayers,
 		RandomSeed:       s.RandomSeed,
 		RandomCounter:    s.RandomCounter,
+		Visibility:       s.Visibility,
 		BoardTiles:       cloneBoardTiles(s.BoardTiles),
 		Players:          clonePlayerStateMap(s.Players),
 		Companies:        cloneCompanyStateMap(s.Companies),
 		MergeMainCompany: s.MergeMainCompany,
 		MergingSelection: cloneMergingSelection(s.MergingSelection),
 		MergeSettleData:  cloneMergeSettleData(s.MergeSettleData),
+		EndGame:          cloneEndGameState(s.EndGame),
 	}
 }
 
@@ -127,10 +130,29 @@ func cloneMergeSettleData(in map[string]domain.SettleData) map[string]domain.Set
 		for pid, amount := range data.Dividends {
 			dividends[pid] = amount
 		}
+		settled := make(map[string]domain.MergingSettleResult, len(data.Settled))
+		for playerID, result := range data.Settled {
+			settled[playerID] = result
+		}
 		out[company] = domain.SettleData{
 			Hoders:    append([]string(nil), data.Hoders...),
 			Dividends: dividends,
+			Settled:   settled,
 		}
 	}
 	return out
+}
+
+func cloneEndGameState(in domain.EndGameState) domain.EndGameState {
+	votes := make(map[string]bool, len(in.Votes))
+	for playerID, allow := range in.Votes {
+		votes[playerID] = allow
+	}
+	return domain.EndGameState{
+		Eligible:  in.Eligible,
+		Condition: in.Condition,
+		Company:   in.Company,
+		TileCount: in.TileCount,
+		Votes:     votes,
+	}
 }

@@ -227,8 +227,8 @@ func TestResolveGameDefinitionUsesRegisteredDefault(t *testing.T) {
 	if def.Version != davinci.EngineVersion {
 		t.Fatalf("version = %q, want %q", def.Version, davinci.EngineVersion)
 	}
-	if def.DefaultMaxPlayers != 4 {
-		t.Fatalf("default max players = %d, want 4", def.DefaultMaxPlayers)
+	if def.DefaultMaxPlayers != 2 {
+		t.Fatalf("default max players = %d, want 2", def.DefaultMaxPlayers)
 	}
 }
 

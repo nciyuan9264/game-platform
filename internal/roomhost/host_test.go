@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -145,6 +146,8 @@ type fakeRoomhostStore struct {
 	rosterMatchID   string
 	rosterPlayers   []contracts.MatchPlayerRecord
 	operationEvents []contracts.GameLogEvent
+	visibilityErr   error
+	visibilityCalls []string
 }
 
 func (s *fakeRoomhostStore) SaveRuntimeEvent(context.Context, contracts.RuntimeEvent) error {
@@ -184,6 +187,11 @@ func (s *fakeRoomhostStore) GetMatch(_ context.Context, matchID string) (contrac
 func (s *fakeRoomhostStore) SetRoom(_ context.Context, room contracts.RoomRecord) error {
 	s.setRooms = append(s.setRooms, room)
 	return nil
+}
+
+func (s *fakeRoomhostStore) SetRoomVisibilityIfOwner(_ context.Context, roomID, visibility, ownerNode string, epoch int64) error {
+	s.visibilityCalls = append(s.visibilityCalls, fmt.Sprintf("%s:%s:%s:%d", roomID, visibility, ownerNode, epoch))
+	return s.visibilityErr
 }
 
 func (s *fakeRoomhostStore) SetMatchRuntime(context.Context, string, string, string, int64, int64, int) error {

@@ -26,6 +26,8 @@ const (
 	maxNoHumanChecks  = 3
 )
 
+const splendorTurnTimeout = 60 * time.Second
+
 type Plugin struct{}
 
 func Definition() game.Definition {
@@ -36,6 +38,7 @@ func Definition() game.Definition {
 		DefaultMaxPlayers: defaultMaxPlayers,
 		Engine:            plugin,
 		AI:                plugin,
+		Scheduler:         plugin,
 		History:           plugin,
 	}
 }
@@ -52,12 +55,16 @@ func (p *Plugin) InitRoom(_ context.Context, cfg game.RoomConfig) (game.State, e
 	if maxPlayers <= 0 {
 		maxPlayers = defaultMaxPlayers
 	}
+	visibility := cfg.Visibility
+	if visibility == "" {
+		visibility = contracts.VisibilityPublic
+	}
 	return &domain.GameState{
 		RoomID:      cfg.RoomID,
 		RoomStatus:  domain.RoomStatusMatch,
 		OwnerID:     cfg.OwnerPlayerID,
 		MaxPlayers:  maxPlayers,
-		Visibility:  contracts.VisibilityPublic,
+		Visibility:  visibility,
 		RandomSeed:  cfg.RandomSeed,
 		Roster:      map[string]*domain.Player{},
 		NormalCards: map[string]*entities.NormalCard{},
@@ -93,13 +100,21 @@ func (p *Plugin) RandomSeed(_ context.Context, state game.State) (uint64, error)
 	return typed.RandomSeed, nil
 }
 
+func (p *Plugin) RoomMetadata(_ context.Context, state game.State) (game.RoomMetadata, error) {
+	typed, err := asState(state)
+	if err != nil {
+		return game.RoomMetadata{}, err
+	}
+	return game.RoomMetadata{Visibility: typed.Visibility}, nil
+}
+
 func (p *Plugin) Roster(_ context.Context, state game.State) ([]game.RosterPlayer, error) {
 	typed, err := asState(state)
 	if err != nil {
 		return nil, err
 	}
 	result := make([]game.RosterPlayer, 0, len(typed.PlayerOrder))
-	for seatIndex, playerID := range typed.PlayerOrder {
+	for _, playerID := range typed.PlayerOrder {
 		player := typed.Roster[playerID]
 		if player == nil {
 			continue
@@ -110,7 +125,7 @@ func (p *Plugin) Roster(_ context.Context, state game.State) ([]game.RosterPlaye
 			DisplayName: player.DisplayName,
 			Online:      player.Online,
 			IsAI:        player.AI,
-			SeatIndex:   seatIndex,
+			SeatIndex:   player.SeatIndex,
 			Ready:       player.Ready,
 		})
 	}
@@ -194,6 +209,10 @@ func (p *Plugin) ApplyCommand(
 			rules.HandleReserveCardMessage(domain.NewRoom(typed), cmd)
 		}
 	case "turn_timeout":
+		if command.ConnectionRef.Valid() {
+			err = errors.New("客户端不能提交超时命令")
+			break
+		}
 		rules.HandleTurnTimeoutMessage(domain.NewRoom(typed), cmd)
 	case "game_restart_game":
 		err = errors.New("终局房间不能原地重开，请开始下一局")
@@ -204,6 +223,7 @@ func (p *Plugin) ApplyCommand(
 		return game.ApplyResult{}, err
 	}
 	rules.RecomputeDerivedState(domain.NewRoom(typed))
+	updateTurnDeadline(typed, command.SentAt)
 	result := game.ApplyResult{
 		Status:   string(typed.RoomStatus),
 		Finished: typed.RoomStatus == domain.RoomStatusEnd,
@@ -212,6 +232,36 @@ func (p *Plugin) ApplyCommand(
 		result.AIRequests = append(result.AIRequests, *ai)
 	}
 	return result, nil
+}
+
+func (p *Plugin) PendingCommands(ctx context.Context, state game.State) ([]game.ScheduledCommand, error) {
+	typed, err := asState(state)
+	if err != nil {
+		return nil, err
+	}
+	if typed.TurnDeadline.IsZero() || typed.CurrentPlayer == "" {
+		return nil, nil
+	}
+	player := typed.Roster[typed.CurrentPlayer]
+	if player == nil || player.AI {
+		return nil, nil
+	}
+	command, err := p.Decide(ctx, game.AIRequest{
+		RoomID:   typed.RoomID,
+		GameType: GameType,
+		PlayerID: typed.CurrentPlayer,
+		State:    typed,
+	})
+	if err != nil {
+		command = contracts.RoomCommand{Type: "turn_timeout", PlayerID: typed.CurrentPlayer}
+	}
+	return []game.ScheduledCommand{{
+		Key:       fmt.Sprintf("%s:%s:%d", typed.RoomStatus, typed.CurrentPlayer, typed.TurnDeadline.UnixNano()),
+		ExecuteAt: typed.TurnDeadline,
+		PlayerID:  typed.CurrentPlayer,
+		Type:      command.Type,
+		Payload:   command.Payload,
+	}}, nil
 }
 
 func (p *Plugin) BuildPlayerView(_ context.Context, state game.State, req game.ViewRequest) (any, error) {
@@ -262,6 +312,8 @@ func (p *Plugin) BuildPlayerView(_ context.Context, state game.State, req game.V
 			"lastData":      typed.LastData,
 			"players":       players,
 			"playerOrder":   typed.PlayerOrder,
+			"turnDeadline":  deadlineValue(typed.TurnDeadline),
+			"turnTimeoutMs": typed.TurnTimeout.Milliseconds(),
 		},
 	}, nil
 }
@@ -290,12 +342,7 @@ func (p *Plugin) Decide(_ context.Context, request game.AIRequest) (contracts.Ro
 	if len(player.ReserveCard) < 3 && len(cards) > 0 {
 		returns := map[string]int{}
 		if tokenCount(player) >= 10 && typed.Gems["Gold"] > 0 {
-			for _, color := range orderedGemColors {
-				if player.Gem[color] > 0 {
-					returns[color] = 1
-					break
-				}
-			}
+			returns["Gold"] = 1
 		}
 		return contracts.RoomCommand{
 			Type:     "game_preserve_card",
@@ -560,7 +607,41 @@ func nextAIRequest(state *domain.GameState) *game.AIRequest {
 		(state.RoomStatus != domain.RoomStatusPlaying && state.RoomStatus != domain.RoomStatusLastTurn) {
 		return nil
 	}
-	return &game.AIRequest{RoomID: state.RoomID, GameType: GameType, PlayerID: player.PlayerID, State: state}
+	return &game.AIRequest{
+		RoomID:   state.RoomID,
+		GameType: GameType,
+		PlayerID: player.PlayerID,
+		State:    state,
+		FallbackCommand: &contracts.RoomCommand{
+			Type:     "turn_timeout",
+			PlayerID: player.PlayerID,
+		},
+	}
+}
+
+func updateTurnDeadline(state *domain.GameState, commandTime time.Time) {
+	state.TurnDeadline = time.Time{}
+	state.TurnTimeout = 0
+	if state.RoomStatus != domain.RoomStatusPlaying &&
+		state.RoomStatus != domain.RoomStatusLastTurn {
+		return
+	}
+	player := state.Roster[state.CurrentPlayer]
+	if player == nil || player.AI {
+		return
+	}
+	if commandTime.IsZero() {
+		commandTime = time.Now().UTC()
+	}
+	state.TurnTimeout = splendorTurnTimeout
+	state.TurnDeadline = commandTime.UTC().Add(splendorTurnTimeout)
+}
+
+func deadlineValue(deadline time.Time) any {
+	if deadline.IsZero() {
+		return nil
+	}
+	return deadline.UTC().Format(time.RFC3339Nano)
 }
 
 func firstFreeSeat(state *domain.GameState) int {
@@ -671,8 +752,17 @@ func revealedNobles(state *domain.GameState) []entities.NobleCard {
 			result = append(result, *noble)
 		}
 	}
-	sort.Slice(result, func(i, j int) bool { return result[i].ID < result[j].ID })
+	sort.Slice(result, func(i, j int) bool { return nobleIDLess(result[i].ID, result[j].ID) })
 	return result
+}
+
+func nobleIDLess(left, right string) bool {
+	leftNumber, leftErr := strconv.Atoi(strings.TrimPrefix(left, "N"))
+	rightNumber, rightErr := strconv.Atoi(strings.TrimPrefix(right, "N"))
+	if leftErr == nil && rightErr == nil && leftNumber != rightNumber {
+		return leftNumber < rightNumber
+	}
+	return left < right
 }
 
 func deckCounts(state *domain.GameState) map[string]int {

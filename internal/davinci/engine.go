@@ -9,30 +9,39 @@ import (
 	"math/rand/v2"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/nciyuan9264/game-platform/internal/contracts"
 	"github.com/nciyuan9264/game-platform/internal/game"
 )
 
 const (
-	CommandConnect    = "connect"
-	CommandDisconnect = "disconnect"
-	CommandMatchReady = "match_ready"
-	CommandMatchBegin = "match_begin"
-	CommandAddAI      = "match_add_ai"
-	CommandGameReady  = "game_ready"
-	CommandGetCard    = "game_get_card"
-	CommandGuessCard  = "game_guess_card"
-	CommandSetCard    = "game_set_card"
-	CommandRestart    = "game_restart_game"
-	CommandAIDecide   = "ai_decide"
-	StatusWaiting     = "waiting"
-	StatusGetCard     = "getCard"
-	StatusGuessCard   = "guessCard"
-	StatusSetCard     = "setCard"
-	StatusEnd         = "end"
-	NumMinus1         = -1
+	CommandConnect     = "connect"
+	CommandDisconnect  = "disconnect"
+	CommandMatchReady  = "match_ready"
+	CommandMatchBegin  = "match_begin"
+	CommandAddAI       = "match_add_ai"
+	CommandRemove      = "match_remove_player"
+	CommandGameReady   = "game_ready"
+	CommandGetCard     = "game_get_card"
+	CommandGuessCard   = "game_guess_card"
+	CommandSetCard     = "game_set_card"
+	CommandRestart     = "game_restart_game"
+	CommandTurnTimeout = "turn_timeout"
+	CommandAIDecide    = "ai_decide"
+	StatusWaiting      = "waiting"
+	StatusGetCard      = "getCard"
+	StatusGuessCard    = "guessCard"
+	StatusSetCard      = "setCard"
+	StatusEnd          = "end"
+	NumMinus1          = -1
 )
+
+var turnTimeoutByStatus = map[string]time.Duration{
+	StatusGetCard:   20 * time.Second,
+	StatusGuessCard: 60 * time.Second,
+	StatusSetCard:   20 * time.Second,
+}
 
 type Card struct {
 	ID         string `json:"id"`
@@ -43,11 +52,12 @@ type Card struct {
 }
 
 type Player struct {
-	PlayerID string `json:"playerID"`
-	Online   bool   `json:"online"`
-	Ready    bool   `json:"ready"`
-	AI       bool   `json:"ai"`
-	Cards    []Card `json:"cards"`
+	PlayerID  string `json:"playerID"`
+	Online    bool   `json:"online"`
+	Ready     bool   `json:"ready"`
+	AI        bool   `json:"ai"`
+	SeatIndex int    `json:"seatIndex"`
+	Cards     []Card `json:"cards"`
 }
 
 type State struct {
@@ -64,6 +74,8 @@ type State struct {
 	Seq           int64              `json:"seq"`
 	RandomSeed    uint64             `json:"randomSeed"`
 	RandomCounter uint64             `json:"randomCounter"`
+	TurnDeadline  time.Time          `json:"turnDeadline,omitempty"`
+	TurnTimeout   time.Duration      `json:"turnTimeout,omitempty"`
 }
 
 type Engine struct{}
@@ -73,12 +85,14 @@ func NewEngine() *Engine { return &Engine{} }
 const EngineVersion = "davinci-v2"
 
 func Definition() game.Definition {
+	plugin := NewPlugin()
 	return game.Definition{
 		GameType:          contracts.GameDaVinci,
 		Version:           EngineVersion,
-		DefaultMaxPlayers: 4,
-		Engine:            NewPlugin(),
+		DefaultMaxPlayers: 2,
+		Engine:            plugin,
 		AI:                NewAIPlanner(),
+		Scheduler:         plugin,
 	}
 }
 
@@ -100,7 +114,7 @@ func (p *Plugin) Roster(ctx context.Context, state game.State) ([]game.RosterPla
 		return nil, err
 	}
 	players := make([]game.RosterPlayer, 0, len(typed.PlayerSeq))
-	for seatIndex, playerID := range typed.PlayerSeq {
+	for _, playerID := range typed.PlayerSeq {
 		player := typed.Players[playerID]
 		if player == nil {
 			continue
@@ -119,7 +133,7 @@ func (p *Plugin) Roster(ctx context.Context, state game.State) ([]game.RosterPla
 			DisplayName: displayName,
 			Online:      player.Online,
 			IsAI:        player.AI,
-			SeatIndex:   seatIndex,
+			SeatIndex:   player.SeatIndex,
 			Ready:       player.Ready,
 		})
 	}
@@ -149,6 +163,7 @@ func (p *Plugin) DecodeState(ctx context.Context, data []byte) (game.State, erro
 	if state.RandomSeed == 0 {
 		state.RandomSeed = davinciRoomSeed(state.RoomID)
 	}
+	normalizeSeats(&state)
 	return &state, nil
 }
 
@@ -157,13 +172,35 @@ func (p *Plugin) ApplyCommand(ctx context.Context, state game.State, cmd contrac
 	if err != nil {
 		return game.ApplyResult{}, err
 	}
+	removedPlayerID := ""
+	if cmd.Type == CommandRemove {
+		removedPlayerID, _ = payloadString(cmd.Payload, "playerID")
+	}
 	result, err := p.engine.ApplyCommand(ctx, typed, cmd)
 	if err != nil {
 		return game.ApplyResult{}, err
 	}
+	commandTime := cmd.SentAt.UTC()
+	if commandTime.IsZero() {
+		commandTime = time.Now().UTC()
+	}
+	updateTurnDeadline(typed, commandTime)
 	out := game.ApplyResult{Status: typed.Status, Finished: result.Finished}
+	if removedPlayerID != "" {
+		out.Effects = append(out.Effects, game.DeliveryEffect{
+			Audience:       game.AudiencePlayer,
+			TargetPlayerID: removedPlayerID,
+			Reliable:       true,
+			CloseAfter:     true,
+			Payload: contracts.ErrorMessage{
+				Type:    contracts.MessageTypeError,
+				Code:    "REMOVED",
+				Message: "你已被移出房间",
+			},
+		})
+	}
 	for _, req := range result.AIRequests {
-		fallback := contracts.RoomCommand{Type: CommandGameReady, PlayerID: req.PlayerID}
+		fallback := contracts.RoomCommand{Type: CommandTurnTimeout, PlayerID: req.PlayerID}
 		out.AIRequests = append(out.AIRequests, game.AIRequest{
 			RoomID:          req.RoomID,
 			GameType:        contracts.GameDaVinci,
@@ -173,6 +210,36 @@ func (p *Plugin) ApplyCommand(ctx context.Context, state game.State, cmd contrac
 		})
 	}
 	return out, nil
+}
+
+func (p *Plugin) PendingCommands(ctx context.Context, state game.State) ([]game.ScheduledCommand, error) {
+	typed, err := asState(state)
+	if err != nil {
+		return nil, err
+	}
+	if typed.TurnDeadline.IsZero() || typed.TurnTimeout <= 0 || typed.CurrentPlayer == "" {
+		return nil, nil
+	}
+	player := typed.Players[typed.CurrentPlayer]
+	if player == nil || player.AI {
+		return nil, nil
+	}
+	command, err := NewAIPlanner().Decide(ctx, game.AIRequest{
+		RoomID:   typed.RoomID,
+		GameType: contracts.GameDaVinci,
+		PlayerID: typed.CurrentPlayer,
+		State:    cloneState(typed),
+	})
+	if err != nil {
+		command = contracts.RoomCommand{Type: CommandTurnTimeout, PlayerID: typed.CurrentPlayer}
+	}
+	return []game.ScheduledCommand{{
+		Key:       fmt.Sprintf("%s:%s:%d", typed.Status, typed.CurrentPlayer, typed.TurnDeadline.UnixNano()),
+		ExecuteAt: typed.TurnDeadline,
+		PlayerID:  typed.CurrentPlayer,
+		Type:      command.Type,
+		Payload:   command.Payload,
+	}}, nil
 }
 
 func (p *Plugin) BuildPlayerView(ctx context.Context, state game.State, req game.ViewRequest) (any, error) {
@@ -207,10 +274,11 @@ func (p *Plugin) BuildSpectatorView(_ context.Context, state game.State, seq int
 	}
 	for playerID, player := range typed.Players {
 		players[playerID] = contracts.RoomPlayer{
-			PlayerID: playerID,
-			Online:   player.Online,
-			AI:       player.AI,
-			Ready:    player.Ready,
+			PlayerID:  playerID,
+			Online:    player.Online,
+			AI:        player.AI,
+			Ready:     player.Ready,
+			SeatIndex: player.SeatIndex,
 		}
 		playersData[playerID] = player
 	}
@@ -225,6 +293,8 @@ func (p *Plugin) BuildSpectatorView(_ context.Context, state game.State, seq int
 			"players":       players,
 			"boardCards":    boardCards,
 			"lastData":      typed.LastAction,
+			"turnDeadline":  turnDeadlineValue(typed.TurnDeadline),
+			"turnTimeoutMs": typed.TurnTimeout.Milliseconds(),
 		},
 		"playersData": playersData,
 		"result":      map[string]any{"winnerID": typed.WinnerID},
@@ -251,7 +321,7 @@ func (e *Engine) InitRoom(roomID, ownerPlayerID string, maxPlayers int) *State {
 
 func (e *Engine) InitRoomWithSeed(roomID, ownerPlayerID string, maxPlayers int, randomSeed uint64) *State {
 	if maxPlayers <= 0 {
-		maxPlayers = 4
+		maxPlayers = 2
 	}
 	if randomSeed == 0 {
 		randomSeed = davinciRoomSeed(roomID)
@@ -290,10 +360,20 @@ func (e *Engine) ApplyCommand(ctx context.Context, state *State, cmd contracts.R
 	case CommandDisconnect:
 		return Result{}, e.disconnect(state, cmd.PlayerID)
 	case CommandMatchReady:
-		ready, _ := payloadBool(cmd.Payload, "ready")
+		ready, ok := payloadBool(cmd.Payload, "ready")
+		if !ok {
+			return Result{}, errors.New("ready is required")
+		}
 		return Result{}, e.ready(state, cmd.PlayerID, ready)
 	case CommandAddAI:
-		return Result{}, e.addAI(state, cmd.PlayerID)
+		seatIndex, hasSeat := payloadInt(cmd.Payload, "seatIndex")
+		return Result{}, e.addAI(state, cmd.PlayerID, optionalInt(seatIndex, hasSeat))
+	case CommandRemove:
+		targetPlayerID, ok := payloadString(cmd.Payload, "playerID")
+		if !ok {
+			return Result{}, errors.New("playerID is required")
+		}
+		return Result{}, e.removePlayer(state, cmd.PlayerID, targetPlayerID)
 	case CommandMatchBegin:
 		return e.begin(state, cmd.PlayerID)
 	case CommandGameReady:
@@ -304,6 +384,11 @@ func (e *Engine) ApplyCommand(ctx context.Context, state *State, cmd contracts.R
 		return e.guessCard(state, cmd.PlayerID, cmd.Payload)
 	case CommandSetCard:
 		return e.setCard(state, cmd.PlayerID, cmd.Payload)
+	case CommandTurnTimeout:
+		if cmd.ConnectionRef.Valid() {
+			return Result{}, errors.New("clients cannot submit turn timeout")
+		}
+		return e.turnTimeout(state, cmd.PlayerID)
 	case CommandRestart:
 		return Result{}, e.restart(state, cmd.PlayerID)
 	default:
@@ -322,8 +407,15 @@ func (e *Engine) connect(state *State, playerID string, ai bool) error {
 	if len(state.Players) >= state.MaxPlayers {
 		return errors.New("room full")
 	}
-	state.Players[playerID] = &Player{PlayerID: playerID, Online: true, Ready: playerID == state.OwnerID, AI: ai}
+	state.Players[playerID] = &Player{
+		PlayerID:  playerID,
+		Online:    true,
+		Ready:     playerID == state.OwnerID,
+		AI:        ai,
+		SeatIndex: firstAvailableSeat(state),
+	}
 	state.PlayerSeq = append(state.PlayerSeq, playerID)
+	sortPlayersBySeat(state)
 	return nil
 }
 
@@ -339,25 +431,60 @@ func (e *Engine) ready(state *State, playerID string, ready bool) error {
 		return errors.New("not in match")
 	}
 	if p, ok := state.Players[playerID]; ok {
+		if playerID == state.OwnerID && !ready {
+			return errors.New("room owner is always ready")
+		}
 		p.Ready = ready
+		return nil
 	}
-	return nil
+	return errors.New("player not found")
 }
 
-func (e *Engine) addAI(state *State, actor string) error {
+func (e *Engine) addAI(state *State, actor string, requestedSeat *int) error {
 	if actor != state.OwnerID {
 		return errors.New("only the room owner can add AI players")
 	}
 	if state.Status != contracts.RoomStatusMatch {
 		return errors.New("not in match")
 	}
+	if len(state.Players) >= state.MaxPlayers {
+		return errors.New("room full")
+	}
+	seatIndex := firstAvailableSeat(state)
+	if requestedSeat != nil {
+		if *requestedSeat < 0 || *requestedSeat >= state.MaxPlayers || seatOccupied(state, *requestedSeat) {
+			return errors.New("invalid or occupied seat")
+		}
+		seatIndex = *requestedSeat
+	}
 	id := fmt.Sprintf("AI_%d", len(state.Players)+1)
-	if err := e.connect(state, id, true); err != nil {
-		return err
+	state.Players[id] = &Player{
+		PlayerID:  id,
+		Online:    true,
+		Ready:     true,
+		AI:        true,
+		SeatIndex: seatIndex,
 	}
-	if p := state.Players[id]; p != nil {
-		p.Ready = true
+	state.PlayerSeq = append(state.PlayerSeq, id)
+	sortPlayersBySeat(state)
+	return nil
+}
+
+func (e *Engine) removePlayer(state *State, actor, target string) error {
+	if actor != state.OwnerID {
+		return errors.New("only the room owner can remove players")
 	}
+	if state.Status != contracts.RoomStatusMatch {
+		return errors.New("not in match")
+	}
+	if target == state.OwnerID || target == actor {
+		return errors.New("cannot remove room owner")
+	}
+	if state.Players[target] == nil {
+		return errors.New("player not found")
+	}
+	delete(state.Players, target)
+	state.PlayerSeq = removePlayerID(state.PlayerSeq, target)
 	return nil
 }
 
@@ -372,7 +499,7 @@ func (e *Engine) begin(state *State, actor string) (Result, error) {
 		return Result{}, errors.New("need at least two players")
 	}
 	for _, p := range state.Players {
-		if !p.Ready {
+		if p == nil || !p.Ready || !p.Online {
 			return Result{}, errors.New("not all players ready")
 		}
 	}
@@ -420,6 +547,9 @@ func (e *Engine) getCard(state *State, playerID string, payload any) (Result, er
 		return Result{}, errors.New("not allowed to get card")
 	}
 	id, _ := payloadString(payload, "id")
+	if id == "" {
+		return Result{}, errors.New("card id is required")
+	}
 	if err := drawBoardCard(state, playerID, id); err != nil {
 		return Result{}, err
 	}
@@ -436,9 +566,12 @@ func (e *Engine) guessCard(state *State, playerID string, payload any) (Result, 
 	if targetCardID == "" {
 		targetCardID, _ = payloadString(payload, "targetCardID")
 	}
-	guessNum, _ := payloadInt(payload, "num")
-	if _, ok := payloadMap(payload)["num"]; !ok {
-		guessNum, _ = payloadInt(payload, "guessNum")
+	guessNum, ok := payloadInt(payload, "num")
+	if !ok {
+		guessNum, ok = payloadInt(payload, "guessNum")
+	}
+	if !ok {
+		return Result{}, errors.New("guess number is required")
 	}
 	var target *Card
 	owner := ""
@@ -459,6 +592,12 @@ func (e *Engine) guessCard(state *State, playerID string, payload any) (Result, 
 	}
 	if owner == playerID {
 		return Result{}, errors.New("cannot guess own card")
+	}
+	if target.IsRevealed {
+		return Result{}, errors.New("cannot guess a revealed card")
+	}
+	if guessNum < NumMinus1 || guessNum > 11 {
+		return Result{}, errors.New("guess number is out of range")
 	}
 	correct := target.Num == guessNum
 	state.LastAction = map[string]any{"action": "guess_card", "playerID": playerID, "payload": map[string]any{"targetPlayerID": owner, "targetCardID": targetCardID, "guessNum": guessNum, "correct": correct}}
@@ -493,22 +632,32 @@ func (e *Engine) setCard(state *State, playerID string, payload any) (Result, er
 		cardID, _ = payloadString(payload, "cardID")
 	}
 	index, ok := payloadInt(payload, "index")
-	if !ok || index < 0 {
-		index = 0
+	if !ok {
+		return Result{}, errors.New("card index is required")
 	}
 	p := state.Players[playerID]
 	if p == nil {
 		return Result{}, errors.New("player not found")
 	}
-	var target *Card
+	targetIndex := -1
 	for i := range p.Cards {
 		if p.Cards[i].ID == cardID {
-			target = &p.Cards[i]
+			targetIndex = i
 			break
 		}
 	}
-	if target == nil {
+	if targetIndex < 0 {
 		return Result{}, errors.New("card not found")
+	}
+	target := &p.Cards[targetIndex]
+	if target.Index != -1 {
+		return Result{}, errors.New("only the card drawn this turn can be placed")
+	}
+	if index < 0 || index > len(p.Cards)-1 {
+		return Result{}, errors.New("card index is out of range")
+	}
+	if target.Num != NumMinus1 && index != computeInsertIndex(p.Cards, target) {
+		return Result{}, errors.New("number cards must remain sorted")
 	}
 	for i := range p.Cards {
 		if p.Cards[i].ID == target.ID {
@@ -525,6 +674,22 @@ func (e *Engine) setCard(state *State, playerID string, payload any) (Result, er
 		state.Status = StatusGetCard
 	}
 	e.nextPlayer(state)
+	return e.maybeAI(state), nil
+}
+
+func (e *Engine) turnTimeout(state *State, playerID string) (Result, error) {
+	if state.Status == StatusEnd {
+		return Result{Finished: true}, nil
+	}
+	if state.CurrentPlayer != playerID {
+		return Result{}, errors.New("stale turn timeout")
+	}
+	e.nextPlayer(state)
+	if len(state.Deck) == 0 {
+		state.Status = StatusGuessCard
+	} else {
+		state.Status = StatusGetCard
+	}
 	return e.maybeAI(state), nil
 }
 
@@ -568,7 +733,13 @@ func (e *Engine) allCardsRevealed(state *State, playerID string) bool {
 func (e *Engine) BuildMatchSync(state *State, playerID string) contracts.MatchSync {
 	players := map[string]contracts.RoomPlayer{}
 	for id, p := range state.Players {
-		players[id] = contracts.RoomPlayer{PlayerID: id, Online: p.Online, AI: p.AI, Ready: p.Ready}
+		players[id] = contracts.RoomPlayer{
+			PlayerID:  id,
+			Online:    p.Online,
+			AI:        p.AI,
+			Ready:     p.Ready,
+			SeatIndex: p.SeatIndex,
+		}
 	}
 	return contracts.MatchSync{Type: contracts.MessageTypeMatchSync, RoomID: state.RoomID, OwnerID: state.OwnerID, Status: state.Status, PlayerID: playerID, Players: players}
 }
@@ -582,7 +753,13 @@ func (e *Engine) BuildRoomSync(state *State, playerID string) contracts.RoomSync
 		boardCards[c.ID] = map[string]any{"id": c.ID, "color": c.Color}
 	}
 	for id, p := range state.Players {
-		players[id] = contracts.RoomPlayer{PlayerID: id, Online: p.Online, AI: p.AI, Ready: p.Ready}
+		players[id] = contracts.RoomPlayer{
+			PlayerID:  id,
+			Online:    p.Online,
+			AI:        p.AI,
+			Ready:     p.Ready,
+			SeatIndex: p.SeatIndex,
+		}
 		for _, c := range p.Cards {
 			if id == playerID {
 				self = append(self, c)
@@ -601,7 +778,15 @@ func (e *Engine) BuildRoomSync(state *State, playerID string) contracts.RoomSync
 		PlayerID: playerID,
 		OwnerID:  state.OwnerID,
 		Seq:      state.Seq,
-		RoomData: map[string]any{"currentPlayer": state.CurrentPlayer, "gameStatus": state.Status, "players": players, "boardCards": boardCards, "lastData": state.LastAction},
+		RoomData: map[string]any{
+			"currentPlayer": state.CurrentPlayer,
+			"gameStatus":    state.Status,
+			"players":       players,
+			"boardCards":    boardCards,
+			"lastData":      state.LastAction,
+			"turnDeadline":  turnDeadlineValue(state.TurnDeadline),
+			"turnTimeoutMs": state.TurnTimeout.Milliseconds(),
+		},
 		CardData: map[string]any{"self": self, "opponents": opponents},
 		Result:   map[string]any{"winnerID": state.WinnerID},
 	}
@@ -742,6 +927,101 @@ func cardOrderLess(numA, colorA, numB, colorB int) bool {
 		return numA < numB
 	}
 	return colorA == 1 && colorB == 0
+}
+
+func updateTurnDeadline(state *State, commandTime time.Time) {
+	state.TurnDeadline = time.Time{}
+	state.TurnTimeout = 0
+	if state.Status == StatusEnd {
+		return
+	}
+	player := state.Players[state.CurrentPlayer]
+	timeout, timed := turnTimeoutByStatus[state.Status]
+	if !timed || player == nil || player.AI {
+		return
+	}
+	state.TurnTimeout = timeout
+	state.TurnDeadline = commandTime.Add(timeout)
+}
+
+func turnDeadlineValue(deadline time.Time) any {
+	if deadline.IsZero() {
+		return nil
+	}
+	return deadline.UTC().Format(time.RFC3339Nano)
+}
+
+func optionalInt(value int, ok bool) *int {
+	if !ok {
+		return nil
+	}
+	return &value
+}
+
+func normalizeSeats(state *State) {
+	used := make(map[int]bool, len(state.Players))
+	for _, playerID := range state.PlayerSeq {
+		player := state.Players[playerID]
+		if player == nil {
+			continue
+		}
+		if player.SeatIndex < 0 || player.SeatIndex >= state.MaxPlayers || used[player.SeatIndex] {
+			player.SeatIndex = firstUnusedSeat(state.MaxPlayers, used)
+		}
+		used[player.SeatIndex] = true
+	}
+	sortPlayersBySeat(state)
+}
+
+func firstAvailableSeat(state *State) int {
+	used := make(map[int]bool, len(state.Players))
+	for _, player := range state.Players {
+		if player != nil {
+			used[player.SeatIndex] = true
+		}
+	}
+	return firstUnusedSeat(state.MaxPlayers, used)
+}
+
+func firstUnusedSeat(maxPlayers int, used map[int]bool) int {
+	for seatIndex := 0; seatIndex < maxPlayers; seatIndex++ {
+		if !used[seatIndex] {
+			return seatIndex
+		}
+	}
+	return len(used)
+}
+
+func seatOccupied(state *State, seatIndex int) bool {
+	for _, player := range state.Players {
+		if player != nil && player.SeatIndex == seatIndex {
+			return true
+		}
+	}
+	return false
+}
+
+func sortPlayersBySeat(state *State) {
+	sort.SliceStable(state.PlayerSeq, func(i, j int) bool {
+		left := state.Players[state.PlayerSeq[i]]
+		right := state.Players[state.PlayerSeq[j]]
+		if left == nil || right == nil {
+			return state.PlayerSeq[i] < state.PlayerSeq[j]
+		}
+		if left.SeatIndex != right.SeatIndex {
+			return left.SeatIndex < right.SeatIndex
+		}
+		return left.PlayerID < right.PlayerID
+	})
+}
+
+func removePlayerID(playerIDs []string, target string) []string {
+	for index, playerID := range playerIDs {
+		if playerID == target {
+			return append(playerIDs[:index], playerIDs[index+1:]...)
+		}
+	}
+	return playerIDs
 }
 
 func (e *Engine) findWinner(state *State) string {

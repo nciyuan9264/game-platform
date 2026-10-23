@@ -60,13 +60,21 @@ func (p *Plugin) RandomSeed(ctx context.Context, state game.State) (uint64, erro
 	return room.State.RandomSeed, nil
 }
 
+func (p *Plugin) RoomMetadata(ctx context.Context, state game.State) (game.RoomMetadata, error) {
+	room, err := asRoom(state)
+	if err != nil {
+		return game.RoomMetadata{}, err
+	}
+	return game.RoomMetadata{Visibility: room.State.Visibility}, nil
+}
+
 func (p *Plugin) Roster(ctx context.Context, state game.State) ([]game.RosterPlayer, error) {
 	room, err := asRoom(state)
 	if err != nil {
 		return nil, err
 	}
 	players := make([]game.RosterPlayer, 0, len(room.PlayerSeq))
-	for seatIndex, playerID := range room.PlayerSeq {
+	for _, playerID := range room.PlayerSeq {
 		connection := room.Connections[playerID]
 		if connection == nil {
 			continue
@@ -85,7 +93,7 @@ func (p *Plugin) Roster(ctx context.Context, state game.State) ([]game.RosterPla
 			DisplayName: displayName,
 			Online:      connection.Online,
 			IsAI:        connection.AI,
-			SeatIndex:   seatIndex,
+			SeatIndex:   connection.SeatIndex,
 			Ready:       connection.Ready,
 		})
 	}
@@ -131,6 +139,10 @@ func (p *Plugin) InitRoom(ctx context.Context, cfg game.RoomConfig) (game.State,
 	if cfg.RandomSeed == 0 {
 		return nil, errors.New("random seed is required")
 	}
+	visibility := cfg.Visibility
+	if visibility == "" {
+		visibility = contracts.VisibilityPublic
+	}
 	base := roomcore.NewBase(cfg.RoomID, 128)
 	return &domain.Room{
 		Base: base,
@@ -139,10 +151,12 @@ func (p *Plugin) InitRoom(ctx context.Context, cfg game.RoomConfig) (game.State,
 			OwnerID:         cfg.OwnerPlayerID,
 			MaxPlayers:      maxPlayers,
 			RandomSeed:      cfg.RandomSeed,
+			Visibility:      visibility,
 			BoardTiles:      map[string]*domain.Tile{},
 			Players:         map[string]*domain.PlayerState{},
 			Companies:       map[string]*domain.CompanyState{},
 			MergeSettleData: map[string]domain.SettleData{},
+			EndGame:         domain.EndGameState{Votes: map[string]bool{}},
 		},
 	}, nil
 }
@@ -180,6 +194,16 @@ func (p *Plugin) DecodeState(ctx context.Context, raw []byte) (game.State, error
 	if room.State.Companies == nil {
 		room.State.Companies = map[string]*domain.CompanyState{}
 	}
+	if room.State.MergeSettleData == nil {
+		room.State.MergeSettleData = map[string]domain.SettleData{}
+	}
+	if room.State.EndGame.Votes == nil {
+		room.State.EndGame.Votes = map[string]bool{}
+	}
+	if room.State.Visibility == "" {
+		room.State.Visibility = contracts.VisibilityPublic
+	}
+	normalizeAcquireSeats(&room)
 	return &room, nil
 }
 
@@ -196,8 +220,13 @@ func (p *Plugin) ApplyCommand(ctx context.Context, state game.State, cmd contrac
 	if err != nil {
 		return game.ApplyResult{}, fmt.Errorf("encode command payload: %w", err)
 	}
+	if err := validateAcquireCommand(room, cmd, payload); err != nil {
+		return game.ApplyResult{}, err
+	}
 	legacy := domain.Command{Type: cmd.Type, PlayerID: cmd.PlayerID, Payload: payload}
 	result := game.ApplyResult{}
+	previousStatus := room.State.RoomStatus
+	previousPlayer := room.State.CurrentPlayer
 
 	if connection := room.Connections[cmd.PlayerID]; connection != nil && connection.AI {
 		room.AIRunning = false
@@ -208,12 +237,24 @@ func (p *Plugin) ApplyCommand(ctx context.Context, state game.State, cmd contrac
 		err = connect(room, cmd.PlayerID)
 	case "disconnect":
 		disconnect(room, cmd.PlayerID)
+	case "room_update_settings":
+		var settings struct {
+			Visibility string `json:"visibility"`
+		}
+		if err = json.Unmarshal(payload, &settings); err == nil {
+			room.State.Visibility = settings.Visibility
+		}
 	case "match_ready":
 		err = setReady(room, cmd.PlayerID, payload)
 	case "match_begin":
 		err = beginMatch(room, cmd.PlayerID)
 	case "match_add_ai":
-		err = addAI(room, cmd.PlayerID)
+		var request struct {
+			SeatIndex *int `json:"seatIndex"`
+		}
+		if err = json.Unmarshal(payload, &request); err == nil {
+			err = addAI(room, cmd.PlayerID, request.SeatIndex)
+		}
 	case "match_remove_player":
 		var target struct {
 			PlayerID string `json:"playerID"`
@@ -244,6 +285,8 @@ func (p *Plugin) ApplyCommand(ctx context.Context, state game.State, cmd contrac
 		rules.HandleMergingSettleMessage(room, legacy)
 	case "game_buy_stock":
 		rules.HandleBuyStockMessage(room, legacy)
+	case "game_end_vote":
+		rules.HandleEndVoteMessage(room, legacy)
 	case "turn_timeout":
 		rules.HandleTurnTimeoutMessage(room, legacy)
 	case "game_play_audio":
@@ -275,6 +318,9 @@ func (p *Plugin) ApplyCommand(ctx context.Context, state game.State, cmd contrac
 	acquireai.AutoSettleDisconnectedHolder(room)
 	if room.State.RoomStatus != domain.RoomStatusMatch && room.State.RoomStatus != domain.RoomStatusWaiting {
 		_, _ = rules.RecomputeDerivedState(room)
+		if rules.ShouldFinalizeEnd(room, acquireCommandCompletedTurn(cmd.Type, previousStatus, previousPlayer, room.State)) {
+			room.State.RoomStatus = domain.RoomStatusEnd
+		}
 	}
 	result.Status = platformStatus(room.State.RoomStatus)
 	result.Finished = room.State.RoomStatus == domain.RoomStatusEnd
@@ -296,7 +342,13 @@ func (p *Plugin) BuildPlayerView(ctx context.Context, state game.State, req game
 		if player == nil {
 			continue
 		}
-		players[playerID] = contracts.RoomPlayer{PlayerID: playerID, Online: player.Online, AI: player.AI, Ready: player.Ready}
+		players[playerID] = contracts.RoomPlayer{
+			PlayerID:  playerID,
+			Online:    player.Online,
+			AI:        player.AI,
+			Ready:     player.Ready,
+			SeatIndex: player.SeatIndex,
+		}
 	}
 	if room.State.RoomStatus == domain.RoomStatusMatch {
 		return contracts.MatchSync{
@@ -335,6 +387,7 @@ func (p *Plugin) BuildPlayerView(ctx context.Context, state game.State, req game
 		"playerId":   req.PlayerID,
 		"playerData": room.State.Players[req.PlayerID],
 		"ownerID":    room.State.OwnerID,
+		"visibility": req.Visibility,
 		"roomData": map[string]any{
 			"companyInfo":   room.State.Companies,
 			"currentPlayer": room.State.CurrentPlayer,
@@ -343,6 +396,7 @@ func (p *Plugin) BuildPlayerView(ctx context.Context, state game.State, req game
 			"players":       playerViews,
 			"turnDeadline":  deadline,
 			"turnTimeoutMs": room.TurnTimeout.Milliseconds(),
+			"endGame":       room.State.EndGame,
 		},
 		"tempData": map[string]any{
 			"last_tile_key":           room.State.LastTileKey,
@@ -428,7 +482,7 @@ func (p *Plugin) PendingCommands(ctx context.Context, state game.State) ([]game.
 
 func (p *Plugin) IsRecordableCommand(commandType string) bool {
 	switch commandType {
-	case "game_place_tile", "game_create_company", "game_merging_selection", "game_merging_settle", "game_buy_stock", "turn_timeout":
+	case "game_place_tile", "game_create_company", "game_merging_selection", "game_merging_settle", "game_buy_stock", "game_end_vote", "turn_timeout":
 		return true
 	default:
 		return false
@@ -504,7 +558,7 @@ func (p *Plugin) ProjectHistory(ctx context.Context, state game.State) (game.His
 		players = append(players, game.HistoryPlayer{
 			UserID:      userID,
 			PlayerID:    item.playerID,
-			SeatIndex:   index,
+			SeatIndex:   acquireSeatIndex(connection, index),
 			IsAI:        connection != nil && connection.AI,
 			FinalScore:  &finalScore,
 			FinalMoney:  &finalMoney,
@@ -546,7 +600,13 @@ func (p *Plugin) BuildReplaySnapshot(ctx context.Context, state game.State, seq,
 		if connection == nil {
 			continue
 		}
-		players[id] = map[string]any{"playerID": id, "online": connection.Online, "ai": connection.AI}
+		players[id] = map[string]any{
+			"playerID":  id,
+			"online":    connection.Online,
+			"ai":        connection.AI,
+			"ready":     connection.Ready,
+			"seatIndex": connection.SeatIndex,
+		}
 	}
 	for id, player := range room.State.Players {
 		playersData[id] = player
@@ -560,6 +620,7 @@ func (p *Plugin) BuildReplaySnapshot(ctx context.Context, state game.State, seq,
 			"gameStatus":    room.State.RoomStatus,
 			"tiles":         room.State.BoardTiles,
 			"players":       players,
+			"endGame":       room.State.EndGame,
 		},
 		"playersData": playersData,
 		"result":      result,
@@ -604,9 +665,10 @@ func (p *Plugin) DecodeReplayState(
 	for _, player := range players {
 		base.PlayerSeq = append(base.PlayerSeq, player.PlayerID)
 		base.Connections[player.PlayerID] = &roomcore.PlayerConn{
-			PlayerID: player.PlayerID,
-			Ready:    true,
-			AI:       player.IsAI,
+			PlayerID:  player.PlayerID,
+			Ready:     true,
+			AI:        player.IsAI,
+			SeatIndex: player.SeatIndex,
 		}
 	}
 	return &domain.Room{Base: base, State: state}, nil
@@ -630,9 +692,12 @@ func connect(room *domain.Room, playerID string) error {
 	if len(room.Connections) >= room.State.MaxPlayers {
 		return errors.New("房间已满")
 	}
-	room.Connections[playerID] = &roomcore.PlayerConn{PlayerID: playerID, Online: true, Ready: playerID == room.State.OwnerID}
-	room.PlayerSeq = append(room.PlayerSeq, playerID)
-	return nil
+	return addAcquirePlayer(room, &roomcore.PlayerConn{
+		PlayerID:  playerID,
+		Online:    true,
+		Ready:     playerID == room.State.OwnerID,
+		SeatIndex: firstAvailableAcquireSeat(room),
+	})
 }
 
 func disconnect(room *domain.Room, playerID string) {
@@ -672,7 +737,7 @@ func setReady(room *domain.Room, playerID string, payload []byte) error {
 	return nil
 }
 
-func addAI(room *domain.Room, actor string) error {
+func addAI(room *domain.Room, actor string, requestedSeat *int) error {
 	if actor != room.State.OwnerID {
 		return errors.New("只有房主可以添加 AI")
 	}
@@ -683,9 +748,17 @@ func addAI(room *domain.Room, actor string) error {
 		return errors.New("房间已满")
 	}
 	playerID := acquireai.NextAIPlayerID(room)
-	room.Connections[playerID] = &roomcore.PlayerConn{PlayerID: playerID, Online: true, Ready: true, AI: true}
-	room.PlayerSeq = append(room.PlayerSeq, playerID)
-	return nil
+	seatIndex := firstAvailableAcquireSeat(room)
+	if requestedSeat != nil {
+		seatIndex = *requestedSeat
+	}
+	return addAcquirePlayer(room, &roomcore.PlayerConn{
+		PlayerID:  playerID,
+		Online:    true,
+		Ready:     true,
+		AI:        true,
+		SeatIndex: seatIndex,
+	})
 }
 
 func removePlayer(room *domain.Room, actor, target string) error {

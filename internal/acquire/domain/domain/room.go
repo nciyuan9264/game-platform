@@ -34,6 +34,14 @@ type CompanyState struct {
 	StockPrice int    `json:"stockPrice"`
 }
 
+type EndGameState struct {
+	Eligible  bool            `json:"eligible"`
+	Condition string          `json:"condition"`
+	Company   string          `json:"company"`
+	TileCount int             `json:"tileCount"`
+	Votes     map[string]bool `json:"votes"`
+}
+
 const DefaultMaxPlayers = 6
 
 type GameState struct {
@@ -45,6 +53,7 @@ type GameState struct {
 	MaxPlayers    int        `json:"maxPlayers"`
 	RandomSeed    uint64     `json:"randomSeed"`
 	RandomCounter uint64     `json:"randomCounter"`
+	Visibility    string     `json:"visibility"`
 
 	BoardTiles map[string]*Tile         `json:"boardTiles"`
 	Players    map[string]*PlayerState  `json:"players"`
@@ -53,6 +62,7 @@ type GameState struct {
 	MergeMainCompany string                `json:"mergeMainCompany"`
 	MergingSelection MergingSelection      `json:"mergingSelection"`
 	MergeSettleData  map[string]SettleData `json:"mergeSettleData"`
+	EndGame          EndGameState          `json:"endGame"`
 }
 
 type Room struct {

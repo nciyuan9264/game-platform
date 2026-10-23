@@ -25,6 +25,7 @@ type RoomConfig struct {
 	OwnerPlayerID string
 	MaxPlayers    int
 	RandomSeed    uint64
+	Visibility    string
 }
 
 type ViewRequest struct {
@@ -124,6 +125,14 @@ type AIPlanner interface {
 
 type Scheduler interface {
 	PendingCommands(ctx context.Context, state State) ([]ScheduledCommand, error)
+}
+
+type RoomMetadata struct {
+	Visibility string
+}
+
+type RoomMetadataProvider interface {
+	RoomMetadata(ctx context.Context, state State) (RoomMetadata, error)
 }
 
 type RosterPlayer struct {

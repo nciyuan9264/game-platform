@@ -115,7 +115,7 @@ func setPendingCard(state *State, playerID string) (contracts.RoomCommand, error
 		}
 	}
 	if cardIndex == -1 {
-		cardIndex = 0
+		return contracts.RoomCommand{}, errors.New("no pending card")
 	}
 	card := player.Cards[cardIndex]
 	return contracts.RoomCommand{

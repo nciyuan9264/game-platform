@@ -179,8 +179,8 @@ func InitPlayerData(r *domain.Room, playerID string) error {
 		return fmt.Errorf("玩家数据已存在")
 	}
 
-	// 2. 随机抽取起始 Tiles（比如每人 5 个）
-	tiles, err := GenerateAvailableTiles(r, 5)
+	// 2. 随机抽取起始 Tiles
+	tiles, err := GenerateAvailableTiles(r, 6)
 	if err != nil {
 		return fmt.Errorf("生成可用 tiles 失败: %w", err)
 	}

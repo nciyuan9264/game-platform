@@ -79,8 +79,15 @@ const (
 )
 
 type SettleData struct {
-	Hoders    []string       `json:"hoders"`
-	Dividends map[string]int `json:"dividends"`
+	Hoders    []string                       `json:"hoders"`
+	Dividends map[string]int                 `json:"dividends"`
+	Settled   map[string]MergingSettleResult `json:"settled,omitempty"`
+}
+
+type MergingSettleResult struct {
+	HoldingBefore  int `json:"holdingBefore"`
+	SellAmount     int `json:"sellAmount"`
+	ExchangeAmount int `json:"exchangeAmount"`
 }
 
 type MergingSettleItem struct {

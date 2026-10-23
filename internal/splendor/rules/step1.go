@@ -5,6 +5,7 @@ import (
 	"log"
 	"math/rand"
 	"strconv"
+	"strings"
 
 	"github.com/nciyuan9264/game-platform/internal/splendor/domain"
 	"github.com/nciyuan9264/game-platform/internal/splendor/entities"
@@ -240,7 +241,7 @@ func settleNoble(r *domain.Room, playerState *domain.PlayerState) {
 		if !qualified {
 			continue
 		}
-		if bestID == "" || nobleID < bestID {
+		if bestID == "" || nobleIDLess(nobleID, bestID) {
 			bestID = nobleID
 			bestNoble = n
 		}
@@ -249,6 +250,15 @@ func settleNoble(r *domain.Room, playerState *domain.PlayerState) {
 		bestNoble.State = entities.CardStateBought
 		playerState.NobleCard = append(playerState.NobleCard, *bestNoble)
 	}
+}
+
+func nobleIDLess(left, right string) bool {
+	leftNumber, leftErr := strconv.Atoi(strings.TrimPrefix(left, "N"))
+	rightNumber, rightErr := strconv.Atoi(strings.TrimPrefix(right, "N"))
+	if leftErr == nil && rightErr == nil && leftNumber != rightNumber {
+		return leftNumber < rightNumber
+	}
+	return left < right
 }
 
 // HandleReserveCardMessage atomically reserves a public card, grants Gold,

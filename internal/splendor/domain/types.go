@@ -43,16 +43,18 @@ type LastAction struct {
 }
 
 type GameState struct {
-	RoomID        string     `json:"roomID"`
-	CurrentPlayer string     `json:"currentPlayer"`
-	FirstPlayer   string     `json:"firstPlayer"`
-	GameStartTime time.Time  `json:"gameStartTime"`
-	RoomStatus    RoomStatus `json:"roomStatus"`
-	OwnerID       string     `json:"ownerID"`
-	MaxPlayers    int        `json:"maxPlayers"`
-	Visibility    string     `json:"visibility"`
-	RandomSeed    uint64     `json:"randomSeed"`
-	RandomCounter uint64     `json:"randomCounter"`
+	RoomID        string        `json:"roomID"`
+	CurrentPlayer string        `json:"currentPlayer"`
+	FirstPlayer   string        `json:"firstPlayer"`
+	GameStartTime time.Time     `json:"gameStartTime"`
+	RoomStatus    RoomStatus    `json:"roomStatus"`
+	OwnerID       string        `json:"ownerID"`
+	MaxPlayers    int           `json:"maxPlayers"`
+	Visibility    string        `json:"visibility"`
+	RandomSeed    uint64        `json:"randomSeed"`
+	RandomCounter uint64        `json:"randomCounter"`
+	TurnDeadline  time.Time     `json:"turnDeadline,omitempty"`
+	TurnTimeout   time.Duration `json:"turnTimeout,omitempty"`
 
 	PlayerOrder []string                        `json:"playerOrder"`
 	Roster      map[string]*Player              `json:"roster"`

@@ -118,6 +118,16 @@ func (s *Store) SetRoomVisibility(ctx context.Context, roomID, visibility string
 	return s.Postgres.SetRoomVisibility(ctx, roomID, visibility)
 }
 
+func (s *Store) SetRoomVisibilityIfOwner(
+	ctx context.Context,
+	roomID,
+	visibility,
+	ownerNode string,
+	epoch int64,
+) error {
+	return s.Postgres.SetRoomVisibilityIfOwner(ctx, roomID, visibility, ownerNode, epoch)
+}
+
 func (s *Store) RoomVisibility(ctx context.Context, roomID string) (string, error) {
 	return s.Postgres.RoomVisibility(ctx, roomID)
 }

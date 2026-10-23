@@ -398,3 +398,182 @@ func TestHumanPresenceClosesAfterThreeConsecutiveEmptyChecks(t *testing.T) {
 		t.Fatalf("reset check = %+v", reset)
 	}
 }
+
+func TestAcquireValidationRejectsInvalidActionsBeforeMutation(t *testing.T) {
+	ctx := context.Background()
+	plugin := &Plugin{}
+	state, err := plugin.InitRoom(ctx, game.RoomConfig{
+		RoomID:        "acquire-validation",
+		OwnerPlayerID: "alice-1",
+		MaxPlayers:    2,
+		RandomSeed:    testRandomSeed,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	room, err := asRoom(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	room.Connections["alice-1"] = &domain.PlayerConn{PlayerID: "alice-1", Online: true}
+	room.State.CurrentPlayer = "alice-1"
+	room.State.RoomStatus = domain.RoomStatusBuyStock
+	room.State.BoardTiles = testAcquireBoard(nil)
+	room.State.Players["alice-1"] = &domain.PlayerState{
+		Money:  100,
+		Tiles:  []string{"1A"},
+		Stocks: map[string]int{"Tower": 0},
+	}
+	room.State.Companies["Tower"] = &domain.CompanyState{
+		Name: "Tower", Tiles: 2, StockTotal: 25, StockPrice: 200,
+	}
+
+	_, err = plugin.ApplyCommand(ctx, state, contracts.RoomCommand{
+		PlayerID: "alice-1",
+		Type:     "game_buy_stock",
+		Payload:  map[string]any{"stocks": map[string]int{"Tower": 1}},
+	})
+	if err == nil {
+		t.Fatal("purchase above cash balance was accepted")
+	}
+	if player := room.State.Players["alice-1"]; player.Money != 100 || player.Stocks["Tower"] != 0 {
+		t.Fatalf("rejected purchase mutated player: %+v", player)
+	}
+	if room.State.Companies["Tower"].StockTotal != 25 {
+		t.Fatalf("rejected purchase mutated inventory: %+v", room.State.Companies["Tower"])
+	}
+
+	room.State.RoomStatus = domain.RoomStatusSetTile
+	_, err = plugin.ApplyCommand(ctx, state, contracts.RoomCommand{
+		PlayerID: "alice-1",
+		Type:     "game_place_tile",
+		Payload:  map[string]any{"tileKey": "unknown"},
+	})
+	if err == nil {
+		t.Fatal("unknown tile was accepted")
+	}
+	if room.State.LastTileKey != "" || len(room.State.Players["alice-1"].Tiles) != 1 {
+		t.Fatal("rejected tile placement mutated game state")
+	}
+}
+
+func TestAcquireRoomSettingsAndRequestedAISeat(t *testing.T) {
+	ctx := context.Background()
+	plugin := &Plugin{}
+	state, err := plugin.InitRoom(ctx, game.RoomConfig{
+		RoomID:        "acquire-settings",
+		OwnerPlayerID: "alice-1",
+		MaxPlayers:    6,
+		RandomSeed:    testRandomSeed,
+		Visibility:    contracts.VisibilityPublic,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	apply := func(commandType string, payload any) {
+		t.Helper()
+		if _, err := plugin.ApplyCommand(ctx, state, contracts.RoomCommand{
+			PlayerID: "alice-1",
+			Type:     commandType,
+			Payload:  payload,
+		}); err != nil {
+			t.Fatalf("%s: %v", commandType, err)
+		}
+	}
+	apply("connect", nil)
+	apply("match_add_ai", map[string]any{"seatIndex": 4})
+	apply("room_update_settings", map[string]any{"visibility": contracts.VisibilityPrivate})
+
+	room, err := asRoom(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ai *domain.PlayerConn
+	for _, player := range room.Connections {
+		if player.AI {
+			ai = player
+		}
+	}
+	if ai == nil || ai.SeatIndex != 4 {
+		t.Fatalf("requested AI seat was not retained: %+v", ai)
+	}
+	metadata, err := plugin.RoomMetadata(ctx, state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if metadata.Visibility != contracts.VisibilityPrivate {
+		t.Fatalf("visibility = %q, want private", metadata.Visibility)
+	}
+}
+
+func TestAcquireEndVoteIsVisibleRecordableAndFinalizesOnTurnBoundary(t *testing.T) {
+	ctx := context.Background()
+	plugin := &Plugin{}
+	state, err := plugin.InitRoom(ctx, game.RoomConfig{
+		RoomID:        "acquire-end-vote",
+		OwnerPlayerID: "alice-1",
+		MaxPlayers:    2,
+		RandomSeed:    testRandomSeed,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	room, err := asRoom(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	room.Connections["alice-1"] = &domain.PlayerConn{PlayerID: "alice-1", Online: true, SeatIndex: 0}
+	room.Connections["bob-2"] = &domain.PlayerConn{PlayerID: "bob-2", Online: true, SeatIndex: 1}
+	room.PlayerSeq = []string{"alice-1", "bob-2"}
+	room.State.RoomStatus = domain.RoomStatusSetTile
+	room.State.CurrentPlayer = "alice-1"
+	room.State.Players = map[string]*domain.PlayerState{
+		"alice-1": {Tiles: []string{"1A"}, Stocks: map[string]int{}},
+		"bob-2":   {Tiles: []string{"2A"}, Stocks: map[string]int{}},
+	}
+	room.State.EndGame = domain.EndGameState{
+		Eligible:  true,
+		Condition: "company_size",
+		Company:   "Tower",
+		TileCount: 41,
+		Votes:     map[string]bool{"alice-1": false, "bob-2": false},
+	}
+
+	for _, playerID := range []string{"alice-1", "bob-2"} {
+		if _, err := plugin.ApplyCommand(ctx, state, contracts.RoomCommand{
+			PlayerID: playerID,
+			Type:     "game_end_vote",
+			Payload:  map[string]any{"allow": true},
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if room.State.RoomStatus == domain.RoomStatusEnd {
+		t.Fatal("vote ended the game before a turn boundary")
+	}
+	if !plugin.IsRecordableCommand("game_end_vote") {
+		t.Fatal("end vote is not recorded for replay")
+	}
+
+	view, err := plugin.BuildPlayerView(ctx, state, game.ViewRequest{
+		RoomID: "acquire-end-vote", PlayerID: "alice-1",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	endGame := view.(map[string]any)["roomData"].(map[string]any)["endGame"].(domain.EndGameState)
+	if !endGame.Votes["alice-1"] || !endGame.Votes["bob-2"] {
+		t.Fatalf("end votes missing from player view: %+v", endGame)
+	}
+
+	result, err := plugin.ApplyCommand(ctx, state, contracts.RoomCommand{
+		PlayerID: "alice-1",
+		Type:     "turn_timeout",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.Finished || room.State.RoomStatus != domain.RoomStatusEnd {
+		t.Fatalf("approved game did not end at turn boundary: result=%+v status=%q", result, room.State.RoomStatus)
+	}
+}

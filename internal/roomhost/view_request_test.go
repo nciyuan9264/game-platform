@@ -2,6 +2,7 @@ package roomhost
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/nciyuan9264/game-platform/internal/contracts"
@@ -9,7 +10,8 @@ import (
 )
 
 type metadataCaptureEngine struct {
-	requests []game.ViewRequest
+	requests          []game.ViewRequest
+	desiredVisibility string
 }
 
 func (e *metadataCaptureEngine) GameType() string { return "metadata-capture" }
@@ -39,6 +41,10 @@ func (e *metadataCaptureEngine) BuildPlayerView(_ context.Context, _ game.State,
 		"players":     map[string]contracts.RoomPlayer{},
 		"playerOrder": []string{},
 	}, nil
+}
+
+func (e *metadataCaptureEngine) RoomMetadata(context.Context, game.State) (game.RoomMetadata, error) {
+	return game.RoomMetadata{Visibility: e.desiredVisibility}, nil
 }
 
 func TestRoomActorPassesRoomMetadataToPlayerViews(t *testing.T) {
@@ -100,5 +106,47 @@ func TestRoomActorPassesRoomMetadataToPlayerViews(t *testing.T) {
 		if request != want {
 			t.Fatalf("BuildPlayerView request %d = %+v, want %+v", index, request, want)
 		}
+	}
+}
+
+func TestRoomActorPersistsMetadataBeforePublishingIt(t *testing.T) {
+	persistErr := errors.New("database unavailable")
+	store := &fakeRoomhostStore{visibilityErr: persistErr}
+	engine := &metadataCaptureEngine{desiredVisibility: contracts.VisibilityPublic}
+	actor := &RoomActor{
+		host: NewHost("roomhost-1", store, nil, nil, nil),
+		record: contracts.RoomRecord{
+			RoomID:     "room-1",
+			GameType:   engine.GameType(),
+			Visibility: contracts.VisibilityPrivate,
+			OwnerNode:  "roomhost-1",
+			Epoch:      7,
+		},
+		definition: game.Definition{Engine: engine},
+		state:      struct{}{},
+	}
+
+	if err := actor.syncRoomMetadataLocked(context.Background()); !errors.Is(err, persistErr) {
+		t.Fatalf("syncRoomMetadataLocked() error = %v, want %v", err, persistErr)
+	}
+	if actor.record.Visibility != contracts.VisibilityPrivate || !actor.metadataDirty {
+		t.Fatalf("failed metadata projection leaked into room record: visibility=%q dirty=%v", actor.record.Visibility, actor.metadataDirty)
+	}
+
+	store.visibilityErr = nil
+	if err := actor.syncRoomMetadataLocked(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if actor.record.Visibility != contracts.VisibilityPublic || actor.metadataDirty || !actor.outboundDirty {
+		t.Fatalf(
+			"retried metadata projection = visibility %q metadataDirty=%v outboundDirty=%v",
+			actor.record.Visibility,
+			actor.metadataDirty,
+			actor.outboundDirty,
+		)
+	}
+	wantCall := "room-1:public:roomhost-1:7"
+	if len(store.visibilityCalls) != 2 || store.visibilityCalls[1] != wantCall {
+		t.Fatalf("visibility calls = %+v, want two calls ending in %q", store.visibilityCalls, wantCall)
 	}
 }

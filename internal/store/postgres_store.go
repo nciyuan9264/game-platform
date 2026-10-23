@@ -656,6 +656,43 @@ func (s *PostgresStore) SetRoomVisibility(ctx context.Context, roomID, visibilit
 	return err
 }
 
+func (s *PostgresStore) SetRoomVisibilityIfOwner(
+	ctx context.Context,
+	roomID,
+	visibility,
+	ownerNode string,
+	epoch int64,
+) error {
+	if visibility != contracts.VisibilityPublic && visibility != contracts.VisibilityPrivate {
+		return errors.New("invalid room visibility")
+	}
+	result, err := s.db.ExecContext(ctx, `
+		UPDATE rooms AS r
+		SET visibility = $2, updated_at = clock_timestamp()
+		WHERE room_id = $1
+		  AND owner_node = $3
+		  AND epoch = $4
+		  AND EXISTS (
+			SELECT 1 FROM room_owner_generations g
+			WHERE g.room_id = r.room_id
+			  AND g.owner_node = $3
+			  AND g.epoch = $4
+			  AND g.state = 'ready'
+		  )`,
+		roomID, visibility, ownerNode, epoch)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected != 1 {
+		return ErrStaleOwnerWrite
+	}
+	return nil
+}
+
 func (s *PostgresStore) RoomVisibility(ctx context.Context, roomID string) (string, error) {
 	var visibility string
 	err := s.db.QueryRowContext(ctx, `SELECT visibility FROM rooms WHERE room_id = $1`, roomID).Scan(&visibility)

@@ -27,11 +27,12 @@ type Command struct {
 
 // PlayerConn 描述房间中的一个玩家连接。
 type PlayerConn struct {
-	PlayerID string        `json:"playerID"`
-	Conn     WriteOnlyConn `json:"-"`
-	Online   bool          `json:"online"`
-	Ready    bool          `json:"ready"`
-	AI       bool          `json:"ai"`
+	PlayerID  string        `json:"playerID"`
+	Conn      WriteOnlyConn `json:"-"`
+	Online    bool          `json:"online"`
+	Ready     bool          `json:"ready"`
+	AI        bool          `json:"ai"`
+	SeatIndex int           `json:"seatIndex"`
 }
 
 // Base 是所有游戏房间共享的基础结构。各 game 的 domain.Room 通过内嵌 *Base 复用。

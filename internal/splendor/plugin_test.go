@@ -90,3 +90,103 @@ func TestPluginSnapshotDoesNotExposeHiddenCards(t *testing.T) {
 		t.Fatalf("visible cards = %d, want 12", visible)
 	}
 }
+
+func TestSplendorMetadataAndRecoverableTurnDeadline(t *testing.T) {
+	ctx := context.Background()
+	plugin := &Plugin{}
+	raw, err := plugin.InitRoom(ctx, game.RoomConfig{
+		RoomID:        "splendor-metadata",
+		OwnerPlayerID: "owner",
+		MaxPlayers:    2,
+		RandomSeed:    2,
+		Visibility:    contracts.VisibilityPrivate,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := raw.(*domain.GameState)
+	metadata, err := plugin.RoomMetadata(ctx, state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if metadata.Visibility != contracts.VisibilityPrivate {
+		t.Fatalf("initial visibility = %q", metadata.Visibility)
+	}
+
+	sentAt := time.Date(2026, 10, 23, 12, 0, 0, 0, time.UTC)
+	commands := []contracts.RoomCommand{
+		{PlayerID: "owner", Type: "connect"},
+		{PlayerID: "owner", Type: "match_add_ai", Payload: map[string]any{"seatIndex": 1}},
+		{PlayerID: "owner", Type: "match_begin"},
+		{PlayerID: "owner", Type: "game_ready"},
+		{PlayerID: "ai_2", Type: "game_ready", SentAt: sentAt},
+	}
+	for _, command := range commands {
+		if _, err := plugin.ApplyCommand(ctx, state, command); err != nil {
+			t.Fatalf("%s: %v", command.Type, err)
+		}
+	}
+	if !state.TurnDeadline.Equal(sentAt.Add(time.Minute)) || state.TurnTimeout != time.Minute {
+		t.Fatalf("turn timing = %s/%s", state.TurnDeadline, state.TurnTimeout)
+	}
+	pending, err := plugin.PendingCommands(ctx, state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pending) != 1 || pending[0].PlayerID != "owner" ||
+		!pending[0].ExecuteAt.Equal(state.TurnDeadline) {
+		t.Fatalf("pending timeout command = %+v", pending)
+	}
+	view, err := plugin.BuildPlayerView(ctx, state, game.ViewRequest{PlayerID: "owner"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	roomData := view.(map[string]any)["roomData"].(map[string]any)
+	if roomData["turnDeadline"] == nil || roomData["turnTimeoutMs"] != int64(60_000) {
+		t.Fatalf("turn timing view = %+v", roomData)
+	}
+}
+
+func TestSplendorAIAtTokenLimitReturnsGrantedGold(t *testing.T) {
+	plugin := &Plugin{}
+	state := &domain.GameState{
+		RoomID:        "splendor-ai-gold",
+		RoomStatus:    domain.RoomStatusPlaying,
+		CurrentPlayer: "ai_1",
+		Roster: map[string]*domain.Player{
+			"ai_1": {PlayerID: "ai_1", AI: true},
+		},
+		Players: map[string]*domain.PlayerState{
+			"ai_1": {Gem: map[string]int{"Red": 10}},
+		},
+		NormalCards: map[string]*entities.NormalCard{
+			"1": {ID: 1, Cost: map[string]int{"Red": 11}, State: entities.CardStateRevealed},
+		},
+		NobleCards: map[string]*entities.NobleCard{},
+		Gems:       map[string]int{"Gold": 5},
+	}
+	command, err := plugin.Decide(context.Background(), game.AIRequest{
+		PlayerID: "ai_1",
+		State:    state,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := command.Payload.(map[string]any)
+	returns := payload["returns"].(map[string]int)
+	if command.Type != "game_preserve_card" || returns["Gold"] != 1 {
+		t.Fatalf("AI reserve command = %+v", command)
+	}
+}
+
+func TestRevealedNoblesUseNaturalIDOrder(t *testing.T) {
+	state := &domain.GameState{NobleCards: map[string]*entities.NobleCard{
+		"N10": {ID: "N10", State: entities.CardStateRevealed},
+		"N2":  {ID: "N2", State: entities.CardStateRevealed},
+		"N1":  {ID: "N1", State: entities.CardStateRevealed},
+	}}
+	nobles := revealedNobles(state)
+	if len(nobles) != 3 || nobles[0].ID != "N1" || nobles[1].ID != "N2" || nobles[2].ID != "N10" {
+		t.Fatalf("noble order = %+v", nobles)
+	}
+}

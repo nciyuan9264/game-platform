@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/nciyuan9264/game-platform/internal/contracts"
 	"github.com/nciyuan9264/game-platform/internal/game"
@@ -136,4 +137,135 @@ func TestDeckUsesPrivateSeedAndOpaqueCardIDs(t *testing.T) {
 			t.Fatalf("card ID exposes hidden value: %+v", card)
 		}
 	}
+}
+
+func TestDavinciRejectsInvalidGuessAndSetCard(t *testing.T) {
+	engine := NewEngine()
+	state := &State{
+		Status:        StatusGuessCard,
+		CurrentPlayer: "alice",
+		PlayerSeq:     []string{"alice", "bob"},
+		Players: map[string]*Player{
+			"alice": {
+				PlayerID: "alice",
+				Cards:    []Card{{ID: "a1", Num: 3, Index: 0}},
+			},
+			"bob": {
+				PlayerID: "bob",
+				Cards:    []Card{{ID: "b1", Num: 5, Index: 0, IsRevealed: true}},
+			},
+		},
+	}
+	for _, payload := range []map[string]any{
+		{"id": "b1", "num": 5},
+		{"id": "b1", "num": 12},
+	} {
+		if _, err := engine.ApplyCommand(context.Background(), state, contracts.RoomCommand{
+			Type: CommandGuessCard, PlayerID: "alice", Payload: payload,
+		}); err == nil {
+			t.Fatalf("invalid guess accepted: %+v", payload)
+		}
+	}
+
+	state.Status = StatusSetCard
+	state.Players["alice"].Cards = []Card{
+		{ID: "existing", Num: 3, Index: 0},
+		{ID: "new", Num: 7, Index: -1},
+	}
+	for _, payload := range []map[string]any{
+		{"id": "existing", "index": 0},
+		{"id": "new", "index": 0},
+		{"id": "new", "index": 2},
+	} {
+		if _, err := engine.ApplyCommand(context.Background(), state, contracts.RoomCommand{
+			Type: CommandSetCard, PlayerID: "alice", Payload: payload,
+		}); err == nil {
+			t.Fatalf("invalid set-card accepted: %+v", payload)
+		}
+	}
+	if state.Players["alice"].Cards[1].Index != -1 {
+		t.Fatal("rejected set-card mutated pending card")
+	}
+}
+
+func TestDavinciRequestedSeatRemovePlayerAndRoster(t *testing.T) {
+	engine := NewEngine()
+	state := engine.InitRoom("room", "owner", 4)
+	if _, err := engine.ApplyCommand(context.Background(), state, contracts.RoomCommand{
+		Type: CommandConnect, PlayerID: "owner",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := engine.ApplyCommand(context.Background(), state, contracts.RoomCommand{
+		Type: CommandConnect, PlayerID: "guest",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := engine.ApplyCommand(context.Background(), state, contracts.RoomCommand{
+		Type: CommandAddAI, PlayerID: "owner", Payload: map[string]any{"seatIndex": 3},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if state.Players["AI_3"] == nil || state.Players["AI_3"].SeatIndex != 3 {
+		t.Fatalf("requested AI seat not retained: %+v", state.Players)
+	}
+	if _, err := engine.ApplyCommand(context.Background(), state, contracts.RoomCommand{
+		Type: CommandRemove, PlayerID: "owner", Payload: map[string]any{"playerID": "guest"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if state.Players["guest"] != nil || slicesContain(state.PlayerSeq, "guest") {
+		t.Fatalf("removed player remains in state: %+v", state)
+	}
+}
+
+func TestDavinciSchedulerPersistsDeadlineAndBuildsTimeoutAction(t *testing.T) {
+	plugin := NewPlugin()
+	state := &State{
+		RoomID:        "deadline-room",
+		Status:        StatusGetCard,
+		CurrentPlayer: "alice",
+		PlayerSeq:     []string{"alice", "bob"},
+		Players: map[string]*Player{
+			"alice": {PlayerID: "alice", Online: true},
+			"bob":   {PlayerID: "bob", Online: true},
+		},
+		Deck: []Card{{ID: "deck-1", Num: 1, Index: -1}},
+	}
+	sentAt := time.Date(2026, 10, 23, 12, 0, 0, 0, time.UTC)
+	if _, err := plugin.ApplyCommand(context.Background(), state, contracts.RoomCommand{
+		Type: CommandTurnTimeout, PlayerID: "bob", SentAt: sentAt,
+	}); err == nil {
+		t.Fatal("stale timeout was accepted")
+	}
+	updateTurnDeadline(state, sentAt)
+	if !state.TurnDeadline.Equal(sentAt.Add(20 * time.Second)) {
+		t.Fatalf("deadline = %s", state.TurnDeadline)
+	}
+	pending, err := plugin.PendingCommands(context.Background(), state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pending) != 1 || pending[0].Type != CommandGetCard ||
+		pending[0].PlayerID != "alice" || !pending[0].ExecuteAt.Equal(state.TurnDeadline) {
+		t.Fatalf("pending timeout action = %+v", pending)
+	}
+
+	raw, err := plugin.BuildPlayerView(context.Background(), state, game.ViewRequest{PlayerID: "alice"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	roomData := raw.(contracts.RoomSync).RoomData.(map[string]any)
+	if roomData["turnDeadline"] == nil || roomData["turnTimeoutMs"] != int64(20_000) {
+		t.Fatalf("deadline view = %+v", roomData)
+	}
+}
+
+func slicesContain(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }

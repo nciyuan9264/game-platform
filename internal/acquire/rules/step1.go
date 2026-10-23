@@ -45,10 +45,12 @@ func handleMergeProcess(
 		}
 		var holders []holder
 
-		for _, pc := range r.Connections {
-			playerID := pc.PlayerID
+		for playerID, player := range r.State.Players {
+			if player == nil {
+				continue
+			}
 			// 获取该玩家对该并购酒店的股票数
-			count := r.State.Players[playerID].Stocks[hotel] // 直接按 hotel 名称取股票数
+			count := player.Stocks[hotel]
 			if count > 0 {
 				holders = append(holders, holder{
 					PlayerID: playerID,
@@ -58,7 +60,10 @@ func handleMergeProcess(
 		}
 		// Step 3：根据持股数量排序
 		sort.Slice(holders, func(i, j int) bool {
-			return holders[i].Count > holders[j].Count
+			if holders[i].Count != holders[j].Count {
+				return holders[i].Count > holders[j].Count
+			}
+			return holders[i].PlayerID < holders[j].PlayerID
 		})
 
 		// 保存拥有当前公司股票的所有玩家
@@ -78,50 +83,52 @@ func handleMergeProcess(
 
 		dividends := make(map[string]int)
 
-		// Step 4：分红逻辑
-		firstGroup := []string{holders[0].PlayerID}
-		firstCount := holders[0].Count
+		if len(holders) > 0 {
+			// Step 4：分红逻辑
+			firstGroup := []string{holders[0].PlayerID}
+			firstCount := holders[0].Count
 
-		// 找出第一名的并列玩家
-		for i := 1; i < len(holders); i++ {
-			if holders[i].Count == firstCount {
-				firstGroup = append(firstGroup, holders[i].PlayerID)
-			} else {
-				break
-			}
-		}
-
-		if len(firstGroup) > 1 {
-			// 并列第一名：平分总红利（first + second）
-			totalBonus := firstBonus + secondBonus
-			each := totalBonus / len(firstGroup)
-			for _, pid := range firstGroup {
-				dividends[pid] = each
-			}
-		} else {
-			// 第一名独占
-			dividends[firstGroup[0]] = firstBonus
-
-			// 找第二名（可能并列）
-			secondGroup := []string{}
-			secondCount := -1
+			// 找出第一名的并列玩家
 			for i := 1; i < len(holders); i++ {
-				if holders[i].Count < firstCount {
-					if secondCount == -1 {
-						secondCount = holders[i].Count
-					}
-					if holders[i].Count == secondCount {
-						secondGroup = append(secondGroup, holders[i].PlayerID)
-					} else {
-						break
-					}
+				if holders[i].Count == firstCount {
+					firstGroup = append(firstGroup, holders[i].PlayerID)
+				} else {
+					break
 				}
 			}
 
-			if len(secondGroup) > 0 {
-				each := secondBonus / len(secondGroup)
-				for _, pid := range secondGroup {
+			if len(firstGroup) > 1 {
+				// 并列第一名：平分总红利（first + second）
+				totalBonus := firstBonus + secondBonus
+				each := totalBonus / len(firstGroup)
+				for _, pid := range firstGroup {
 					dividends[pid] = each
+				}
+			} else {
+				// 第一名独占
+				dividends[firstGroup[0]] = firstBonus
+
+				// 找第二名（可能并列）
+				secondGroup := []string{}
+				secondCount := -1
+				for i := 1; i < len(holders); i++ {
+					if holders[i].Count < firstCount {
+						if secondCount == -1 {
+							secondCount = holders[i].Count
+						}
+						if holders[i].Count == secondCount {
+							secondGroup = append(secondGroup, holders[i].PlayerID)
+						} else {
+							break
+						}
+					}
+				}
+
+				if len(secondGroup) > 0 {
+					each := secondBonus / len(secondGroup)
+					for _, pid := range secondGroup {
+						dividends[pid] = each
+					}
 				}
 			}
 		}
@@ -132,12 +139,23 @@ func handleMergeProcess(
 		tempSettleData[hotel] = domain.SettleData{
 			Hoders:    currentCompanyHoders,
 			Dividends: dividends,
+			Settled:   make(map[string]domain.MergingSettleResult),
 		}
 	}
 
 	r.State.MergeMainCompany = mainHotel
 	r.State.MergeSettleData = tempSettleData
 	r.State.RoomStatus = domain.RoomStatusMergingSettle
+	hasPendingHolder := false
+	for _, settlement := range tempSettleData {
+		if len(settlement.Hoders) > 0 {
+			hasPendingHolder = true
+			break
+		}
+	}
+	if !hasPendingHolder {
+		completeMergeSettlement(r)
+	}
 	logger.Info("完成酒店并入红利计算和状态更新", logger.F("room_id", r.ID), logger.F("other_hotel", otherHotel), logger.F("main_hotel", mainHotel))
 	return nil
 }
@@ -407,6 +425,46 @@ type MergingSettlePayload struct {
 	Actions []domain.MergingSettleItem `json:"actions"`
 }
 
+func completeMergeSettlement(r *domain.Room) {
+	mergeMainCompany := r.State.MergeMainCompany
+	lastTile := r.State.LastTileKey
+	connectedTileSet := make(map[string]struct{})
+	if r.State.BoardTiles[lastTile] != nil {
+		for _, id := range data.GetConnectedTiles(r, lastTile) {
+			connectedTileSet[id] = struct{}{}
+		}
+	}
+
+	for key, tile := range r.State.BoardTiles {
+		if tile == nil {
+			continue
+		}
+		if _, absorbed := r.State.MergeSettleData[tile.Belong]; absorbed {
+			tile.Belong = mergeMainCompany
+			r.State.BoardTiles[key] = tile
+		}
+		if tile.ID == lastTile {
+			tile.Belong = mergeMainCompany
+			r.State.BoardTiles[key] = tile
+		}
+		if _, connected := connectedTileSet[tile.ID]; connected {
+			tile.Belong = mergeMainCompany
+			r.State.BoardTiles[key] = tile
+		}
+	}
+
+	for _, key := range data.GetAdjacentTileKeys(lastTile) {
+		tile := r.State.BoardTiles[key]
+		if tile != nil && tile.Belong == "Blank" {
+			tile.Belong = mergeMainCompany
+			r.State.BoardTiles[key] = tile
+		}
+	}
+
+	r.State.RoomStatus = domain.RoomStatusBuyStock
+	r.State.MergeSettleData = map[string]domain.SettleData{}
+}
+
 func HandleMergingSettleMessage(r *domain.Room, cmd domain.Command) {
 	var p MergingSettlePayload
 	if err := json.Unmarshal(cmd.Payload, &p); err != nil {
@@ -421,11 +479,13 @@ func HandleMergingSettleMessage(r *domain.Room, cmd domain.Command) {
 	}
 
 	playerInHoder := false
-	for _, data := range r.State.MergeSettleData {
+	holdingsBefore := make(map[string]int)
+	for company, data := range r.State.MergeSettleData {
 		oldHoders := data.Hoders
 		for _, h := range oldHoders {
 			if h == cmd.PlayerID {
 				playerInHoder = true
+				holdingsBefore[company] = r.State.Players[cmd.PlayerID].Stocks[company]
 			}
 		}
 	}
@@ -434,8 +494,10 @@ func HandleMergingSettleMessage(r *domain.Room, cmd domain.Command) {
 		return
 	}
 
-	mergeMainCompany := r.State.MergeMainCompany
-
+	actionsByCompany := make(map[string]domain.MergingSettleItem, len(settleActions))
+	for _, item := range settleActions {
+		actionsByCompany[item.Company] = item
+	}
 	for _, item := range settleActions {
 		companyData, ok := r.State.Companies[item.Company]
 		if !ok {
@@ -448,14 +510,17 @@ func HandleMergingSettleMessage(r *domain.Room, cmd domain.Command) {
 
 		if sellAmount > 0 {
 			r.State.Players[cmd.PlayerID].Stocks[item.Company] -= sellAmount
+			companyData.StockTotal += sellAmount
 			money := sellAmount * companyData.StockPrice
 			r.State.Players[cmd.PlayerID].Money += money
 		}
 
 		if exchangeAmount > 0 {
 			// 修改股票持仓
-			r.State.Players[cmd.PlayerID].Stocks[mergeMainCompany] += exchangeAmount / 2
+			r.State.Players[cmd.PlayerID].Stocks[r.State.MergeMainCompany] += exchangeAmount / 2
 			r.State.Players[cmd.PlayerID].Stocks[item.Company] -= exchangeAmount
+			companyData.StockTotal += exchangeAmount
+			r.State.Companies[r.State.MergeMainCompany].StockTotal -= exchangeAmount / 2
 		}
 	}
 
@@ -464,12 +529,26 @@ func HandleMergingSettleMessage(r *domain.Room, cmd domain.Command) {
 	for key, data := range r.State.MergeSettleData {
 		oldHoders := data.Hoders
 		newHoders := make([]string, 0)
+		wasPending := false
 		for _, h := range oldHoders {
 			if h != cmd.PlayerID {
 				newHoders = append(newHoders, h)
+			} else {
+				wasPending = true
 			}
 		}
 		data.Hoders = newHoders
+		if wasPending {
+			if data.Settled == nil {
+				data.Settled = make(map[string]domain.MergingSettleResult)
+			}
+			action := actionsByCompany[key]
+			data.Settled[cmd.PlayerID] = domain.MergingSettleResult{
+				HoldingBefore:  holdingsBefore[key],
+				SellAmount:     action.SellAmount,
+				ExchangeAmount: action.ExchangeAmount,
+			}
+		}
 		r.State.MergeSettleData[key] = data
 		// 如果还有剩余 hoders，就不是全部清空
 		if len(newHoders) > 0 {
@@ -478,43 +557,7 @@ func HandleMergingSettleMessage(r *domain.Room, cmd domain.Command) {
 	}
 
 	if allHodersCleared {
-		lastTile := r.State.LastTileKey
-
-		connTile := data.GetConnectedTiles(r, lastTile)
-		connTileSet := make(map[string]struct{})
-		for _, id := range connTile {
-			connTileSet[id] = struct{}{}
-		}
-
-		tileMap := r.State.BoardTiles
-
-		for key, tile := range tileMap {
-			if _, ok := r.State.MergeSettleData[tile.Belong]; ok {
-				tile.Belong = mergeMainCompany
-				tileMap[key] = tile
-			}
-			if tile.ID == lastTile {
-				tile.Belong = mergeMainCompany
-				tileMap[key] = tile
-			}
-			if _, ok := connTileSet[tile.ID]; ok {
-				tile.Belong = mergeMainCompany
-				tileMap[key] = tile
-			}
-		}
-
-		r.State.BoardTiles = tileMap
-		adj := data.GetAdjacentTileKeys(lastTile)
-		for _, key := range adj {
-			tile := tileMap[key]
-			if tile.Belong == "Blank" {
-				tile.Belong = mergeMainCompany
-				tileMap[key] = tile
-			}
-		}
-
-		r.State.RoomStatus = domain.RoomStatusBuyStock
-		r.State.MergeSettleData = map[string]domain.SettleData{}
+		completeMergeSettlement(r)
 	}
 }
 
