@@ -1332,6 +1332,35 @@ func TestShouldRecover(t *testing.T) {
 	}
 }
 
+func TestBootstrapOwnedRoomsSkipsTerminalCurrentMatch(t *testing.T) {
+	st := &fakeRoomhostStore{
+		room: contracts.RoomRecord{
+			RoomID:         "ended-match-room",
+			CurrentMatchID: "match-1",
+			OwnerNode:      "roomhost-a",
+			Epoch:          7,
+			Status:         contracts.RoomStatusOpen,
+			PlayerCount:    2,
+			LeaseExpiresAt: time.Now().UTC().Add(time.Minute),
+		},
+		match: contracts.MatchRecord{
+			MatchID: "match-1",
+			Status:  contracts.MatchStatusEnded,
+		},
+	}
+	router := &fakeRoomhostRouter{}
+	host := NewHost("roomhost-a", st, fakeRoomhostCoordinator{}, router, nil)
+
+	host.bootstrapOwnedRooms(context.Background())
+
+	if host.ActiveRooms() != 0 {
+		t.Fatalf("active rooms = %d, want 0", host.ActiveRooms())
+	}
+	if len(router.logs) != 0 {
+		t.Fatalf("owner fences = %d, want 0", len(router.logs))
+	}
+}
+
 func TestCleanupRoomsClosesExpiredEmptyRoom(t *testing.T) {
 	now := time.Now().UTC()
 	st := &fakeRoomhostStore{}

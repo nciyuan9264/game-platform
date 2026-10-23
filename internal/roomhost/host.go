@@ -166,6 +166,9 @@ func (h *Host) bootstrapOwnedRooms(ctx context.Context) {
 			!rec.LeaseExpiresAt.After(now) {
 			continue
 		}
+		if !h.shouldRecover(ctx, rec) {
+			continue
+		}
 		owner, err := h.coord.EnsureRoomOwner(ctx, rec, h.nodeID, coordination.DefaultRoomLease)
 		if err != nil {
 			observability.Warn("verify startup room owner failed", "roomID", rec.RoomID, "epoch", rec.Epoch, "error", err)
