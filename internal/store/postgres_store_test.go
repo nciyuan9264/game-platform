@@ -7,6 +7,30 @@ import (
 	"testing"
 )
 
+type roomScannerFunc func(dest ...any) error
+
+func (scan roomScannerFunc) Scan(dest ...any) error {
+	return scan(dest...)
+}
+
+func TestScanRoomIncludesVisibility(t *testing.T) {
+	record, err := scanRoom(roomScannerFunc(func(dest ...any) error {
+		if len(dest) != 19 {
+			t.Fatalf("scan destinations = %d, want 19", len(dest))
+		}
+		*dest[0].(*string) = "room-1"
+		*dest[1].(*string) = "acquire"
+		*dest[2].(*string) = "private"
+		return nil
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if record.Visibility != "private" {
+		t.Fatalf("visibility = %q, want private", record.Visibility)
+	}
+}
+
 func TestWithBinaryParametersURL(t *testing.T) {
 	dsn := "postgres://game:p%40ss@db.example.com:5432/game?sslmode=require"
 	got := withBinaryParameters(dsn)

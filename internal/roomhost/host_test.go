@@ -528,6 +528,7 @@ func TestRuntimeRoomCreatePersistsInitialRandomState(t *testing.T) {
 	st := &fakeRoomhostStore{room: contracts.RoomRecord{
 		RoomID:         "room-1",
 		GameType:       "test-game",
+		Visibility:     contracts.VisibilityPrivate,
 		OwnerPlayerID:  "alice-1",
 		OwnerNode:      "roomhost-1",
 		Epoch:          1,
@@ -554,6 +555,9 @@ func TestRuntimeRoomCreatePersistsInitialRandomState(t *testing.T) {
 	}
 	if engine.cfg.RandomSeed == 0 {
 		t.Fatal("room actor received a zero random seed")
+	}
+	if engine.cfg.Visibility != contracts.VisibilityPrivate {
+		t.Fatalf("room actor visibility = %q, want private", engine.cfg.Visibility)
 	}
 	if len(st.savedSnapshots) != 1 || st.savedSnapshots[0].Seq != 0 {
 		t.Fatalf("initial snapshots = %+v", st.savedSnapshots)
