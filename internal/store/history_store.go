@@ -136,7 +136,7 @@ func (s *PostgresStore) FinishHistoryGame(ctx context.Context, gameID int64, inp
 		return err
 	}
 	defer tx.Rollback()
-	_, err = tx.ExecContext(ctx, `
+	result, err := tx.ExecContext(ctx, `
 		UPDATE games SET
 			ended_at = $2,
 			duration_seconds = $3,
@@ -145,11 +145,18 @@ func (s *PostgresStore) FinishHistoryGame(ctx context.Context, gameID int64, inp
 			end_reason = $6,
 			final_result = $7,
 			updated_at = $2
-		WHERE id = $1`,
+		WHERE id = $1 AND ended_at IS NULL`,
 		gameID, input.EndedAt, input.DurationSeconds, input.WinnerUserID,
 		input.WinnerPlayerID, input.EndReason, nullableJSON(input.FinalResult))
 	if err != nil {
 		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return tx.Commit()
 	}
 	for _, player := range input.Players {
 		_, err = tx.ExecContext(ctx, `
