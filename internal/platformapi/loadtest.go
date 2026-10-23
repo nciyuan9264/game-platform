@@ -38,7 +38,15 @@ func (s *Server) loadtestRooms(w http.ResponseWriter, r *http.Request) {
 		roomIDs := make([]string, 0, req.Count)
 		for index := 1; index <= req.Count; index++ {
 			owner := req.OwnerPrefix + "-" + leftPad(index, 6)
-			room, err := s.rooms.CreateRoom(r.Context(), contracts.GameAcquire, owner, owner, req.Prefix+"-"+leftPad(index, 6), 6)
+			room, err := s.rooms.CreateRoomWithVisibility(
+				r.Context(),
+				contracts.GameAcquire,
+				owner,
+				owner,
+				req.Prefix+"-"+leftPad(index, 6),
+				6,
+				contracts.VisibilityPublic,
+			)
 			if err != nil {
 				writeRPCError(w, err, "control_unavailable")
 				return

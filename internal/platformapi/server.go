@@ -21,7 +21,7 @@ import (
 )
 
 type roomController interface {
-	CreateRoom(ctx context.Context, gameType, ownerUserID, ownerPlayerID, requestID string, maxPlayers int) (contracts.RoomRecord, error)
+	CreateRoomWithVisibility(ctx context.Context, gameType, ownerUserID, ownerPlayerID, requestID string, maxPlayers int, visibility string) (contracts.RoomRecord, error)
 	StartMatch(ctx context.Context, roomID, actorUserID string, actorRoles []string, requestID string) (contracts.RoomRecord, string, int, error)
 	CloseRoom(ctx context.Context, roomID, actorUserID string, actorRoles []string, reason string) (contracts.RoomRecord, error)
 	InterruptRoom(ctx context.Context, roomID, actorUserID string, actorRoles []string, reason string) (contracts.RoomRecord, error)
@@ -103,6 +103,7 @@ func (s *Server) handleRooms(w http.ResponseWriter, r *http.Request) {
 		}
 		var req struct {
 			GameType   string `json:"gameType"`
+			Visibility string `json:"visibility"`
 			MaxPlayers int    `json:"maxPlayers"`
 			RequestID  string `json:"requestID,omitempty"`
 		}
@@ -121,7 +122,15 @@ func (s *Server) handleRooms(w http.ResponseWriter, r *http.Request) {
 		if requestID == "" {
 			requestID = uuid.NewString()
 		}
-		room, err := s.rooms.CreateRoom(r.Context(), req.GameType, identity.UserID, platformtoken.LegacyPlayerID(identity), requestID, req.MaxPlayers)
+		room, err := s.rooms.CreateRoomWithVisibility(
+			r.Context(),
+			req.GameType,
+			identity.UserID,
+			platformtoken.LegacyPlayerID(identity),
+			requestID,
+			req.MaxPlayers,
+			req.Visibility,
+		)
 		if err != nil {
 			writeRPCError(w, err, "control_unavailable")
 			return

@@ -69,6 +69,95 @@ func (e platformCodedError) Error() string      { return e.message }
 func (e platformCodedError) GetCode() string    { return e.code }
 func (e platformCodedError) GetMessage() string { return e.message }
 
+type roomCreateCall struct {
+	gameType      string
+	ownerUserID   string
+	ownerPlayerID string
+	requestID     string
+	maxPlayers    int
+	visibility    string
+}
+
+type recordingRoomController struct {
+	create roomCreateCall
+}
+
+func (r *recordingRoomController) CreateRoomWithVisibility(
+	_ context.Context,
+	gameType,
+	ownerUserID,
+	ownerPlayerID,
+	requestID string,
+	maxPlayers int,
+	visibility string,
+) (contracts.RoomRecord, error) {
+	r.create = roomCreateCall{
+		gameType:      gameType,
+		ownerUserID:   ownerUserID,
+		ownerPlayerID: ownerPlayerID,
+		requestID:     requestID,
+		maxPlayers:    maxPlayers,
+		visibility:    visibility,
+	}
+	return contracts.RoomRecord{
+		RoomID:     "room-1",
+		GameType:   gameType,
+		Visibility: visibility,
+	}, nil
+}
+
+func (*recordingRoomController) StartMatch(context.Context, string, string, []string, string) (contracts.RoomRecord, string, int, error) {
+	return contracts.RoomRecord{}, "", 0, nil
+}
+
+func (*recordingRoomController) CloseRoom(context.Context, string, string, []string, string) (contracts.RoomRecord, error) {
+	return contracts.RoomRecord{}, nil
+}
+
+func (*recordingRoomController) InterruptRoom(context.Context, string, string, []string, string) (contracts.RoomRecord, error) {
+	return contracts.RoomRecord{}, nil
+}
+
+func TestCreateRoomForwardsVisibility(t *testing.T) {
+	rooms := &recordingRoomController{}
+	server := &Server{
+		auth: roleAuthClient{
+			valid: true,
+			identity: contracts.UserIdentity{
+				UserID: "owner-1",
+				Roles:  []string{"player"},
+			},
+		},
+		rooms: rooms,
+	}
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/platform/rooms",
+		strings.NewReader(`{"gameType":"acquire","visibility":"private","maxPlayers":6,"requestID":"request-1"}`),
+	)
+	req.Header.Set("Authorization", "Bearer access-token")
+	rec := httptest.NewRecorder()
+
+	server.handleRooms(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	if rooms.create != (roomCreateCall{
+		gameType:      "acquire",
+		ownerUserID:   "owner-1",
+		ownerPlayerID: "owner-1",
+		requestID:     "request-1",
+		maxPlayers:    6,
+		visibility:    contracts.VisibilityPrivate,
+	}) {
+		t.Fatalf("create room call = %+v", rooms.create)
+	}
+	if !strings.Contains(rec.Body.String(), `"visibility":"private"`) {
+		t.Fatalf("response omitted private visibility: %s", rec.Body.String())
+	}
+}
+
 func TestRequireRole(t *testing.T) {
 	tests := []struct {
 		name       string
