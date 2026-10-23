@@ -48,6 +48,41 @@ func TestBuildSpectatorViewIncludesBothPlayersHiddenCards(t *testing.T) {
 	}
 }
 
+func TestBuildMatchSyncIncludesRequiredRoomMetadata(t *testing.T) {
+	plugin := NewPlugin()
+	state := &State{
+		RoomID:    "davinci-match-sync",
+		OwnerID:   "alice-1",
+		Status:    contracts.RoomStatusMatch,
+		PlayerSeq: []string{"alice-1", "bob-2"},
+		Players: map[string]*Player{
+			"alice-1": {PlayerID: "alice-1"},
+			"bob-2":   {PlayerID: "bob-2"},
+		},
+	}
+
+	raw, err := plugin.BuildPlayerView(context.Background(), state, game.ViewRequest{
+		MatchID:    "match-1",
+		PlayerID:   "alice-1",
+		Visibility: contracts.VisibilityPrivate,
+		MaxPlayers: 4,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	view := raw.(contracts.MatchSync)
+	if view.Visibility != contracts.VisibilityPrivate || view.MaxPlayers != 4 {
+		t.Fatalf("room metadata = (%q, %d), want (%q, 4)", view.Visibility, view.MaxPlayers, contracts.VisibilityPrivate)
+	}
+	if !reflect.DeepEqual(view.PlayerOrder, []string{"alice-1", "bob-2"}) {
+		t.Fatalf("player order = %v", view.PlayerOrder)
+	}
+	state.PlayerSeq[0] = "changed"
+	if view.PlayerOrder[0] != "alice-1" {
+		t.Fatalf("player order aliases mutable state: %v", view.PlayerOrder)
+	}
+}
+
 func TestOwnerOnlyCommandsAreEnforcedByEngine(t *testing.T) {
 	engine := NewEngine()
 	state := engine.InitRoom("room-1", "alice-1", 3)

@@ -28,11 +28,13 @@ type RoomConfig struct {
 }
 
 type ViewRequest struct {
-	RoomID   string
-	MatchID  string
-	GameType string
-	PlayerID string
-	Seq      int64
+	RoomID     string
+	MatchID    string
+	GameType   string
+	PlayerID   string
+	Visibility string
+	MaxPlayers int
+	Seq        int64
 }
 
 type AIRequest struct {

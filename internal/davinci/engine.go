@@ -183,6 +183,9 @@ func (p *Plugin) BuildPlayerView(ctx context.Context, state game.State, req game
 	if typed.Status == contracts.RoomStatusMatch {
 		view := p.engine.BuildMatchSync(typed, req.PlayerID)
 		view.MatchID = req.MatchID
+		view.Visibility = req.Visibility
+		view.MaxPlayers = req.MaxPlayers
+		view.PlayerOrder = append([]string{}, typed.PlayerSeq...)
 		return view, nil
 	}
 	view := p.engine.BuildRoomSync(typed, req.PlayerID)

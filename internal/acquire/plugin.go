@@ -300,13 +300,16 @@ func (p *Plugin) BuildPlayerView(ctx context.Context, state game.State, req game
 	}
 	if room.State.RoomStatus == domain.RoomStatusMatch {
 		return contracts.MatchSync{
-			Type:     contracts.MessageTypeMatchSync,
-			RoomID:   room.ID,
-			MatchID:  req.MatchID,
-			OwnerID:  room.State.OwnerID,
-			Status:   string(room.State.RoomStatus),
-			PlayerID: req.PlayerID,
-			Players:  players,
+			Type:        contracts.MessageTypeMatchSync,
+			RoomID:      room.ID,
+			MatchID:     req.MatchID,
+			OwnerID:     room.State.OwnerID,
+			Status:      string(room.State.RoomStatus),
+			PlayerID:    req.PlayerID,
+			Visibility:  req.Visibility,
+			MaxPlayers:  req.MaxPlayers,
+			Players:     players,
+			PlayerOrder: append([]string{}, room.PlayerSeq...),
 		}, nil
 	}
 

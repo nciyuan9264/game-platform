@@ -2,6 +2,7 @@ package acquire
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
 
@@ -66,6 +67,58 @@ func TestPluginRunsMatchAndBuildsPrivateView(t *testing.T) {
 	playersData := spectatorPayload["playersData"].(map[string]any)
 	if playersData["alice-1"] == nil || playersData["bob-2"] == nil {
 		t.Fatalf("spectator view omitted private player state: %+v", playersData)
+	}
+}
+
+func TestBuildMatchSyncIncludesRequiredRoomMetadata(t *testing.T) {
+	ctx := context.Background()
+	plugin := &Plugin{}
+	state, err := plugin.InitRoom(ctx, game.RoomConfig{
+		RoomID:        "acquire-match-sync",
+		OwnerPlayerID: "alice-1",
+		MaxPlayers:    6,
+		RandomSeed:    testRandomSeed,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := plugin.ApplyCommand(ctx, state, contracts.RoomCommand{
+		PlayerID: "alice-1",
+		Type:     "connect",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	raw, err := plugin.BuildPlayerView(ctx, state, game.ViewRequest{
+		RoomID:     "acquire-match-sync",
+		MatchID:    "match-1",
+		PlayerID:   "alice-1",
+		Visibility: contracts.VisibilityPrivate,
+		MaxPlayers: 6,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	view := raw.(contracts.MatchSync)
+	if view.Visibility != contracts.VisibilityPrivate || view.MaxPlayers != 6 {
+		t.Fatalf("room metadata = (%q, %d), want (%q, 6)", view.Visibility, view.MaxPlayers, contracts.VisibilityPrivate)
+	}
+	if len(view.PlayerOrder) != 1 || view.PlayerOrder[0] != "alice-1" {
+		t.Fatalf("player order = %v, want [alice-1]", view.PlayerOrder)
+	}
+
+	encoded, err := json.Marshal(view)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var payload map[string]json.RawMessage
+	if err := json.Unmarshal(encoded, &payload); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"visibility", "maxPlayers", "playerOrder"} {
+		if _, ok := payload[key]; !ok {
+			t.Fatalf("serialized match sync omitted %q: %s", key, encoded)
+		}
 	}
 }
 

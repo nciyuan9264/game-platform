@@ -1876,8 +1876,13 @@ func (r *RoomActor) deliverEffects(ctx context.Context, traceID string, effects 
 				payload = typed
 			default:
 				view, viewErr := r.definition.Engine.BuildPlayerView(ctx, r.state, game.ViewRequest{
-					RoomID: r.record.RoomID, MatchID: r.match.MatchID,
-					GameType: r.record.GameType, PlayerID: presence.PlayerID, Seq: r.seq,
+					RoomID:     r.record.RoomID,
+					MatchID:    r.match.MatchID,
+					GameType:   r.record.GameType,
+					PlayerID:   presence.PlayerID,
+					Visibility: r.record.Visibility,
+					MaxPlayers: r.record.MaxPlayers,
+					Seq:        r.seq,
 				})
 				if viewErr != nil {
 					return viewErr
@@ -2037,11 +2042,13 @@ func (r *RoomActor) broadcast(ctx context.Context, traceID string) error {
 			continue
 		}
 		payload, err := r.definition.Engine.BuildPlayerView(ctx, r.state, game.ViewRequest{
-			RoomID:   r.record.RoomID,
-			MatchID:  r.match.MatchID,
-			GameType: r.record.GameType,
-			PlayerID: p.PlayerID,
-			Seq:      r.seq,
+			RoomID:     r.record.RoomID,
+			MatchID:    r.match.MatchID,
+			GameType:   r.record.GameType,
+			PlayerID:   p.PlayerID,
+			Visibility: r.record.Visibility,
+			MaxPlayers: r.record.MaxPlayers,
+			Seq:        r.seq,
 		})
 		if err != nil {
 			observability.Warn("build player view failed", "roomID", r.record.RoomID, "playerID", p.PlayerID, "error", err)

@@ -353,14 +353,17 @@ type RoomPlayer struct {
 }
 
 type MatchSync struct {
-	Type     string                `json:"type"`
-	RoomID   string                `json:"roomID"`
-	MatchID  string                `json:"matchID"`
-	OwnerID  string                `json:"ownerID"`
-	Status   string                `json:"status"`
-	PlayerID string                `json:"playerID"`
-	Players  map[string]RoomPlayer `json:"players"`
-	Message  string                `json:"message,omitempty"`
+	Type        string                `json:"type"`
+	RoomID      string                `json:"roomID"`
+	MatchID     string                `json:"matchID"`
+	OwnerID     string                `json:"ownerID"`
+	Status      string                `json:"status"`
+	PlayerID    string                `json:"playerID"`
+	Visibility  string                `json:"visibility"`
+	MaxPlayers  int                   `json:"maxPlayers"`
+	Players     map[string]RoomPlayer `json:"players"`
+	PlayerOrder []string              `json:"playerOrder"`
+	Message     string                `json:"message,omitempty"`
 }
 
 type RoomSync struct {
