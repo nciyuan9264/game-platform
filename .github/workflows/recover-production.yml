@@ -30,10 +30,16 @@ jobs:
 
       - name: Start and verify production services
         uses: appleboy/ssh-action@v1.2.0
+        env:
+          TCR_LOGIN_SERVER: ${{ secrets.TCR_LOGIN_SERVER }}
+          TCR_USERNAME: ${{ secrets.TCR_USERNAME }}
+          TCR_PASSWORD: ${{ secrets.TCR_PASSWORD }}
+          CENTER_IMAGE_TAG: be1b9eec293d03276eb269c2ef7c59a79777f72e
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          envs: TCR_LOGIN_SERVER,TCR_USERNAME,TCR_PASSWORD,CENTER_IMAGE_TAG
           command_timeout: 10m
           script: |
             set -eu
@@ -42,8 +48,37 @@ jobs:
             set -a
             . ./.env
             set +a
+            registry="${TCR_LOGIN_SERVER}/tengxuntcr"
+            export GAME_PLATFORM_IMAGE_REGISTRY="${registry}"
+            export GAME_PLATFORM_IMAGE_TAG="${CENTER_IMAGE_TAG}"
+            persist_env() {
+              key="$1"
+              value="$2"
+              temporary="$(mktemp .env.XXXXXX)"
+              awk -v key="${key}" -v value="${value}" '
+                BEGIN { found = 0 }
+                index($0, key "=") == 1 {
+                  print key "=" value
+                  found = 1
+                  next
+                }
+                { print }
+                END {
+                  if (!found) {
+                    print key "=" value
+                  }
+                }
+              ' .env >"${temporary}"
+              mv "${temporary}" .env
+            }
+            persist_env GAME_PLATFORM_IMAGE_REGISTRY "${registry}"
+            persist_env GAME_PLATFORM_IMAGE_TAG "${CENTER_IMAGE_TAG}"
+            printf '%s' "${TCR_PASSWORD}" | docker login "${TCR_LOGIN_SERVER}" \
+              --username "${TCR_USERNAME}" --password-stdin
             chmod +x scripts/validate-prod-config.sh
             ./scripts/validate-prod-config.sh
+            docker compose -f docker-compose.prod.yml pull \
+              gateway control-plane platform-rpc
             services="
               gateway
               control-plane
