@@ -109,6 +109,14 @@ func (p *Plugin) GameType() string { return contracts.GameDaVinci }
 
 func (p *Plugin) Version() string { return EngineVersion }
 
+func (p *Plugin) RandomSeed(_ context.Context, state game.State) (uint64, error) {
+	typed, err := asState(state)
+	if err != nil {
+		return 0, err
+	}
+	return typed.RandomSeed, nil
+}
+
 func (p *Plugin) Roster(ctx context.Context, state game.State) ([]game.RosterPlayer, error) {
 	typed, err := asState(state)
 	if err != nil {

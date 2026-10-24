@@ -98,6 +98,33 @@ func TestDavinciHistoryStartsDeterministically(t *testing.T) {
 	}
 }
 
+func TestDavinciHistoryExposesRuntimeRandomSeed(t *testing.T) {
+	ctx := context.Background()
+	plugin := NewPlugin()
+	const seed = uint64(42)
+	raw, err := plugin.InitRoom(ctx, game.RoomConfig{
+		RoomID:        "davinci-history-seed",
+		OwnerPlayerID: "137",
+		MaxPlayers:    2,
+		RandomSeed:    seed,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	provider, ok := any(plugin).(game.RandomSeedProvider)
+	if !ok {
+		t.Fatal("davinci plugin does not implement game.RandomSeedProvider")
+	}
+	got, err := provider.RandomSeed(ctx, raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != seed {
+		t.Fatalf("random seed = %d, want %d", got, seed)
+	}
+}
+
 func TestDavinciHistoryProjectsWinnerAndRanks(t *testing.T) {
 	startedAt := time.Date(2026, time.October, 24, 12, 30, 0, 0, time.UTC)
 	state := &State{
