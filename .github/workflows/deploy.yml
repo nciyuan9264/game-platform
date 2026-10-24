@@ -252,7 +252,7 @@ jobs:
       (needs.deploy-center.result == 'success' || needs.deploy-center.result == 'skipped')
     runs-on: ubuntu-24.04
     strategy:
-      fail-fast: true
+      fail-fast: false
       max-parallel: 1
       matrix:
         game: ${{ fromJSON(needs.detect.outputs.games) }}
@@ -278,6 +278,7 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 15m
           envs: TCR_LOGIN_SERVER,TCR_USERNAME,TCR_PASSWORD,IMAGE_TAG,GAME
           script: |
             set -eu
@@ -314,7 +315,8 @@ jobs:
       - deploy-games
     if: >-
       always() &&
-      (needs.deploy-center.result == 'success' || needs.deploy-games.result == 'success')
+      (needs.deploy-center.result == 'success' || needs.deploy-center.result == 'skipped') &&
+      (needs.deploy-games.result == 'success' || needs.deploy-games.result == 'skipped')
     runs-on: ubuntu-24.04
     steps:
       - name: Notify Feishu
