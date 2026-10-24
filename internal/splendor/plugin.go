@@ -21,7 +21,7 @@ import (
 
 const (
 	GameType          = "splendor"
-	EngineVersion     = "splendor-v3"
+	EngineVersion     = "splendor-v4"
 	defaultMaxPlayers = 4
 	maxNoHumanChecks  = 3
 )
@@ -524,7 +524,7 @@ func beginMatch(state *domain.GameState, actorID string) error {
 		if player == nil || !player.Ready || !player.Online {
 			return errors.New("all players must be ready and online")
 		}
-		player.Ready = false
+		player.Ready = player.AI
 	}
 	initBoard(state)
 	state.RoomStatus = domain.RoomStatusWaiting

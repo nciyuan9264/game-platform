@@ -56,6 +56,44 @@ func TestPluginLifecycleAndHistory(t *testing.T) {
 	assertReplayFrameMatchesGolden(t, projection.ReplayFrame)
 }
 
+func TestSplendorAIStaysReadyForSingleHumanStart(t *testing.T) {
+	ctx := context.Background()
+	plugin := &Plugin{}
+	raw, err := plugin.InitRoom(ctx, game.RoomConfig{
+		RoomID:        "splendor-ai-ready",
+		OwnerPlayerID: "owner",
+		MaxPlayers:    2,
+		RandomSeed:    7,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := raw.(*domain.GameState)
+	apply := func(commandType string) {
+		t.Helper()
+		if _, err := plugin.ApplyCommand(ctx, state, contracts.RoomCommand{
+			PlayerID: "owner",
+			Type:     commandType,
+			SentAt:   time.Now().UTC(),
+		}); err != nil {
+			t.Fatalf("%s: %v", commandType, err)
+		}
+	}
+	apply("connect")
+	apply("match_add_ai")
+	apply("match_begin")
+	if state.Roster["owner"].Ready || !state.Roster["ai_2"].Ready {
+		t.Fatalf("waiting readiness = owner:%v ai:%v",
+			state.Roster["owner"].Ready,
+			state.Roster["ai_2"].Ready,
+		)
+	}
+	apply("game_ready")
+	if state.RoomStatus != domain.RoomStatusPlaying {
+		t.Fatalf("room status = %q, want playing", state.RoomStatus)
+	}
+}
+
 func TestPluginSnapshotDoesNotExposeHiddenCards(t *testing.T) {
 	ctx := context.Background()
 	plugin := &Plugin{}
