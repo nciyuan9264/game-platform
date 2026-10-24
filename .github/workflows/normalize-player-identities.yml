@@ -47,7 +47,7 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           envs: TCR_LOGIN_SERVER,TCR_USERNAME,TCR_PASSWORD,IMAGE_TAG
-          command_timeout: 45m
+          command_timeout: 90m
           script: |
             set -eu
             cd /home/game-platform

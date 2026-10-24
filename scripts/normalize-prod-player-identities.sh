@@ -107,6 +107,26 @@ validate_backfill_report() {
   ' "$report" >/dev/null
 }
 
+count_missing_replay_games() {
+  local game_type="$1"
+  "${compose[@]}" run --rm --no-deps --entrypoint psql \
+    normalize-player-identities "$POSTGRES_DSN" \
+    --no-psqlrc --set=ON_ERROR_STOP=1 --tuples-only --no-align \
+    --command="
+      SELECT COUNT(*)
+      FROM games g
+      WHERE g.game_type = '${game_type}'
+        AND (
+          g.initial_replay_payload IS NULL
+          OR EXISTS (
+            SELECT 1
+            FROM game_events ge
+            WHERE ge.game_id = g.id AND ge.replay_payload IS NULL
+          )
+        );
+    "
+}
+
 run_acceptance() {
   "${compose[@]}" run --rm --no-deps --entrypoint psql \
     normalize-player-identities "$POSTGRES_DSN" \
@@ -210,12 +230,12 @@ maintenance=1
 
 for game_type in "${backfill_games[@]}"; do
   expected="${backfill_expected[$game_type]}"
-  stopped_report="$report_dir/backfill-${game_type}-stopped.json"
-  run_backfill "$game_type" "$stopped_report" --dry-run
-  validate_backfill_report "$stopped_report"
-  jq -e --argjson expected "$expected" '
-    .processed == $expected
-  ' "$stopped_report" >/dev/null
+  actual="$(count_missing_replay_games "$game_type")"
+  if [[ "$actual" -ne "$expected" ]]; then
+    printf '%s replay backfill set changed: expected %s games, found %s\n' \
+      "$game_type" "$expected" "$actual" >&2
+    exit 1
+  fi
   if [[ "$expected" -eq 0 ]]; then
     continue
   fi
