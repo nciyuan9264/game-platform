@@ -48,6 +48,15 @@ legacy_containers=()
 
 on_exit() {
   local status=$?
+  if [[ "$status" -ne 0 ]]; then
+    printf 'Migration failed. Reports: %s\n' "$report_dir" >&2
+    for report in dry-run-live.json dry-run-stopped.json apply.json verify.json; do
+      if [[ -s "$report_dir/$report" ]]; then
+        printf '%s=' "$report" >&2
+        jq -c . "$report_dir/$report" >&2 || true
+      fi
+    done
+  fi
   if [[ "$maintenance" -eq 1 && "$completed" -ne 1 ]]; then
     {
       printf 'Migration did not complete. Write services remain stopped.\n'
