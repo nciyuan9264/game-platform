@@ -705,58 +705,61 @@ func (h *Host) projectionRetryLoop(ctx context.Context) {
 			h.mu.Unlock()
 			for _, room := range rooms {
 				room.mu.Lock()
-				if room.closed {
-					room.mu.Unlock()
-					continue
-				}
-				if room.historyDirty {
-					if err := room.reconcileHistoryLocked(ctx); err != nil {
-						if room.suppressIrrecoverableHistoryProjectionLocked(err, "history projection retry skipped") {
-							// The projection cannot be rebuilt from the current command log shape.
-						} else {
-							observability.Warn(
-								"history projection retry failed",
-								"execution_mode", contracts.ExecutionModeReplay,
-								"roomID", room.record.RoomID,
-								"matchID", room.match.MatchID,
-								"error", err,
-							)
-						}
-					}
-				}
-				if room.operationDirty {
-					if err := room.reconcileOperationEventsLocked(ctx); err != nil {
-						observability.Warn("operation projection retry failed", "roomID", room.record.RoomID, "error", err)
-					}
-				}
-				if room.snapshotDirty {
-					if err := room.saveSnapshot(ctx); err != nil {
-						observability.Warn("snapshot projection retry failed", "roomID", room.record.RoomID, "seq", room.seq, "error", err)
-					} else {
-						room.snapshotDirty = false
-					}
-				}
-				if room.spectatorDirty {
-					if err := room.saveSpectatorSnapshot(ctx); err != nil {
-						observability.Warn("spectator projection retry failed", "roomID", room.record.RoomID, "seq", room.seq, "error", err)
-					} else {
-						room.spectatorDirty = false
-					}
-				}
-				if room.metadataDirty {
-					if err := room.syncRoomMetadataLocked(ctx); err != nil {
-						observability.Warn("room metadata projection retry failed", "roomID", room.record.RoomID, "error", err)
-					}
-				}
-				if room.outboundDirty {
-					if err := room.broadcast(ctx, "projection-retry"); err != nil {
-						observability.Warn("outbound projection retry failed", "roomID", room.record.RoomID, "seq", room.seq, "error", err)
-					} else {
-						room.outboundDirty = false
-					}
-				}
+				room.retryDirtyProjectionsLocked(ctx)
 				room.mu.Unlock()
 			}
+		}
+	}
+}
+
+func (r *RoomActor) retryDirtyProjectionsLocked(ctx context.Context) {
+	if r.closed {
+		return
+	}
+	if r.historyDirty {
+		if err := r.reconcileHistoryLocked(ctx); err != nil {
+			if r.suppressIrrecoverableHistoryProjectionLocked(err, "history projection retry skipped") {
+				// The projection cannot be rebuilt from the current command log shape.
+			} else {
+				observability.Warn(
+					"history projection retry failed",
+					"execution_mode", contracts.ExecutionModeReplay,
+					"roomID", r.record.RoomID,
+					"matchID", r.match.MatchID,
+					"error", err,
+				)
+			}
+		}
+	}
+	if r.operationDirty {
+		if err := r.reconcileOperationEventsLocked(ctx); err != nil {
+			observability.Warn("operation projection retry failed", "roomID", r.record.RoomID, "error", err)
+		}
+	}
+	if r.snapshotDirty {
+		if err := r.saveSnapshot(ctx); err != nil {
+			observability.Warn("snapshot projection retry failed", "roomID", r.record.RoomID, "seq", r.seq, "error", err)
+		} else {
+			r.snapshotDirty = false
+		}
+	}
+	if r.spectatorDirty {
+		if err := r.saveSpectatorSnapshot(ctx); err != nil {
+			observability.Warn("spectator projection retry failed", "roomID", r.record.RoomID, "seq", r.seq, "error", err)
+		} else {
+			r.spectatorDirty = false
+		}
+	}
+	if r.metadataDirty {
+		if err := r.syncRoomMetadataLocked(ctx); err != nil {
+			observability.Warn("room metadata projection retry failed", "roomID", r.record.RoomID, "error", err)
+		}
+	}
+	if r.outboundDirty {
+		if err := r.broadcast(ctx, "projection-retry"); err != nil {
+			observability.Warn("outbound projection retry failed", "roomID", r.record.RoomID, "seq", r.seq, "error", err)
+		} else {
+			r.outboundDirty = false
 		}
 	}
 }

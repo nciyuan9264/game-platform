@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -138,6 +139,47 @@ func (e *loggingEngine) BuildSpectatorView(_ context.Context, state game.State, 
 	return map[string]any{"seq": seq, "state": state}, nil
 }
 
+type retryProjectionEngine struct {
+	countingEngine
+	visibility string
+}
+
+func (e *retryProjectionEngine) BuildSpectatorView(_ context.Context, state game.State, seq int64) (any, error) {
+	return map[string]any{"seq": seq, "state": state}, nil
+}
+
+func (e *retryProjectionEngine) RoomMetadata(context.Context, game.State) (game.RoomMetadata, error) {
+	return game.RoomMetadata{Visibility: e.visibility}, nil
+}
+
+type countingHistoryProvider struct {
+	startedAt time.Time
+}
+
+func (p countingHistoryProvider) ProjectHistory(_ context.Context, state game.State) (game.HistoryProjection, error) {
+	encoded, err := json.Marshal(state)
+	if err != nil {
+		return game.HistoryProjection{}, err
+	}
+	return game.HistoryProjection{
+		Started:             true,
+		StartedAt:           p.startedAt,
+		MaxPlayers:          2,
+		ReplaySchemaVersion: 1,
+		ReplayFrame: map[string]any{
+			"roomData":    map[string]any{"count": state.(*countingState).Count},
+			"playersData": map[string]any{},
+			"result":      map[string]any{},
+		},
+		InitialState: encoded,
+		StateBlob:    encoded,
+	}, nil
+}
+
+func (countingHistoryProvider) IsRecordableCommand(commandType string) bool {
+	return commandType == "increment"
+}
+
 type fakeHistoryLookup struct {
 	id       int64
 	nextSeq  int
@@ -149,6 +191,7 @@ type fakeHistoryLookup struct {
 type fakeRoomhostStore struct {
 	snapshot        contracts.SnapshotRecord
 	snapshotErr     error
+	saveSnapshotErr error
 	room            contracts.RoomRecord
 	roomErr         error
 	match           contracts.MatchRecord
@@ -157,6 +200,9 @@ type fakeRoomhostStore struct {
 	presences       []contracts.PresenceRecord
 	presenceErr     error
 	outboundErr     error
+	spectatorErr    error
+	operationErr    error
+	resetHistoryErr error
 	savedOutbound   []contracts.OutboundMessage
 	savedSnapshots  []contracts.SnapshotRecord
 	savedSpectator  []contracts.SpectatorSnapshotRecord
@@ -282,11 +328,17 @@ func (s *fakeRoomhostStore) LatestSnapshot(context.Context, string) (contracts.S
 }
 
 func (s *fakeRoomhostStore) SaveSnapshot(_ context.Context, snapshot contracts.SnapshotRecord) error {
+	if s.saveSnapshotErr != nil {
+		return s.saveSnapshotErr
+	}
 	s.savedSnapshots = append(s.savedSnapshots, snapshot)
 	return nil
 }
 
 func (s *fakeRoomhostStore) SaveSpectatorSnapshot(_ context.Context, snapshot contracts.SpectatorSnapshotRecord) error {
+	if s.spectatorErr != nil {
+		return s.spectatorErr
+	}
 	s.savedSpectator = append(s.savedSpectator, snapshot)
 	return nil
 }
@@ -300,6 +352,9 @@ func (s *fakeRoomhostStore) SaveCommandAck(context.Context, contracts.CommandAck
 }
 
 func (s *fakeRoomhostStore) AppendGameLogEvents(_ context.Context, events []contracts.GameLogEvent) error {
+	if s.operationErr != nil {
+		return s.operationErr
+	}
 	s.operationEvents = append(s.operationEvents, events...)
 	return nil
 }
@@ -352,7 +407,7 @@ func (s *fakeRoomhostStore) SetHistoryReplayMetadata(context.Context, int64, str
 }
 
 func (s *fakeRoomhostStore) ResetOpenHistoryGame(context.Context, string, string) error {
-	return nil
+	return s.resetHistoryErr
 }
 
 func (s *fakeRoomhostStore) AppendHistoryEvent(_ context.Context, event history.Event) error {
@@ -485,6 +540,302 @@ func (r *fakeRoomhostRouter) ListCommandLog(matchID string, afterSeq int64) ([]c
 func (r *fakeRoomhostRouter) Deliver(out contracts.OutboundMessage) error {
 	r.delivered = append(r.delivered, out)
 	return r.deliverErr
+}
+
+func TestRetryDirtyProjectionsHistoryConvergesWithoutChangingLiveState(t *testing.T) {
+	ctx := context.Background()
+	retryErr := errors.New("history store unavailable")
+	startedAt := time.Date(2026, time.October, 24, 12, 0, 0, 0, time.UTC)
+	store := &fakeRoomhostStore{resetHistoryErr: retryErr}
+	engine := &countingEngine{}
+	router := &fakeRoomhostRouter{logs: []contracts.CommandLogRecord{{
+		Kind:      contracts.CommandLogKindCommand,
+		RoomID:    "retry-room",
+		MatchID:   "retry-room-r1",
+		CommandID: "increment-1",
+		PlayerID:  "player-1",
+		Type:      "increment",
+		Payload:   map[string]any{"delta": 1},
+		Seq:       1,
+		Epoch:     7,
+		CreatedAt: startedAt,
+	}}}
+	liveState := &countingState{Count: 9}
+	actor := &RoomActor{
+		host: &Host{
+			nodeID: "roomhost-a",
+			store:  store,
+			router: router,
+		},
+		record: contracts.RoomRecord{
+			RoomID:        "retry-room",
+			GameType:      "counting",
+			Visibility:    contracts.VisibilityPrivate,
+			OwnerNode:     "roomhost-a",
+			Epoch:         7,
+			MaxPlayers:    2,
+			EngineVersion: "counting-v1",
+		},
+		match: contracts.MatchRecord{
+			MatchID: "retry-room-r1",
+			Status:  contracts.MatchStatusRunning,
+		},
+		definition: game.Definition{
+			GameType: "counting",
+			Version:  "counting-v1",
+			Engine:   engine,
+			History:  countingHistoryProvider{startedAt: startedAt},
+		},
+		state:          liveState,
+		seq:            9,
+		processed:      map[string]contracts.CommandAck{},
+		historyDirty:   true,
+		operationDirty: true,
+		snapshotDirty:  true,
+		spectatorDirty: true,
+		metadataDirty:  true,
+		outboundDirty:  true,
+	}
+
+	actor.retryDirtyProjectionsLocked(ctx)
+	if !actor.historyDirty {
+		t.Fatal("failed history projection was marked clean")
+	}
+	if actor.operationDirty || actor.snapshotDirty || actor.spectatorDirty ||
+		actor.metadataDirty || actor.outboundDirty {
+		t.Fatalf("history failure blocked independent retries: %+v", dirtyProjectionState(actor))
+	}
+	if actor.state != liveState || liveState.Count != 9 || actor.seq != 9 || actor.record.Epoch != 7 {
+		t.Fatalf("failed retry changed live actor: state=%p/%p count=%d seq=%d epoch=%d",
+			actor.state, liveState, liveState.Count, actor.seq, actor.record.Epoch)
+	}
+
+	store.resetHistoryErr = nil
+	actor.retryDirtyProjectionsLocked(ctx)
+	if actor.historyDirty {
+		t.Fatal("successful history replay remained dirty")
+	}
+	if actor.state != liveState || liveState.Count != 9 || actor.seq != 9 || actor.record.Epoch != 7 {
+		t.Fatalf("successful retry changed live actor: state=%p/%p count=%d seq=%d epoch=%d",
+			actor.state, liveState, liveState.Count, actor.seq, actor.record.Epoch)
+	}
+	if len(store.startedHistory) != 1 || len(store.appendedHistory) != 1 {
+		t.Fatalf("history writes = games:%d events:%d, want 1/1",
+			len(store.startedHistory), len(store.appendedHistory))
+	}
+	if len(engine.applied) != 1 || !engine.applied[0].Replay {
+		t.Fatalf("history commands were not replayed deterministically: %+v", engine.applied)
+	}
+
+	actor.retryDirtyProjectionsLocked(ctx)
+	if len(store.startedHistory) != 1 || len(store.appendedHistory) != 1 {
+		t.Fatalf("clean retry produced extra history writes: games:%d events:%d",
+			len(store.startedHistory), len(store.appendedHistory))
+	}
+}
+
+func TestRetryDirtyProjectionsConvergeIndependently(t *testing.T) {
+	retryErr := errors.New("projection unavailable")
+	tests := []struct {
+		name   string
+		inject func(*fakeRoomhostStore)
+		clear  func(*fakeRoomhostStore)
+		dirty  func(*RoomActor) bool
+	}{
+		{
+			name:   "operation",
+			inject: func(store *fakeRoomhostStore) { store.operationErr = retryErr },
+			clear:  func(store *fakeRoomhostStore) { store.operationErr = nil },
+			dirty:  func(actor *RoomActor) bool { return actor.operationDirty },
+		},
+		{
+			name:   "snapshot",
+			inject: func(store *fakeRoomhostStore) { store.saveSnapshotErr = retryErr },
+			clear:  func(store *fakeRoomhostStore) { store.saveSnapshotErr = nil },
+			dirty:  func(actor *RoomActor) bool { return actor.snapshotDirty },
+		},
+		{
+			name:   "spectator",
+			inject: func(store *fakeRoomhostStore) { store.spectatorErr = retryErr },
+			clear:  func(store *fakeRoomhostStore) { store.spectatorErr = nil },
+			dirty:  func(actor *RoomActor) bool { return actor.spectatorDirty },
+		},
+		{
+			name:   "metadata",
+			inject: func(store *fakeRoomhostStore) { store.visibilityErr = retryErr },
+			clear:  func(store *fakeRoomhostStore) { store.visibilityErr = nil },
+			dirty:  func(actor *RoomActor) bool { return actor.metadataDirty },
+		},
+		{
+			name:   "outbound",
+			inject: func(store *fakeRoomhostStore) { store.presenceErr = retryErr },
+			clear:  func(store *fakeRoomhostStore) { store.presenceErr = nil },
+			dirty:  func(actor *RoomActor) bool { return actor.outboundDirty },
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			store := &fakeRoomhostStore{}
+			test.inject(store)
+			router := &fakeRoomhostRouter{logs: []contracts.CommandLogRecord{{
+				Kind:    contracts.CommandLogKindCommand,
+				RoomID:  "retry-room",
+				MatchID: "retry-room-r1",
+				Seq:     1,
+				Operations: []contracts.GameLogEvent{{
+					EventID: "retry-room-r1:1:0",
+					RoomID:  "retry-room",
+					MatchID: "retry-room-r1",
+					Seq:     1,
+					Type:    "count_changed",
+				}},
+			}}}
+			engine := &retryProjectionEngine{visibility: contracts.VisibilityPrivate}
+			actor := &RoomActor{
+				host: &Host{
+					nodeID: "roomhost-a",
+					store:  store,
+					router: router,
+				},
+				record: contracts.RoomRecord{
+					RoomID:        "retry-room",
+					GameType:      "counting",
+					Visibility:    contracts.VisibilityPublic,
+					OwnerNode:     "roomhost-a",
+					Epoch:         3,
+					EngineVersion: "counting-v1",
+				},
+				match: contracts.MatchRecord{
+					MatchID: "retry-room-r1",
+					Status:  contracts.MatchStatusRunning,
+				},
+				definition: game.Definition{
+					GameType: "counting",
+					Version:  "counting-v1",
+					Engine:   engine,
+				},
+				state:          &countingState{Count: 4},
+				seq:            1,
+				processed:      map[string]contracts.CommandAck{},
+				historyDirty:   true,
+				operationDirty: true,
+				snapshotDirty:  true,
+				spectatorDirty: true,
+				metadataDirty:  true,
+				outboundDirty:  true,
+			}
+
+			actor.retryDirtyProjectionsLocked(context.Background())
+			if !test.dirty(actor) {
+				t.Fatalf("%s failure was marked clean: %+v", test.name, dirtyProjectionState(actor))
+			}
+			dirtyCount := 0
+			for _, dirty := range dirtyProjectionState(actor) {
+				if dirty {
+					dirtyCount++
+				}
+			}
+			if dirtyCount != 1 {
+				t.Fatalf("%s failure blocked another projection: %+v", test.name, dirtyProjectionState(actor))
+			}
+
+			test.clear(store)
+			actor.retryDirtyProjectionsLocked(context.Background())
+			for name, dirty := range dirtyProjectionState(actor) {
+				if dirty {
+					t.Fatalf("%s remained dirty after retry: %+v", name, dirtyProjectionState(actor))
+				}
+			}
+			before := []int{
+				len(store.operationEvents),
+				len(store.savedSnapshots),
+				len(store.savedSpectator),
+				len(store.visibilityCalls),
+				len(store.savedOutbound),
+				len(router.delivered),
+			}
+			actor.retryDirtyProjectionsLocked(context.Background())
+			after := []int{
+				len(store.operationEvents),
+				len(store.savedSnapshots),
+				len(store.savedSpectator),
+				len(store.visibilityCalls),
+				len(store.savedOutbound),
+				len(router.delivered),
+			}
+			if !reflect.DeepEqual(after, before) {
+				t.Fatalf("clean retry produced side effects: before=%v after=%v", before, after)
+			}
+		})
+	}
+}
+
+func TestRetryDirtyProjectionsSkipsClosedRoom(t *testing.T) {
+	actor := &RoomActor{
+		closed:         true,
+		historyDirty:   true,
+		operationDirty: true,
+		snapshotDirty:  true,
+		spectatorDirty: true,
+		metadataDirty:  true,
+		outboundDirty:  true,
+	}
+	before := dirtyProjectionState(actor)
+	actor.retryDirtyProjectionsLocked(context.Background())
+	if after := dirtyProjectionState(actor); !reflect.DeepEqual(after, before) {
+		t.Fatalf("closed room dirty state changed: before=%v after=%v", before, after)
+	}
+}
+
+func TestDavinciHistoryPlayersResolveIdentityFromMatchRoster(t *testing.T) {
+	store := &fakeRoomhostStore{matchPlayers: []contracts.MatchPlayerRecord{
+		{
+			UserID:      "137",
+			PlayerID:    "runtime-player-137",
+			DisplayName: "Alice",
+		},
+		{
+			PlayerID:    "AI_2",
+			DisplayName: "AI",
+			IsAI:        true,
+		},
+	}}
+	actor := &RoomActor{
+		host:  &Host{store: store},
+		match: contracts.MatchRecord{MatchID: "davinci-room-r1"},
+	}
+	players, err := actor.historyPlayersLocked(context.Background(), []game.HistoryPlayer{
+		{PlayerID: "runtime-player-137", SeatIndex: 0, IsWinner: true},
+		{PlayerID: "AI_2", SeatIndex: 1, IsAI: true},
+	}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(players) != 2 {
+		t.Fatalf("players = %+v", players)
+	}
+	human, ai := players[0], players[1]
+	if human.UserID == nil || *human.UserID != 137 ||
+		human.PlayerID != "137" ||
+		human.SourcePlayerID != "runtime-player-137" ||
+		human.DisplayName != "Alice" {
+		t.Fatalf("resolved human identity = %+v", human)
+	}
+	if ai.UserID != nil || ai.PlayerID != "AI_2" || !ai.IsAI {
+		t.Fatalf("resolved AI identity = %+v", ai)
+	}
+}
+
+func dirtyProjectionState(actor *RoomActor) map[string]bool {
+	return map[string]bool{
+		"history":   actor.historyDirty,
+		"operation": actor.operationDirty,
+		"snapshot":  actor.snapshotDirty,
+		"spectator": actor.spectatorDirty,
+		"metadata":  actor.metadataDirty,
+		"outbound":  actor.outboundDirty,
+	}
 }
 
 func TestBroadcastDoesNotPublishWhenReliablePersistenceFails(t *testing.T) {
