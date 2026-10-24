@@ -21,7 +21,7 @@ import (
 
 const (
 	GameType          = "splendor"
-	EngineVersion     = "splendor-v4"
+	EngineVersion     = "splendor-v5"
 	defaultMaxPlayers = 4
 	maxNoHumanChecks  = 3
 )
@@ -401,6 +401,23 @@ func ensureState(state *domain.GameState) {
 	if state.Players == nil {
 		state.Players = map[string]*domain.PlayerState{}
 	}
+	for _, player := range state.Players {
+		if player == nil {
+			continue
+		}
+		if player.NormalCard == nil {
+			player.NormalCard = []entities.NormalCard{}
+		}
+		if player.NobleCard == nil {
+			player.NobleCard = []entities.NobleCard{}
+		}
+		if player.Gem == nil {
+			player.Gem = map[string]int{}
+		}
+		if player.ReserveCard == nil {
+			player.ReserveCard = []entities.NormalCard{}
+		}
+	}
 	if state.Visibility == "" {
 		state.Visibility = contracts.VisibilityPublic
 	}
@@ -600,7 +617,12 @@ func initBoard(state *domain.GameState) {
 		"Red": gemCount, "Black": gemCount, "Gold": 5,
 	}
 	for _, playerID := range state.PlayerOrder {
-		state.Players[playerID] = &domain.PlayerState{Gem: map[string]int{}}
+		state.Players[playerID] = &domain.PlayerState{
+			NormalCard:  []entities.NormalCard{},
+			NobleCard:   []entities.NobleCard{},
+			Gem:         map[string]int{},
+			ReserveCard: []entities.NormalCard{},
+		}
 	}
 	state.CurrentPlayer = ""
 	state.FirstPlayer = ""

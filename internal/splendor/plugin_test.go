@@ -35,6 +35,12 @@ func TestPluginLifecycleAndHistory(t *testing.T) {
 	apply("7", "connect", nil)
 	apply("7", "match_add_ai", map[string]any{"seatIndex": 1})
 	apply("7", "match_begin", nil)
+	for playerID, player := range state.Players {
+		if player.NormalCard == nil || player.NobleCard == nil ||
+			player.Gem == nil || player.ReserveCard == nil {
+			t.Fatalf("player %s has nil collections: %+v", playerID, player)
+		}
+	}
 	apply("7", "game_ready", nil)
 	apply("ai_2", "game_ready", nil)
 	if state.RoomStatus != domain.RoomStatusPlaying || state.CurrentPlayer == "" {
@@ -54,6 +60,22 @@ func TestPluginLifecycleAndHistory(t *testing.T) {
 		t.Fatalf("materialized replay projection = %+v", projection)
 	}
 	assertReplayFrameMatchesGolden(t, projection.ReplayFrame)
+}
+
+func TestPluginDecodeStateNormalizesPlayerCollections(t *testing.T) {
+	plugin := &Plugin{}
+	decoded, err := plugin.DecodeState(
+		context.Background(),
+		[]byte(`{"players":{"player-1":{}}}`),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	player := decoded.(*domain.GameState).Players["player-1"]
+	if player.NormalCard == nil || player.NobleCard == nil ||
+		player.Gem == nil || player.ReserveCard == nil {
+		t.Fatalf("decoded player has nil collections: %+v", player)
+	}
 }
 
 func TestSplendorAIStaysReadyForSingleHumanStart(t *testing.T) {
