@@ -1,71 +1,110 @@
 # Game Plugin Guide
 
-This platform uses compile-time Go plugins: each game implements the stable
-`internal/game` interfaces and is registered in `internal/plugins`.
+Games use compile-time Go interfaces, but production packages each game in an
+independent RoomHost image. The shared runtime stays in `internal/roomhost` and
+`internal/roomhostapp`; a production entrypoint imports exactly one game.
 
 ## Contract
 
-A game plugin must provide a `game.Definition`:
+A game provides a `game.Definition`:
 
 ```go
 func Definition() game.Definition {
+	plugin := NewPlugin()
 	return game.Definition{
 		GameType:          "my-game",
 		Version:           "my-game-v1",
 		DefaultMaxPlayers: 4,
-		Engine:            NewPlugin(),
-		AI:                NewAIPlanner(), // optional
+		Engine:            plugin,
+		AI:                plugin,
+		History:           plugin,
+		LegacyReplay:      plugin,
 	}
 }
 ```
 
-The engine must implement:
+`game.Engine` must implement initialization, command application, state codec,
+and player view generation. Games with hidden randomness must reject a missing
+private seed and persist the seed/counter needed for deterministic recovery.
 
-- `InitRoom`: create initial room state from the supplied private
-  `RoomConfig.RandomSeed`; reject a missing seed for games with hidden
-  randomness.
-- `ApplyCommand`: validate and apply one room command.
-- `EncodeState` / `DecodeState`: persist and restore snapshots.
-- `BuildPlayerView`: return the private view for a single player.
-- `GameType` / `Version`: identify the game and snapshot format.
+`History` is the online write projection. It emits:
 
-Optional AI support is provided by `game.AIPlanner`. The planner returns a
-normal `contracts.RoomCommand`; RoomHost applies that command through the same
-engine path as human actions.
+- `ReplaySchemaVersion`;
+- a replay frame containing only `roomData`, `playersData`, and `result`;
+- legacy state blobs retained for audit and migration.
 
-## Registration
+`LegacyReplay` exists only for `cmd/backfill-replay`. Center services must never
+load it.
 
-Add the game package to `internal/plugins/registry.go`:
+## Production Entrypoint
+
+Add one command:
 
 ```go
-func Registry() *game.Registry {
-	return game.NewRegistry(
-		davinci.Definition(),
-		mygame.Definition(),
-	)
+func main() {
+	if err := roomhostapp.Run(mygame.Definition()); err != nil {
+		log.Fatal(err)
+	}
 }
 ```
 
-Control Plane, RoomHost, Gateway, recovery, snapshots, command logs, and
-broadcast delivery do not need game-specific changes after the definition is
-registered.
+Add `roomhost-mygame` to the image matrix and A/B Compose slots. Do not add the
+new game to Control Plane or Platform RPC. `internal/plugins` is only the local
+all-games and backfill registry.
+
+## Version Rules
+
+`Definition.Version` is an engine compatibility contract, not an image tag.
+
+- Change it when deterministic behavior, state encoding, recovery semantics,
+  or rules change.
+- Keep it unchanged for a compatible RoomHost infrastructure fix.
+- Use the immutable Git SHA image tag to identify the artifact.
+- Change `ReplaySchemaVersion` when the materialized replay frame shape changes.
+
+`scripts/validate-engine-version-bump.sh` enforces these rules. A compatible
+implementation-only change requires an explicit reason through
+`--compatibility-ack`; a replay golden fixture change still requires a schema
+version bump.
+
+## Catalog Registration
+
+Start the candidate RoomHost before changing desired state:
+
+```bash
+game-release register \
+  --game my-game \
+  --version my-game-v1 \
+  --default-max-players 4 \
+  --replay-schema-version 1 \
+  --artifact registry.example/game-platform-roomhost-mygame:<git-sha>
+```
+
+For an existing game, switch new room traffic with CAS:
+
+```bash
+game-release promote \
+  --game my-game \
+  --version my-game-v2 \
+  --expected-version my-game-v1 \
+  --artifact registry.example/game-platform-roomhost-mygame:<git-sha>
+```
+
+The catalog is desired state. Redis RoomHost heartbeats are observed state.
+Room creation requires both an enabled active catalog entry and a ready node
+advertising the exact version.
 
 ## Required Tests
 
-Each game plugin should include focused tests for:
+Each game must cover:
 
-- Initial state created from `game.RoomConfig`.
-- Valid and invalid command handling.
-- Snapshot encode/decode round trips.
-- Player-private view filtering.
-- Different private seeds produce different hidden outcomes, while replaying
-  the same seed and counter reproduces the same state.
-- Public object IDs and player/spectator views do not reveal hidden values or
-  the random seed.
-- Recovery replay compatibility when a snapshot is restored and later commands
-  are replayed.
+- initial state and invalid command handling;
+- state codec round trip and deterministic replay;
+- private view filtering and hidden-randomness non-disclosure;
+- exact engine-version recovery;
+- materialized replay frame generation;
+- replay golden fixture compatibility;
+- the single-game RoomHost registry containing only its definition.
 
-The platform-level tests in `internal/game`, `internal/control`, and
-`internal/roomhost` verify that definitions can be registered, rooms are
-created through the plugin interface, command logs can be inspected, and
-RoomHost recovery replays commands after the latest snapshot.
+Operational release and rollback steps are in
+[`game-release-runbook.md`](game-release-runbook.md).

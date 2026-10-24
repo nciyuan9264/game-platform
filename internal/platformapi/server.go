@@ -16,6 +16,7 @@ import (
 	"github.com/nciyuan9264/game-platform/internal/authclient"
 	"github.com/nciyuan9264/game-platform/internal/contracts"
 	platformtoken "github.com/nciyuan9264/game-platform/internal/platform/token"
+	"github.com/nciyuan9264/game-platform/internal/playerprofile"
 	"github.com/nciyuan9264/game-platform/internal/rpcmeta"
 	"github.com/nciyuan9264/game-platform/internal/store"
 )
@@ -30,6 +31,7 @@ type roomController interface {
 type Server struct {
 	store       *store.Store
 	auth        authclient.Client
+	profiles    *playerprofile.Resolver
 	rooms       roomController
 	spectators  spectatorStore
 	authHandler *authapi.Server
@@ -42,6 +44,7 @@ func New(st *store.Store, auth authclient.Client, rooms roomController, authConf
 	return &Server{
 		store:       st,
 		auth:        auth,
+		profiles:    playerprofile.NewResolver(auth),
 		rooms:       rooms,
 		spectators:  st,
 		authHandler: authapi.New(auth, authConfig),
@@ -126,7 +129,7 @@ func (s *Server) handleRooms(w http.ResponseWriter, r *http.Request) {
 			r.Context(),
 			req.GameType,
 			identity.UserID,
-			platformtoken.LegacyPlayerID(identity),
+			platformtoken.PlayerID(identity),
 			requestID,
 			req.MaxPlayers,
 			req.Visibility,

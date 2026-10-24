@@ -12,6 +12,7 @@ import (
 	"github.com/nciyuan9264/game-platform/internal/gateway"
 	"github.com/nciyuan9264/game-platform/internal/observability"
 	"github.com/nciyuan9264/game-platform/internal/platform/node"
+	"github.com/nciyuan9264/game-platform/internal/playerprofile"
 	"github.com/nciyuan9264/game-platform/internal/store"
 	"github.com/nciyuan9264/game-platform/internal/transport"
 )
@@ -51,7 +52,15 @@ func main() {
 		panic(err)
 	}
 	tokenVerifier := authclient.NewVerifier(authClient, authClient)
-	srv := gateway.NewServer(nodeID, tokenVerifier, st, router, coord)
+	srv := gateway.NewServer(
+		nodeID,
+		tokenVerifier,
+		st,
+		router,
+		coord,
+		playerprofile.NewResolver(authClient),
+		observability.EnvDuration("PROFILE_REFRESH_INTERVAL", time.Minute),
+	)
 	if err := srv.Start(ctx); err != nil {
 		panic(err)
 	}

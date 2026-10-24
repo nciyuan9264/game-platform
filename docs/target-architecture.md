@@ -9,8 +9,8 @@ thing.
 | --- | --- | --- |
 | Repository | `auth`, `game-platform`, `pam-idl` | Split by ownership and release lifecycle. |
 | Business service | Auth Center, Game Platform | A service owns its data and external contract. |
-| Deployment process | Platform API, Control Plane, Gateway, RoomHost | Split by scaling, fault, latency, and security needs. |
-| In-process module | DaVinci, Acquire | Game rules execute inside RoomHost. |
+| Deployment process | Platform RPC, Control Plane, Gateway, per-game RoomHost pools | Split by release cadence, scaling, fault, latency, and security needs. |
+| In-process module | DaVinci, Acquire, Splendor | One game engine executes inside each production RoomHost image. |
 
 ## 2. Runtime Architecture
 
@@ -25,20 +25,21 @@ flowchart LR
 
     Control -->|room.control.owner| NATS
     Gateway -->|room.cmd.owner| NATS
-    NATS --> RoomHost
-    RoomHost -->|delivery| NATS
+    NATS --> RoomHostPools[Per-game RoomHost A/B pools]
+    RoomHostPools -->|delivery| NATS
     NATS --> Gateway
 
-    RoomHost --> DaVinci[DaVinci Engine]
-    RoomHost --> Acquire[Acquire Engine]
+    RoomHostPools --> DaVinci[DaVinci Engine]
+    RoomHostPools --> Acquire[Acquire Engine]
+    RoomHostPools --> Splendor[Splendor Engine]
 
     AuthRPC --> AuthDB[(auth_center)]
     PlatformAPI --> PlatformDB[(game_platform)]
     Control --> PlatformDB
-    RoomHost --> PlatformDB
+    RoomHostPools --> PlatformDB
     Gateway --> Redis[(Redis hot state)]
     Control --> Etcd[(etcd owner lease)]
-    RoomHost --> JetStream[(JetStream command log)]
+    RoomHostPools --> JetStream[(JetStream command log)]
 ```
 
 ## 3. Service Responsibilities
@@ -118,7 +119,8 @@ RoomHost owns room actors:
 
 ### Game Plugins
 
-DaVinci and Acquire are compile-time Go plugins inside RoomHost.
+DaVinci, Acquire, and Splendor are compile-time Go engines. Production builds a
+separate RoomHost image for each engine while keeping execution in-process.
 
 Plugins may:
 
@@ -212,19 +214,28 @@ Generated code is never edited manually.
 Keep game code in the platform repository while:
 
 - one team owns platform and games;
-- game releases require a RoomHost rebuild anyway;
+- each game has an independent RoomHost image and release cadence;
 - no third-party plugin SDK is required.
 
 Extract a versioned `game-sdk` only when at least one of these is true:
 
 - an independent team owns a game;
 - third parties need to implement games;
-- games require independent RoomHost images/release cadence;
 - fault/resource isolation by game is required.
 
-RoomHost heartbeat advertises supported engine versions. Control Plane only
-schedules a room to a compatible RoomHost, and recovery fails closed when the
-room or snapshot engine version does not match the loaded plugin.
+PostgreSQL `game_catalog` is desired state and selects the active version for
+new rooms. Redis RoomHost heartbeat is observed state. Control Plane only
+schedules to a `ready` node advertising the exact active version. A `draining`
+node continues existing commands and compatible recovery but receives no new
+room creation.
+
+Engine version identifies state/behavior compatibility. Image Git SHA
+identifies an artifact. Promotion changes only new-room traffic; old and new
+versions coexist until the old pool reaches zero active rooms.
+
+Replay frames are generated on the RoomHost write path and stored as bounded
+gzip JSON. Platform RPC maps those frames to the existing typed API without
+loading a game engine. Legacy replay decoders exist only in the backfill tool.
 
 ## 9. Room And Match Lifecycles
 
@@ -351,9 +362,9 @@ Production and test environments use the same Docker Compose service topology:
 - Auth RPC x1;
 - Platform API x2 behind `platform-api-lb`;
 - Gateway x2 behind `gateway-lb`;
-- RoomHost x2;
+- Acquire, DaVinci, and Splendor RoomHost A/B slots;
 - Control Plane x1;
-- RoomHost graceful snapshot and owner release during rolling shutdown;
+- per-game drain, promotion, rollback, and zero-room shutdown;
 - one PostgreSQL, Redis, etcd, and persistent NATS JetStream instance.
 
 [`docker-compose.yml`](../docker-compose.yml) is the single-host baseline.

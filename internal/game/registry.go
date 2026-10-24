@@ -51,7 +51,7 @@ func (r ViewRequest) PlayerProfile(playerID string) PlayerProfile {
 		profile.UserID = playerID
 	}
 	if profile.DisplayName == "" {
-		profile.DisplayName = playerID
+		profile.DisplayName = fmt.Sprintf("玩家 %s", profile.UserID)
 	}
 	return profile
 }
@@ -197,6 +197,7 @@ type HumanPresenceObserver interface {
 type HistoryPlayer struct {
 	UserID      string
 	PlayerID    string
+	DisplayName string
 	SeatIndex   int
 	IsAI        bool
 	FinalScore  *int
@@ -207,22 +208,27 @@ type HistoryPlayer struct {
 }
 
 type HistoryProjection struct {
-	Started           bool
-	Finished          bool
-	AbandonedEligible bool
-	StartedAt         time.Time
-	MaxPlayers        int
-	InitialState      []byte
-	StateBlob         []byte
-	FinalResult       any
-	WinnerUserID      string
-	WinnerPlayerID    string
-	Players           []HistoryPlayer
+	Started             bool
+	Finished            bool
+	AbandonedEligible   bool
+	StartedAt           time.Time
+	MaxPlayers          int
+	ReplaySchemaVersion int
+	ReplayFrame         any
+	InitialState        []byte
+	StateBlob           []byte
+	FinalResult         any
+	WinnerUserID        string
+	WinnerPlayerID      string
+	Players             []HistoryPlayer
 }
 
 type HistoryProvider interface {
 	ProjectHistory(ctx context.Context, state State) (HistoryProjection, error)
 	IsRecordableCommand(commandType string) bool
+}
+
+type LegacyReplayProvider interface {
 	DecodeReplayState(
 		ctx context.Context,
 		initialState,
@@ -241,6 +247,7 @@ type Definition struct {
 	AI                AIPlanner
 	Scheduler         Scheduler
 	History           HistoryProvider
+	LegacyReplay      LegacyReplayProvider
 }
 
 type Registry struct {

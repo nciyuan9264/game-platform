@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/nciyuan9264/game-platform/internal/contracts"
-	"github.com/nciyuan9264/game-platform/internal/game"
+	"github.com/nciyuan9264/game-platform/internal/playerprofile"
 	"github.com/nciyuan9264/game-platform/internal/store"
 )
 
@@ -22,15 +22,22 @@ type roomController interface {
 	CloseRoom(context.Context, string, string, []string, string) (contracts.RoomRecord, error)
 }
 
-type Handler struct {
-	store *store.Store
-	rooms roomController
-	games *game.Registry
+type gameCatalog interface {
+	GetGameCatalogEntry(context.Context, string) (contracts.GameCatalogEntry, error)
 }
 
-func NewHandler(st *store.Store, rooms roomController, games *game.Registry) *Handler {
-	if games == nil {
-		games = game.NewRegistry()
+type Handler struct {
+	store       *store.Store
+	rooms       roomController
+	gameCatalog gameCatalog
+	profiles    *playerprofile.Resolver
+}
+
+func NewHandler(st *store.Store, rooms roomController, profiles *playerprofile.Resolver) *Handler {
+	return &Handler{
+		store:       st,
+		rooms:       rooms,
+		gameCatalog: st,
+		profiles:    profiles,
 	}
-	return &Handler{store: st, rooms: rooms, games: games}
 }

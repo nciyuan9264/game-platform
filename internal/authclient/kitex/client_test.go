@@ -25,6 +25,8 @@ type fakeRPC struct {
 	profile       *auth.UserResp
 	profileUserID string
 	profileRoles  []string
+	publicReq     *auth.BatchGetPublicProfilesReq
+	public        *auth.BatchGetPublicProfilesResp
 	list          *auth.ListUsersResp
 	err           error
 }
@@ -87,6 +89,14 @@ func (f *fakeRPC) UploadAvatar(context.Context, *auth.UploadAvatarReq, ...callop
 }
 func (f *fakeRPC) GetUser(context.Context, *auth.GetUserReq, ...callopt.Option) (*auth.UserResp, error) {
 	return nil, errors.New("not implemented")
+}
+func (f *fakeRPC) BatchGetPublicProfiles(
+	_ context.Context,
+	req *auth.BatchGetPublicProfilesReq,
+	_ ...callopt.Option,
+) (*auth.BatchGetPublicProfilesResp, error) {
+	f.publicReq = req
+	return f.public, f.err
 }
 func (f *fakeRPC) ListUsers(context.Context, *auth.ListUsersReq, ...callopt.Option) (*auth.ListUsersResp, error) {
 	return f.list, f.err
@@ -219,6 +229,33 @@ func TestListUsersMapsProfilesAndCursor(t *testing.T) {
 	}
 	if len(resp.Users) != 1 || resp.Users[0].User.UserID != "7" || resp.Users[0].User.Email != email || resp.NextPageToken != next {
 		t.Fatalf("unexpected list response: %+v", resp)
+	}
+}
+
+func TestBatchGetPublicProfilesMapsOnlyDisplayNames(t *testing.T) {
+	rpc := &fakeRPC{public: &auth.BatchGetPublicProfilesResp{
+		StatusCode: 200,
+		Message:    "ok",
+		Data: &auth.BatchGetPublicProfilesData{
+			Profiles: []*auth.PublicUserProfile{
+				{UserId: "7", DisplayName: "Alice-Cooper-7"},
+				nil,
+				{UserId: "", DisplayName: "invalid"},
+				{UserId: "9", DisplayName: "Bob"},
+			},
+		},
+	}}
+	client := NewWithRPC(rpc)
+
+	profiles, err := client.BatchGetPublicProfiles(context.Background(), []string{"7", "9", "404"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rpc.publicReq.GetUserIds()) != 3 || rpc.publicReq.GetUserIds()[2] != "404" {
+		t.Fatalf("request = %+v", rpc.publicReq)
+	}
+	if len(profiles) != 2 || profiles["7"] != "Alice-Cooper-7" || profiles["9"] != "Bob" {
+		t.Fatalf("profiles = %v", profiles)
 	}
 }
 

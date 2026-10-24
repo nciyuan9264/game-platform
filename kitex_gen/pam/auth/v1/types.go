@@ -1437,6 +1437,158 @@ var fieldIDToName_GetUserReq = map[int16]string{
 	1: "user_id",
 }
 
+type PublicUserProfile struct {
+	UserId      string `thrift:"user_id,1,required" frugal:"1,required,string" json:"user_id"`
+	DisplayName string `thrift:"display_name,2,required" frugal:"2,required,string" json:"display_name"`
+}
+
+func NewPublicUserProfile() *PublicUserProfile {
+	return &PublicUserProfile{}
+}
+
+func (p *PublicUserProfile) InitDefault() {
+}
+
+func (p *PublicUserProfile) GetUserId() (v string) {
+	return p.UserId
+}
+
+func (p *PublicUserProfile) GetDisplayName() (v string) {
+	return p.DisplayName
+}
+func (p *PublicUserProfile) SetUserId(val string) {
+	p.UserId = val
+}
+func (p *PublicUserProfile) SetDisplayName(val string) {
+	p.DisplayName = val
+}
+
+func (p *PublicUserProfile) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("PublicUserProfile(%+v)", *p)
+}
+
+var fieldIDToName_PublicUserProfile = map[int16]string{
+	1: "user_id",
+	2: "display_name",
+}
+
+type BatchGetPublicProfilesReq struct {
+	UserIds []string `thrift:"user_ids,1,required" frugal:"1,required,list<string>" json:"user_ids"`
+}
+
+func NewBatchGetPublicProfilesReq() *BatchGetPublicProfilesReq {
+	return &BatchGetPublicProfilesReq{}
+}
+
+func (p *BatchGetPublicProfilesReq) InitDefault() {
+}
+
+func (p *BatchGetPublicProfilesReq) GetUserIds() (v []string) {
+	return p.UserIds
+}
+func (p *BatchGetPublicProfilesReq) SetUserIds(val []string) {
+	p.UserIds = val
+}
+
+func (p *BatchGetPublicProfilesReq) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("BatchGetPublicProfilesReq(%+v)", *p)
+}
+
+var fieldIDToName_BatchGetPublicProfilesReq = map[int16]string{
+	1: "user_ids",
+}
+
+type BatchGetPublicProfilesData struct {
+	Profiles []*PublicUserProfile `thrift:"profiles,1,required" frugal:"1,required,list<PublicUserProfile>" json:"profiles"`
+}
+
+func NewBatchGetPublicProfilesData() *BatchGetPublicProfilesData {
+	return &BatchGetPublicProfilesData{}
+}
+
+func (p *BatchGetPublicProfilesData) InitDefault() {
+}
+
+func (p *BatchGetPublicProfilesData) GetProfiles() (v []*PublicUserProfile) {
+	return p.Profiles
+}
+func (p *BatchGetPublicProfilesData) SetProfiles(val []*PublicUserProfile) {
+	p.Profiles = val
+}
+
+func (p *BatchGetPublicProfilesData) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("BatchGetPublicProfilesData(%+v)", *p)
+}
+
+var fieldIDToName_BatchGetPublicProfilesData = map[int16]string{
+	1: "profiles",
+}
+
+type BatchGetPublicProfilesResp struct {
+	StatusCode int32                       `thrift:"status_code,1,required" frugal:"1,required,i32" json:"status_code"`
+	Message    string                      `thrift:"message,2,required" frugal:"2,required,string" json:"message"`
+	Data       *BatchGetPublicProfilesData `thrift:"data,3,required" frugal:"3,required,BatchGetPublicProfilesData" json:"data"`
+}
+
+func NewBatchGetPublicProfilesResp() *BatchGetPublicProfilesResp {
+	return &BatchGetPublicProfilesResp{}
+}
+
+func (p *BatchGetPublicProfilesResp) InitDefault() {
+}
+
+func (p *BatchGetPublicProfilesResp) GetStatusCode() (v int32) {
+	return p.StatusCode
+}
+
+func (p *BatchGetPublicProfilesResp) GetMessage() (v string) {
+	return p.Message
+}
+
+var BatchGetPublicProfilesResp_Data_DEFAULT *BatchGetPublicProfilesData
+
+func (p *BatchGetPublicProfilesResp) GetData() (v *BatchGetPublicProfilesData) {
+	if !p.IsSetData() {
+		return BatchGetPublicProfilesResp_Data_DEFAULT
+	}
+	return p.Data
+}
+func (p *BatchGetPublicProfilesResp) SetStatusCode(val int32) {
+	p.StatusCode = val
+}
+func (p *BatchGetPublicProfilesResp) SetMessage(val string) {
+	p.Message = val
+}
+func (p *BatchGetPublicProfilesResp) SetData(val *BatchGetPublicProfilesData) {
+	p.Data = val
+}
+
+func (p *BatchGetPublicProfilesResp) IsSetData() bool {
+	return p.Data != nil
+}
+
+func (p *BatchGetPublicProfilesResp) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("BatchGetPublicProfilesResp(%+v)", *p)
+}
+
+var fieldIDToName_BatchGetPublicProfilesResp = map[int16]string{
+	1: "status_code",
+	2: "message",
+	3: "data",
+}
+
 type AuthUserRecord struct {
 	Identity      *UserIdentity `thrift:"identity,1,required" frugal:"1,required,UserIdentity" json:"identity"`
 	CreatedAtUnix int64         `thrift:"created_at_unix,2,required" frugal:"2,required,i64" json:"created_at_unix"`

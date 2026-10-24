@@ -18,13 +18,15 @@ import (
 	"github.com/nciyuan9264/game-platform/internal/authclient"
 	"github.com/nciyuan9264/game-platform/internal/contracts"
 	"github.com/nciyuan9264/game-platform/internal/coordination"
-	"github.com/nciyuan9264/game-platform/internal/game"
 	"github.com/nciyuan9264/game-platform/internal/observability"
+	"github.com/nciyuan9264/game-platform/internal/store"
 )
 
 var (
 	errNoRoomHost             = errors.New("no roomhost available")
 	errRoomCreationInProgress = errors.New("room creation is already in progress")
+	errUnknownGame            = errors.New("unknown game")
+	errGameDisabled           = errors.New("game is disabled for new rooms")
 )
 
 const (
@@ -40,6 +42,11 @@ type roomCommandSender interface {
 
 type commandLogReader interface {
 	ListCommandLog(roomID string, afterSeq int64) ([]contracts.CommandLogRecord, error)
+}
+
+type gameCatalog interface {
+	GetGameCatalogEntry(context.Context, string) (contracts.GameCatalogEntry, error)
+	GetDefaultGameCatalogEntry(context.Context) (contracts.GameCatalogEntry, error)
 }
 
 type controlStore interface {
@@ -70,7 +77,7 @@ type roomCoordinator interface {
 type Server struct {
 	store                  controlStore
 	coordinator            roomCoordinator
-	games                  *game.Registry
+	gameCatalog            gameCatalog
 	roomCommands           roomCommandSender
 	commandLogs            commandLogReader
 	adminAuth              authclient.TokenVerifier
@@ -85,7 +92,7 @@ func NewServer(store controlStore, coordinator roomCoordinator) *Server {
 type Config struct {
 	SchedulerPolicy string
 	PendingWindow   time.Duration
-	Games           *game.Registry
+	GameCatalog     gameCatalog
 	RoomCommands    roomCommandSender
 	CommandLogs     commandLogReader
 	AdminAuth       authclient.TokenVerifier
@@ -103,8 +110,10 @@ func NewServerWithConfig(store controlStore, coordinator roomCoordinator, cfg Co
 	if cfg.PendingWindow <= 0 {
 		cfg.PendingWindow = defaultSchedulerPendingWindow
 	}
-	if cfg.Games == nil {
-		cfg.Games = game.NewRegistry()
+	if cfg.GameCatalog == nil {
+		if catalog, ok := store.(gameCatalog); ok {
+			cfg.GameCatalog = catalog
+		}
 	}
 	if cfg.CommandLogs == nil {
 		if reader, ok := cfg.RoomCommands.(commandLogReader); ok {
@@ -114,7 +123,7 @@ func NewServerWithConfig(store controlStore, coordinator roomCoordinator, cfg Co
 	return &Server{
 		store:                  store,
 		coordinator:            coordinator,
-		games:                  cfg.Games,
+		gameCatalog:            cfg.GameCatalog,
 		roomCommands:           cfg.RoomCommands,
 		commandLogs:            cfg.CommandLogs,
 		adminAuth:              cfg.AdminAuth,
@@ -175,7 +184,7 @@ type createRoomRequest struct {
 }
 
 func (s *Server) createRoomRecord(ctx context.Context, req createRoomRequest) (contracts.RoomRecord, error) {
-	def, err := s.resolveGameDefinition(req.GameType)
+	def, err := s.resolveGameDefinition(ctx, req.GameType)
 	if err != nil {
 		return contracts.RoomRecord{}, err
 	}
@@ -207,7 +216,7 @@ func (s *Server) createRoomRecord(ctx context.Context, req createRoomRequest) (c
 		Status:        contracts.RoomStatusCreating,
 		MaxPlayers:    req.MaxPlayers,
 		PlayerCount:   req.PlayerCount,
-		EngineVersion: def.Version,
+		EngineVersion: def.ActiveEngineVersion,
 		NextRoundNo:   1,
 		CreatedAt:     now,
 		UpdatedAt:     now,
@@ -249,9 +258,9 @@ func (s *Server) createRoomRecord(ctx context.Context, req createRoomRequest) (c
 		}
 		return contracts.RoomRecord{}, s.compensateRoomCreation(rec, err)
 	}
-	nodes = compatibleRoomHosts(nodes, def.GameType, def.Version)
+	nodes = compatibleRoomHosts(nodes, def.GameType, def.ActiveEngineVersion)
 	if len(nodes) == 0 {
-		err := fmt.Errorf("%w: no roomhost supports %s@%s", errNoRoomHost, def.GameType, def.Version)
+		err := fmt.Errorf("%w: no roomhost supports %s@%s", errNoRoomHost, def.GameType, def.ActiveEngineVersion)
 		return contracts.RoomRecord{}, s.compensateRoomCreation(rec, err)
 	}
 	selection, err := s.selectRoomHost(ctx, nodes)
@@ -350,7 +359,7 @@ func (s *Server) startNextMatch(ctx context.Context, roomID, requestID string) (
 func compatibleRoomHosts(nodes []contracts.NodeInfo, gameType, version string) []contracts.NodeInfo {
 	compatible := make([]contracts.NodeInfo, 0, len(nodes))
 	for _, node := range nodes {
-		if node.GameVersions[gameType] == version {
+		if node.Status == contracts.NodeStatusReady && node.GameVersions[gameType] == version {
 			compatible = append(compatible, node)
 		}
 	}
@@ -432,19 +441,29 @@ func (s *Server) createRoomActor(ctx context.Context, rec contracts.RoomRecord, 
 	return nil
 }
 
-func (s *Server) resolveGameDefinition(gameType string) (game.Definition, error) {
+func (s *Server) resolveGameDefinition(ctx context.Context, gameType string) (contracts.GameCatalogEntry, error) {
+	if s.gameCatalog == nil {
+		return contracts.GameCatalogEntry{}, errors.New("game catalog is unavailable")
+	}
+	var (
+		entry contracts.GameCatalogEntry
+		err   error
+	)
 	if gameType == "" {
-		def, ok := s.games.DefaultDefinition()
-		if !ok {
-			return game.Definition{}, fmt.Errorf("%w: no default game registered", game.ErrUnknownGame)
-		}
-		return def, nil
+		entry, err = s.gameCatalog.GetDefaultGameCatalogEntry(ctx)
+	} else {
+		entry, err = s.gameCatalog.GetGameCatalogEntry(ctx, gameType)
 	}
-	def, ok := s.games.Get(gameType)
-	if !ok {
-		return game.Definition{}, fmt.Errorf("%w: %s", game.ErrUnknownGame, gameType)
+	if errors.Is(err, store.ErrGameCatalogNotFound) {
+		return contracts.GameCatalogEntry{}, fmt.Errorf("%w: %s", errUnknownGame, gameType)
 	}
-	return def, nil
+	if err != nil {
+		return contracts.GameCatalogEntry{}, err
+	}
+	if !entry.EnabledForNewRooms {
+		return contracts.GameCatalogEntry{}, fmt.Errorf("%w: %s", errGameDisabled, entry.GameType)
+	}
+	return entry, nil
 }
 
 type roomHostCandidate struct {

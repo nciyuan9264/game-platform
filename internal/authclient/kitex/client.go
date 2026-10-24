@@ -192,6 +192,24 @@ func (c *Client) GetUser(ctx context.Context, userID string) (contracts.UserIden
 	return fromRPCUser(resp.GetData()), nil
 }
 
+func (c *Client) BatchGetPublicProfiles(ctx context.Context, userIDs []string) (map[string]string, error) {
+	resp, err := c.rpc.BatchGetPublicProfiles(ctx, &auth.BatchGetPublicProfilesReq{UserIds: userIDs})
+	if err != nil {
+		return nil, err
+	}
+	profiles := make(map[string]string)
+	if resp == nil || resp.GetData() == nil {
+		return profiles, nil
+	}
+	for _, profile := range resp.GetData().GetProfiles() {
+		if profile == nil || profile.GetUserId() == "" {
+			continue
+		}
+		profiles[profile.GetUserId()] = profile.GetDisplayName()
+	}
+	return profiles, nil
+}
+
 func (c *Client) ListUsers(ctx context.Context, req authclient.ListUsersRequest) (authclient.ListUsersResponse, error) {
 	rpcReq := &auth.ListUsersReq{}
 	if req.PageSize > 0 {

@@ -295,6 +295,9 @@ services:
       KITEX_IP_TO_REGISTRY: "${PRIMARY_HOST:-10.37.223.1}"
       KITEX_PORT_TO_REGISTRY: "18092"
       CONTROL_RPC_ADDR: "${PRIMARY_HOST:-10.37.223.1}:18091"
+      AUTH_RPC_ADDR: auth-rpc:19090
+      AUTH_RPC_PSM: pam.auth.rpc
+      AUTH_RPC_TIMEOUT: "${AUTH_RPC_TIMEOUT:-2s}"
     ports:
       - "${DISTRIBUTED_BIND_ADDR:-0.0.0.0}:18092:18092"
       - "${DISTRIBUTED_BIND_ADDR:-0.0.0.0}:18093:18093"
@@ -366,6 +369,8 @@ services:
       NODE_ID: gateway-a
       PUBLIC_ADDR: "${PRIMARY_HOST:-10.37.223.1}:${GATEWAY_A_PORT:-18081}"
       AUTH_RPC_ADDR: auth-rpc:19090
+      AUTH_RPC_TIMEOUT: "${AUTH_RPC_TIMEOUT:-2s}"
+      PROFILE_REFRESH_INTERVAL: "${PROFILE_REFRESH_INTERVAL:-60s}"
       NATS_URL: "nats://gateway-a:${NATS_GATEWAY_A_PASSWORD:-local-gateway-a}@nats:4222"
       WS_ALLOWED_ORIGINS: *browser_origins
     ports:

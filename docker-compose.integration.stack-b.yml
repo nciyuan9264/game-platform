@@ -42,6 +42,8 @@ services:
       GAME_PLATFORM_HEALTH_ADDR: ":18093"
       GAME_PLATFORM_RPC_PSM: game.platform.rpc
       CONTROL_RPC_ADDR: control-plane:18091
+      AUTH_RPC_ADDR: auth-rpc:19090
+      AUTH_RPC_TIMEOUT: "${AUTH_RPC_TIMEOUT:-2s}"
     depends_on:
       schema-migrate:
         condition: service_completed_successfully
@@ -93,6 +95,8 @@ services:
       NODE_ID: gateway-b
       PUBLIC_ADDR: gateway-b:8080
       AUTH_RPC_ADDR: auth-rpc:19090
+      AUTH_RPC_TIMEOUT: "${AUTH_RPC_TIMEOUT:-2s}"
+      PROFILE_REFRESH_INTERVAL: "${PROFILE_REFRESH_INTERVAL:-60s}"
       NATS_URL: "nats://gateway-b:${NATS_GATEWAY_B_PASSWORD:-local-gateway-b}@nats:4222"
     labels:
       - traefik.enable=true

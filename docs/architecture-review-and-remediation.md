@@ -1169,6 +1169,23 @@ room_player_views
 - 不把运维观测与用户/对局业务管理混在同一服务边界；
 - 不为了“微服务完整”继续拆分当前 Store 或插件模块；
 - 不在 RoomHost 热路径同步增加更多跨服务调用；
+
+## 18. 游戏引擎独立发布边界
+
+游戏规则继续与 RoomHost runtime 同进程执行。这里没有把核心规则改成
+远程 RPC，因为那会给每条命令增加网络故障、序列化和版本协商成本。
+
+发布隔离通过进程和制品边界实现：
+
+- Acquire、DaVinci、Splendor 各自编译独立 RoomHost 镜像；
+- PostgreSQL `game_catalog` 原子选择新房间的 active engine version；
+- Redis 心跳报告每个节点真实支持的精确版本及 `ready/draining` 状态；
+- A/B 槽允许两个版本并存，旧房间不迁移、不强杀；
+- `SIGUSR1` 只停止新建房间，`SIGUSR2` 恢复同版本制品接流量；
+- Platform RPC 从物化回放帧读取历史，不再加载游戏实现。
+
+因此，修改单个游戏规则只发布该游戏池；修改共享 RoomHost runtime 才重建
+三个游戏镜像。中心服务、Gateway 和其他游戏池不会因单游戏规则发布而重启。
 - 不依赖更长 timeout 掩盖缺少幂等、outbox 和 fencing 的问题。
 
 当前最有价值的投入不是增加组件，而是把已有组件之间的权限、状态机、幂等、fencing、补偿和观测协议补完整。

@@ -88,6 +88,9 @@ func (f *fakeAuthClient) UploadAvatar(context.Context, authclient.UploadAvatarRe
 func (f *fakeAuthClient) GetUser(context.Context, string) (contracts.UserIdentity, error) {
 	return f.login.User, f.err
 }
+func (f *fakeAuthClient) BatchGetPublicProfiles(context.Context, []string) (map[string]string, error) {
+	return map[string]string{}, f.err
+}
 func (f *fakeAuthClient) ListUsers(context.Context, authclient.ListUsersRequest) (authclient.ListUsersResponse, error) {
 	return authclient.ListUsersResponse{}, f.err
 }

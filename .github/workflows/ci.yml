@@ -17,12 +17,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: game-platform
+          fetch-depth: 0
 
       - name: Checkout pinned IDL
         uses: actions/checkout@v4
         with:
           repository: nciyuan9264/pam-idl
-          ref: bfa32fb7b35dc37d382bf879a947fa5ad6d99419
+          ref: 8a28c457c894d89c497c4fb316d60f7dd7e51565
           path: pam-idl
 
       - name: Setup Go
@@ -53,6 +54,21 @@ jobs:
           go vet ./...
           go test ./...
 
+      - name: Validate release classification
+        working-directory: game-platform
+        env:
+          EVENT_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          ./scripts/changed-release-components-test.sh
+          ./scripts/validate-engine-version-bump-test.sh
+          ./scripts/validate-center-imports.sh
+          base="${EVENT_BASE_SHA}"
+          if [ -z "${base}" ] || [ "${base}" = "0000000000000000000000000000000000000000" ]; then
+            base="$(git rev-parse HEAD^)"
+          fi
+          ./scripts/changed-release-components.sh "${base}" HEAD | jq .
+          ./scripts/validate-engine-version-bump.sh "${base}" HEAD
+
       - name: Build service binaries
         working-directory: game-platform
         run: |
@@ -61,9 +77,15 @@ jobs:
             control-plane
             gateway
             roomhost
+            roomhost-acquire
+            roomhost-davinci
+            roomhost-splendor
             platform-api
             migrate-schema
             migrate-game-history
+            backfill-replay
+            game-release
+            normalize-player-identities
             smoke-test
           )
           pids=()
@@ -102,6 +124,18 @@ jobs:
           NATS_GATEWAY_B_PASSWORD: ci-gateway-b
           NATS_ROOMHOST_A_PASSWORD: ci-roomhost-a
           NATS_ROOMHOST_B_PASSWORD: ci-roomhost-b
+          ACQUIRE_ROOMHOST_A_IMAGE: registry.example.com/game-platform-roomhost-acquire:ci-a
+          ACQUIRE_ROOMHOST_B_IMAGE: registry.example.com/game-platform-roomhost-acquire:ci-b
+          ACQUIRE_ROOMHOST_A_VERSION: ci-a
+          ACQUIRE_ROOMHOST_B_VERSION: ci-b
+          DAVINCI_ROOMHOST_A_IMAGE: registry.example.com/game-platform-roomhost-davinci:ci-a
+          DAVINCI_ROOMHOST_B_IMAGE: registry.example.com/game-platform-roomhost-davinci:ci-b
+          DAVINCI_ROOMHOST_A_VERSION: ci-a
+          DAVINCI_ROOMHOST_B_VERSION: ci-b
+          SPLENDOR_ROOMHOST_A_IMAGE: registry.example.com/game-platform-roomhost-splendor:ci-a
+          SPLENDOR_ROOMHOST_B_IMAGE: registry.example.com/game-platform-roomhost-splendor:ci-b
+          SPLENDOR_ROOMHOST_A_VERSION: ci-a
+          SPLENDOR_ROOMHOST_B_VERSION: ci-b
         run: |
           docker compose -f docker-compose.yml config >/dev/null
           docker compose -f docker-compose.distributed.primary.yml config >/dev/null

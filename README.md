@@ -9,7 +9,8 @@
 - `cmd/platform-rpc`：统一 `GamePlatformService` Kitex RPC，承接玩家房间、历史、统计和排行接口。
 - `cmd/control-plane`：内部 Control Plane Kitex RPC + 运维 HTTP，负责调度、房间生命周期、实例与拓扑。
 - `cmd/gateway`：Realtime Gateway，负责 WebSocket 鉴权、session/presence 注册、命令路由、下行投递。
-- `cmd/roomhost`：RoomHost，负责承载长期 RoomActor 和每局独立的 MatchRuntime，单房间单 owner 串行执行。
+- `cmd/roomhost-acquire`、`cmd/roomhost-davinci`、`cmd/roomhost-splendor`：单游戏 RoomHost 生产制品，负责承载长期 RoomActor 和每局独立的 MatchRuntime。
+- `cmd/roomhost`：仅供本地和集成测试使用的 all-games RoomHost，不进入生产发布矩阵。
 - `cmd/smoke-test`：端到端自测客户端。
 - `web/`：集成测试前端页面，支持登录、创建房间、连接 WS、发送命令、查看消息和操作日志。
 
@@ -31,8 +32,9 @@ Game Plugins: DaVinci / Acquire / Splendor
 - 节点心跳逻辑位于 `internal/platform/node`，Control Plane 和 Gateway 复用该基础设施包。
 - Control Plane 只提供内部房间控制 RPC 和运维观测 HTTP，不承接业务后台 API，也不进入实时命令热路径。
 - Distributed Runtime 使用 `room.cmd.<ownerNode>` 承载 Gateway 游戏命令，使用 `room.control.<ownerNode>` 承载 Control Plane 生命周期命令，NATS pub/sub 处理广播，JetStream 处理 command log。
-- RoomHost 和 Control Plane 只依赖 `internal/game` 插件接口，不直接依赖具体游戏。
-- 当前 `internal/plugins` 注册 DaVinci、Acquire 和 Splendor；后续新增游戏应注册 `game.Definition`，而不是改 RoomHost 的执行逻辑。
+- RoomHost runtime 只依赖 `internal/game` 接口；每个生产入口只编译一个游戏定义。
+- Control Plane 从 PostgreSQL `game_catalog` 读取 active engine version，不加载游戏实现。
+- `internal/plugins` 只供本地 all-games 入口和回放回填工具使用，不得被生产中心服务引用。
 
 ## 当前架构入口
 
@@ -43,10 +45,11 @@ Game Plugins: DaVinci / Acquire / Splendor
 - Auth RPC 迁移：[`docs/auth-rpc-migration.md`](docs/auth-rpc-migration.md)
 - 游戏日志架构：[`docs/game-log-architecture.md`](docs/game-log-architecture.md)
 - 游戏插件接入：[`docs/game-plugin-guide.md`](docs/game-plugin-guide.md)
+- 游戏独立发布：[`docs/game-release-runbook.md`](docs/game-release-runbook.md)
 
 ## 游戏插件模型
 
-本项目按 Nakama 风格使用“平台仓库 + 游戏插件”的接入方式：平台 runtime 固定提供 Gateway、Control Plane、RoomHost、调度、路由、租约、恢复、快照和命令日志；具体游戏以插件形式实现并注册到 `internal/plugins`。
+本项目使用“平台仓库 + 编译期单游戏 RoomHost 制品”的接入方式：共享 runtime 固定提供 Gateway、Control Plane、RoomHost、调度、路由、租约、恢复、快照和命令日志；每个游戏实现同一接口，但独立编译、发布和排空。
 
 插件需要提供：
 
@@ -54,7 +57,7 @@ Game Plugins: DaVinci / Acquire / Splendor
 - 可选 `game.AIPlanner`：根据规则层暴露的 AI request 生成普通 room command。
 - `game.Definition`：声明 `gameType`、版本、默认人数、Engine 和 AI。
 
-Runtime 不应 import 具体游戏包；具体游戏只应出现在插件清单或游戏自身实现中。
+中心 runtime 不应 import 具体游戏包；具体游戏只应出现在对应 RoomHost 入口、游戏自身实现或离线回填工具中。
 
 Control Plane 为每个 Match 生成安全随机 seed，RoomHost 在 Match 运行时创建成功前保存 seq=0 初始快照。
 插件必须把 seed/counter 编入状态以保证重放确定性，但不得通过玩家视图、观战视图或
@@ -73,8 +76,8 @@ Platform API
   -> call Control Plane Kitex RPC
 
 Control Plane
-  -> resolve game definition
-  -> select RoomHost owner
+  -> resolve active version from game_catalog
+  -> select a ready RoomHost with the exact game/version
   -> write room metadata
   -> reserve round 1 match metadata and random seed
   -> init owner lease

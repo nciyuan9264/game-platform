@@ -36,9 +36,6 @@ func (h *Handler) roomInfo(ctx context.Context, room contracts.RoomRecord) (*pla
 				if displayName == "" {
 					displayName = player.Name
 				}
-				if displayName == "" {
-					displayName = player.PlayerID
-				}
 				mapped := &platform.RoomPlayer{
 					PlayerID:    player.PlayerID,
 					DisplayName: displayName,
@@ -171,6 +168,9 @@ func mapHistoryPlayers(values []history.Player) []*platform.HistoryGamePlayer {
 			FinalStocks: int32(value.FinalStocks),
 			IsWinner:    value.IsWinner,
 			CreatedAt:   platform.ISODateTime(formatTime(value.CreatedAt)),
+		}
+		if value.DisplayName != "" {
+			mapped.DisplayName = stringPointer(value.DisplayName)
 		}
 		mapped.FinalScore = int32Pointer(value.FinalScore)
 		mapped.FinalMoney = int32Pointer(value.FinalMoney)

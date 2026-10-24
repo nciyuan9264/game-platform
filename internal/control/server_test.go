@@ -15,7 +15,6 @@ import (
 	"github.com/nciyuan9264/game-platform/internal/contracts"
 	"github.com/nciyuan9264/game-platform/internal/coordination"
 	"github.com/nciyuan9264/game-platform/internal/davinci"
-	"github.com/nciyuan9264/game-platform/internal/game"
 	"github.com/nciyuan9264/game-platform/internal/store"
 )
 
@@ -41,6 +40,39 @@ type failingTokenVerifier struct{}
 
 func (failingTokenVerifier) VerifyToken(context.Context, authclient.VerifyTokenRequest) (authclient.VerifyTokenResponse, error) {
 	return authclient.VerifyTokenResponse{}, errors.New("auth rpc unavailable")
+}
+
+type staticGameCatalog struct {
+	entries     map[string]contracts.GameCatalogEntry
+	defaultGame string
+}
+
+func davinciCatalog() *staticGameCatalog {
+	entry := contracts.GameCatalogEntry{
+		GameType:            contracts.GameDaVinci,
+		ActiveEngineVersion: davinci.EngineVersion,
+		DefaultMaxPlayers:   2,
+		ReplaySchemaVersion: 1,
+		EnabledForNewRooms:  true,
+		IsDefault:           true,
+		Revision:            1,
+	}
+	return &staticGameCatalog{
+		entries:     map[string]contracts.GameCatalogEntry{entry.GameType: entry},
+		defaultGame: entry.GameType,
+	}
+}
+
+func (c *staticGameCatalog) GetGameCatalogEntry(_ context.Context, gameType string) (contracts.GameCatalogEntry, error) {
+	entry, ok := c.entries[gameType]
+	if !ok {
+		return contracts.GameCatalogEntry{}, store.ErrGameCatalogNotFound
+	}
+	return entry, nil
+}
+
+func (c *staticGameCatalog) GetDefaultGameCatalogEntry(ctx context.Context) (contracts.GameCatalogEntry, error) {
+	return c.GetGameCatalogEntry(ctx, c.defaultGame)
 }
 
 func TestAdminRoutesRequireAdminRole(t *testing.T) {
@@ -122,6 +154,7 @@ func (s *roomCreationStore) ListNodes(context.Context, string) ([]contracts.Node
 		NodeID:       "roomhost-a",
 		Type:         contracts.NodeTypeRoomHost,
 		ActiveRooms:  0,
+		Status:       contracts.NodeStatusReady,
 		GameVersions: map[string]string{contracts.GameDaVinci: davinci.EngineVersion},
 	}}, nil
 }
@@ -215,17 +248,17 @@ func (c *roomCreationCoordinator) DeleteRoomOwner(_ context.Context, roomID, own
 }
 
 func TestResolveGameDefinitionUsesRegisteredDefault(t *testing.T) {
-	server := NewServerWithConfig(nil, nil, Config{Games: game.NewRegistry(davinci.Definition())})
+	server := NewServerWithConfig(nil, nil, Config{GameCatalog: davinciCatalog()})
 
-	def, err := server.resolveGameDefinition("")
+	def, err := server.resolveGameDefinition(context.Background(), "")
 	if err != nil {
 		t.Fatalf("resolveGameDefinition() error = %v", err)
 	}
 	if def.GameType != contracts.GameDaVinci {
 		t.Fatalf("game type = %q, want %q", def.GameType, contracts.GameDaVinci)
 	}
-	if def.Version != davinci.EngineVersion {
-		t.Fatalf("version = %q, want %q", def.Version, davinci.EngineVersion)
+	if def.ActiveEngineVersion != davinci.EngineVersion {
+		t.Fatalf("version = %q, want %q", def.ActiveEngineVersion, davinci.EngineVersion)
 	}
 	if def.DefaultMaxPlayers != 2 {
 		t.Fatalf("default max players = %d, want 2", def.DefaultMaxPlayers)
@@ -233,11 +266,36 @@ func TestResolveGameDefinitionUsesRegisteredDefault(t *testing.T) {
 }
 
 func TestResolveGameDefinitionRejectsUnknownGame(t *testing.T) {
-	server := NewServerWithConfig(nil, nil, Config{Games: game.NewRegistry(davinci.Definition())})
+	server := NewServerWithConfig(nil, nil, Config{GameCatalog: davinciCatalog()})
 
-	_, err := server.resolveGameDefinition("missing-game")
-	if !errors.Is(err, game.ErrUnknownGame) {
+	_, err := server.resolveGameDefinition(context.Background(), "missing-game")
+	if !errors.Is(err, errUnknownGame) {
 		t.Fatalf("resolveGameDefinition() error = %v, want ErrUnknownGame", err)
+	}
+}
+
+func TestResolveGameDefinitionRejectsDisabledGame(t *testing.T) {
+	catalog := davinciCatalog()
+	entry := catalog.entries[contracts.GameDaVinci]
+	entry.EnabledForNewRooms = false
+	catalog.entries[contracts.GameDaVinci] = entry
+	server := NewServerWithConfig(nil, nil, Config{GameCatalog: catalog})
+
+	_, err := server.resolveGameDefinition(context.Background(), contracts.GameDaVinci)
+	if !errors.Is(err, errGameDisabled) {
+		t.Fatalf("resolveGameDefinition() error = %v, want errGameDisabled", err)
+	}
+}
+
+func TestCompatibleRoomHostsRequiresReadyExactVersion(t *testing.T) {
+	nodes := []contracts.NodeInfo{
+		{NodeID: "ready", Status: contracts.NodeStatusReady, GameVersions: map[string]string{contracts.GameDaVinci: davinci.EngineVersion}},
+		{NodeID: "draining", Status: contracts.NodeStatusDraining, GameVersions: map[string]string{contracts.GameDaVinci: davinci.EngineVersion}},
+		{NodeID: "wrong-version", Status: contracts.NodeStatusReady, GameVersions: map[string]string{contracts.GameDaVinci: "davinci-v1"}},
+	}
+	compatible := compatibleRoomHosts(nodes, contracts.GameDaVinci, davinci.EngineVersion)
+	if len(compatible) != 1 || compatible[0].NodeID != "ready" {
+		t.Fatalf("compatibleRoomHosts() = %+v, want ready node", compatible)
 	}
 }
 
@@ -353,7 +411,7 @@ func TestCreateRoomRecordCompensatesPersistFailure(t *testing.T) {
 	coord := &roomCreationCoordinator{}
 	sender := &recordingRoomCommandSender{}
 	server := NewServerWithConfig(st, coord, Config{
-		Games:        game.NewRegistry(davinci.Definition()),
+		GameCatalog:  davinciCatalog(),
 		RoomCommands: sender,
 	})
 
@@ -382,7 +440,7 @@ func TestCreateRoomRecordCompensatesActorFailure(t *testing.T) {
 	coord := &roomCreationCoordinator{}
 	sender := &recordingRoomCommandSender{err: actorErr}
 	server := NewServerWithConfig(st, coord, Config{
-		Games:        game.NewRegistry(davinci.Definition()),
+		GameCatalog:  davinciCatalog(),
 		RoomCommands: sender,
 	})
 
@@ -416,7 +474,7 @@ func TestCreateRoomRecordReturnsCompletedIdempotentRequest(t *testing.T) {
 	st := &roomCreationStore{reserveExists: true, reservedRoom: existing}
 	sender := &recordingRoomCommandSender{}
 	server := NewServerWithConfig(st, &roomCreationCoordinator{}, Config{
-		Games:        game.NewRegistry(davinci.Definition()),
+		GameCatalog:  davinciCatalog(),
 		RoomCommands: sender,
 	})
 	got, err := server.createRoomRecord(context.Background(), createRoomRequest{
@@ -436,7 +494,7 @@ func TestCreateRoomRecordReturnsCompletedIdempotentRequest(t *testing.T) {
 func TestCreateRoomRecordRejectsQuotaExceeded(t *testing.T) {
 	st := &roomCreationStore{reserveErr: store.ErrRoomQuotaExceeded}
 	server := NewServerWithConfig(st, &roomCreationCoordinator{}, Config{
-		Games: game.NewRegistry(davinci.Definition()),
+		GameCatalog: davinciCatalog(),
 	})
 	_, err := server.createRoomRecord(context.Background(), createRoomRequest{
 		GameType:      contracts.GameDaVinci,

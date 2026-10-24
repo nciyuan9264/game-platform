@@ -1,0 +1,102 @@
+name: Normalize Player Identities
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_apply:
+        description: Back up production RDS and apply player identity normalization
+        type: boolean
+        required: true
+        default: false
+  push:
+    tags:
+      - normalize-player-identities-*
+
+permissions:
+  contents: read
+
+concurrency:
+  group: normalize-player-identities-production
+  cancel-in-progress: false
+
+jobs:
+  normalize:
+    if: github.event_name == 'push' || inputs.confirm_apply
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Upload migration configuration
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: docker-compose.prod.yml,scripts/validate-prod-config.sh,scripts/normalize-prod-player-identities.sh
+          target: /home/game-platform
+
+      - name: Back up, normalize, and verify production identities
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          TCR_LOGIN_SERVER: ${{ secrets.TCR_LOGIN_SERVER }}
+          TCR_USERNAME: ${{ secrets.TCR_USERNAME }}
+          TCR_PASSWORD: ${{ secrets.TCR_PASSWORD }}
+          IMAGE_TAG: ${{ github.sha }}
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          envs: TCR_LOGIN_SERVER,TCR_USERNAME,TCR_PASSWORD,IMAGE_TAG
+          command_timeout: 45m
+          script: |
+            set -eu
+            cd /home/game-platform
+            test -f .env
+            set -a
+            . ./.env
+            set +a
+            export GAME_PLATFORM_IMAGE_REGISTRY="${TCR_LOGIN_SERVER}/tengxuntcr"
+            export GAME_PLATFORM_IMAGE_TAG="${IMAGE_TAG}"
+            export PLAYER_IDENTITY_MIGRATION_IMAGE="${TCR_LOGIN_SERVER}/tengxuntcr/game-platform-identity-migration:${IMAGE_TAG}"
+            printf '%s' "${TCR_PASSWORD}" | docker login "${TCR_LOGIN_SERVER}" \
+              --username "${TCR_USERNAME}" --password-stdin
+            chmod +x scripts/validate-prod-config.sh scripts/normalize-prod-player-identities.sh
+            ./scripts/validate-prod-config.sh
+            docker pull "${PLAYER_IDENTITY_MIGRATION_IMAGE}"
+            ./scripts/normalize-prod-player-identities.sh
+
+            report_dir="$(ls -1dt /home/game-platform/backups/player-identity-* | head -n 1)"
+            printf 'report_dir=%s\n' "${report_dir}"
+            sha256sum --check "${report_dir}/game-platform-player-identities.dump.sha256"
+            for report in dry-run-live.json dry-run-stopped.json apply.json verify.json; do
+              if [ -f "${report_dir}/${report}" ]; then
+                printf '%s=' "${report}"
+                jq -c . "${report_dir}/${report}"
+              fi
+            done
+            printf 'acceptance_sql:\n'
+            cat "${report_dir}/acceptance-sql.txt"
+
+            for game_type in acquire davinci splendor; do
+              response="$(
+                curl --fail --silent --show-error \
+                  "https://api.gamebus.online/pam-api/platform/rankings?gameType=${game_type}&limit=5&offset=0&sort=metric"
+              )"
+              printf '%s\n' "${response}" | jq -e '
+                .data.entries
+                | all(
+                    (.playerID == (.userID | tostring))
+                    and (.displayName | type == "string")
+                    and (.displayName | length > 0)
+                  )
+              ' >/dev/null
+              printf 'leaderboard_%s=' "${game_type}"
+              printf '%s\n' "${response}" | jq -c '{
+                count: (.data.entries | length),
+                entries: [.data.entries[] | {
+                  userID,
+                  playerID,
+                  displayName
+                }]
+              }'
+            done

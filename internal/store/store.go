@@ -58,6 +58,64 @@ func (s *Store) ListNodes(ctx context.Context, nodeType string) ([]contracts.Nod
 	return s.Redis.ListNodes(ctx, nodeType)
 }
 
+func (s *Store) GetGameCatalogEntry(ctx context.Context, gameType string) (contracts.GameCatalogEntry, error) {
+	return s.Postgres.GetGameCatalogEntry(ctx, gameType)
+}
+
+func (s *Store) GetDefaultGameCatalogEntry(ctx context.Context) (contracts.GameCatalogEntry, error) {
+	return s.Postgres.GetDefaultGameCatalogEntry(ctx)
+}
+
+func (s *Store) ListGameCatalog(ctx context.Context) ([]contracts.GameCatalogEntry, error) {
+	return s.Postgres.ListGameCatalog(ctx)
+}
+
+func (s *Store) RegisterGameCatalogEntry(
+	ctx context.Context,
+	entry contracts.GameCatalogEntry,
+	artifact,
+	actor string,
+) (contracts.GameCatalogEntry, bool, error) {
+	return s.Postgres.RegisterGameCatalogEntry(ctx, entry, artifact, actor)
+}
+
+func (s *Store) SetActiveGameVersion(
+	ctx context.Context,
+	gameType,
+	targetVersion,
+	expectedVersion,
+	action,
+	artifact,
+	actor string,
+) (contracts.GameCatalogEntry, error) {
+	return s.Postgres.SetActiveGameVersion(
+		ctx,
+		gameType,
+		targetVersion,
+		expectedVersion,
+		action,
+		artifact,
+		actor,
+	)
+}
+
+func (s *Store) DisableGameCatalogEntry(
+	ctx context.Context,
+	gameType,
+	artifact,
+	actor string,
+) (contracts.GameCatalogEntry, bool, error) {
+	return s.Postgres.DisableGameCatalogEntry(ctx, gameType, artifact, actor)
+}
+
+func (s *Store) ListGameCatalogEvents(
+	ctx context.Context,
+	gameType string,
+	limit int,
+) ([]contracts.GameCatalogEvent, error) {
+	return s.Postgres.ListGameCatalogEvents(ctx, gameType, limit)
+}
+
 func (s *Store) SetSession(ctx context.Context, rec contracts.SessionRecord, ttl time.Duration) error {
 	return s.Redis.SetSession(ctx, rec, ttl)
 }
@@ -192,6 +250,10 @@ func (s *Store) UpsertMatchPlayer(ctx context.Context, matchID string, player co
 	return s.Postgres.UpsertMatchPlayer(ctx, matchID, player)
 }
 
+func (s *Store) UpdateMatchPlayerDisplayName(ctx context.Context, userID, displayName string) error {
+	return s.Postgres.UpdateMatchPlayerDisplayName(ctx, userID, displayName)
+}
+
 func (s *Store) SyncMatchRoster(ctx context.Context, matchID string, players []contracts.MatchPlayerRecord) error {
 	return s.Postgres.SyncMatchRoster(ctx, matchID, players)
 }
@@ -297,6 +359,22 @@ func (s *Store) FindHistoryGameByStart(
 	return s.Postgres.FindHistoryGameByStart(ctx, roomID, gameType, startedAt)
 }
 
+func (s *Store) SetHistoryReplayMetadata(
+	ctx context.Context,
+	gameID int64,
+	engineVersion string,
+	replaySchemaVersion int,
+	initialReplayPayload []byte,
+) error {
+	return s.Postgres.SetHistoryReplayMetadata(
+		ctx,
+		gameID,
+		engineVersion,
+		replaySchemaVersion,
+		initialReplayPayload,
+	)
+}
+
 func (s *Store) ResetOpenHistoryGame(ctx context.Context, roomID, gameType string) error {
 	return s.Postgres.ResetOpenHistoryGame(ctx, roomID, gameType)
 }
@@ -354,4 +432,38 @@ func (s *Store) HistoryLeaderboardSorted(ctx context.Context, gameType, sortBy s
 
 func (s *Store) CountLeaderboardEntries(ctx context.Context, gameType string) (int, error) {
 	return s.Postgres.CountLeaderboardEntries(ctx, gameType)
+}
+
+func (s *Store) ListReplayBackfillGameIDs(
+	ctx context.Context,
+	gameType string,
+	afterID int64,
+	limit int,
+) ([]int64, error) {
+	return s.Postgres.ListReplayBackfillGameIDs(ctx, gameType, afterID, limit)
+}
+
+func (s *Store) BackfillReplayPayloads(
+	ctx context.Context,
+	gameID int64,
+	engineVersion string,
+	replaySchemaVersion int,
+	initialReplayPayload []byte,
+	eventPayloads map[int][]byte,
+) error {
+	return s.Postgres.BackfillReplayPayloads(
+		ctx,
+		gameID,
+		engineVersion,
+		replaySchemaVersion,
+		initialReplayPayload,
+		eventPayloads,
+	)
+}
+
+func (s *Store) CountMissingReplayPayloads(
+	ctx context.Context,
+	gameType string,
+) (history.ReplayMissingCounts, error) {
+	return s.Postgres.CountMissingReplayPayloads(ctx, gameType)
 }

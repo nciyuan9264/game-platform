@@ -21,7 +21,7 @@ func (h *Handler) CreateRoom(ctx context.Context, req *platform.CreateRoomReq) (
 	if req == nil || strings.TrimSpace(req.GetRequestId()) == "" {
 		return nil, platformError("invalid_request", errors.New("requestID is required"))
 	}
-	gameType, err := h.validGameType(req.GetGameType())
+	gameType, err := h.validGameTypeForCreate(ctx, req.GetGameType())
 	if err != nil {
 		return nil, err
 	}
@@ -49,6 +49,7 @@ func (h *Handler) CreateRoom(ctx context.Context, req *platform.CreateRoomReq) (
 	if err != nil {
 		return nil, err
 	}
+	h.resolveRoomDisplayNames(ctx, []*platform.RoomInfo{info})
 	return &platform.RoomResp{StatusCode: http.StatusOK, Message: "ok", Data: info}, nil
 }
 
@@ -60,7 +61,7 @@ func (h *Handler) ListRooms(ctx context.Context, req *platform.ListRoomsReq) (*p
 	if req == nil {
 		return nil, platformError("invalid_request", errors.New("request is required"))
 	}
-	gameType, err := h.validGameType(req.GetGameType())
+	gameType, err := h.validGameType(ctx, req.GetGameType())
 	if err != nil {
 		return nil, err
 	}
@@ -82,6 +83,7 @@ func (h *Handler) ListRooms(ctx context.Context, req *platform.ListRoomsReq) (*p
 		}
 		result = append(result, info)
 	}
+	h.resolveRoomDisplayNames(ctx, result)
 	return &platform.RoomListResp{
 		StatusCode: http.StatusOK,
 		Message:    "ok",
@@ -96,7 +98,7 @@ func (h *Handler) GetRoom(ctx context.Context, req *platform.GetRoomReq) (*platf
 	if req == nil || strings.TrimSpace(req.GetRoomId()) == "" {
 		return nil, platformError("invalid_request", errors.New("roomID is required"))
 	}
-	gameType, err := h.validGameType(req.GetGameType())
+	gameType, err := h.validGameType(ctx, req.GetGameType())
 	if err != nil {
 		return nil, err
 	}
@@ -114,6 +116,7 @@ func (h *Handler) GetRoom(ctx context.Context, req *platform.GetRoomReq) (*platf
 	if err != nil {
 		return nil, err
 	}
+	h.resolveRoomDisplayNames(ctx, []*platform.RoomInfo{info})
 	return &platform.RoomResp{StatusCode: http.StatusOK, Message: "ok", Data: info}, nil
 }
 
@@ -125,7 +128,7 @@ func (h *Handler) CloseRoom(ctx context.Context, req *platform.CloseRoomReq) (*p
 	if req == nil || req.GetRoomId() == "" || req.GetRequestId() == "" {
 		return nil, platformError("invalid_request", errors.New("roomID and requestID are required"))
 	}
-	gameType, err := h.validGameType(req.GetGameType())
+	gameType, err := h.validGameType(ctx, req.GetGameType())
 	if err != nil {
 		return nil, err
 	}
@@ -144,6 +147,7 @@ func (h *Handler) CloseRoom(ctx context.Context, req *platform.CloseRoomReq) (*p
 	if err != nil {
 		return nil, err
 	}
+	h.resolveRoomDisplayNames(ctx, []*platform.RoomInfo{info})
 	return &platform.RoomResp{StatusCode: http.StatusOK, Message: "ok", Data: info}, nil
 }
 
@@ -155,7 +159,7 @@ func (h *Handler) StartNextMatch(ctx context.Context, req *platform.StartNextMat
 	if req == nil || req.GetRoomId() == "" || req.GetRequestId() == "" {
 		return nil, platformError("invalid_request", errors.New("roomID and requestID are required"))
 	}
-	gameType, err := h.validGameType(req.GetGameType())
+	gameType, err := h.validGameType(ctx, req.GetGameType())
 	if err != nil {
 		return nil, err
 	}
@@ -180,6 +184,7 @@ func (h *Handler) StartNextMatch(ctx context.Context, req *platform.StartNextMat
 	if err != nil {
 		return nil, err
 	}
+	h.resolveRoomDisplayNames(ctx, []*platform.RoomInfo{info})
 	return &platform.StartNextMatchResp{
 		StatusCode: http.StatusOK,
 		Message:    "ok",
@@ -191,10 +196,31 @@ func (h *Handler) StartNextMatch(ctx context.Context, req *platform.StartNextMat
 	}, nil
 }
 
-func (h *Handler) validGameType(value string) (string, error) {
+func (h *Handler) validGameType(ctx context.Context, value string) (string, error) {
 	value = strings.TrimSpace(value)
-	if _, ok := h.games.Get(value); !ok {
-		return "", platformError("invalid_game_type", errors.New("gameType must be acquire, davinci, or splendor"))
+	if h.gameCatalog == nil {
+		return "", platformError("store_error", errors.New("game catalog is unavailable"))
+	}
+	if _, err := h.gameCatalog.GetGameCatalogEntry(ctx, value); err != nil {
+		if errors.Is(err, store.ErrGameCatalogNotFound) {
+			return "", platformError("invalid_game_type", errors.New("gameType is not registered"))
+		}
+		return "", platformError("store_error", err)
+	}
+	return value, nil
+}
+
+func (h *Handler) validGameTypeForCreate(ctx context.Context, value string) (string, error) {
+	value, err := h.validGameType(ctx, value)
+	if err != nil {
+		return "", err
+	}
+	entry, err := h.gameCatalog.GetGameCatalogEntry(ctx, value)
+	if err != nil {
+		return "", platformError("store_error", err)
+	}
+	if !entry.EnabledForNewRooms {
+		return "", platformError("game_disabled", errors.New("game is disabled for new rooms"))
 	}
 	return value, nil
 }

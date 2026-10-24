@@ -32,6 +32,7 @@ type Client interface {
 	RenamePasskey(ctx context.Context, req *v1.RenamePasskeyReq, callOptions ...callopt.Option) (r *v1.PasskeyResp, err error)
 	DeletePasskey(ctx context.Context, req *v1.DeletePasskeyReq, callOptions ...callopt.Option) (r *v1.BaseResp, err error)
 	GetUser(ctx context.Context, req *v1.GetUserReq, callOptions ...callopt.Option) (r *v1.UserResp, err error)
+	BatchGetPublicProfiles(ctx context.Context, req *v1.BatchGetPublicProfilesReq, callOptions ...callopt.Option) (r *v1.BatchGetPublicProfilesResp, err error)
 	ListUsers(ctx context.Context, req *v1.ListUsersReq, callOptions ...callopt.Option) (r *v1.ListUsersResp, err error)
 	GetJWKS(ctx context.Context, req *v1.JWKSReq, callOptions ...callopt.Option) (r *v1.JWKSResp, err error)
 }
@@ -168,6 +169,11 @@ func (p *kAuthServiceClient) DeletePasskey(ctx context.Context, req *v1.DeletePa
 func (p *kAuthServiceClient) GetUser(ctx context.Context, req *v1.GetUserReq, callOptions ...callopt.Option) (r *v1.UserResp, err error) {
 	ctx = client.NewCtxWithCallOptions(ctx, callOptions)
 	return p.kClient.GetUser(ctx, req)
+}
+
+func (p *kAuthServiceClient) BatchGetPublicProfiles(ctx context.Context, req *v1.BatchGetPublicProfilesReq, callOptions ...callopt.Option) (r *v1.BatchGetPublicProfilesResp, err error) {
+	ctx = client.NewCtxWithCallOptions(ctx, callOptions)
+	return p.kClient.BatchGetPublicProfiles(ctx, req)
 }
 
 func (p *kAuthServiceClient) ListUsers(ctx context.Context, req *v1.ListUsersReq, callOptions ...callopt.Option) (r *v1.ListUsersResp, err error) {

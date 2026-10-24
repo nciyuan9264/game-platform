@@ -8,30 +8,7 @@ import (
 	"github.com/nciyuan9264/game-platform/internal/game"
 )
 
-func TestUserIDFromPlayerIDSupportsPlatformAndLegacyFormats(t *testing.T) {
-	tests := []struct {
-		playerID string
-		want     string
-		ok       bool
-	}{
-		{playerID: "137", want: "137", ok: true},
-		{playerID: "player@example.com-137", want: "137", ok: true},
-		{playerID: "ai_1"},
-		{playerID: "player"},
-		{playerID: "player-0"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.playerID, func(t *testing.T) {
-			got, ok := userIDFromPlayerID(tt.playerID)
-			if got != tt.want || ok != tt.ok {
-				t.Fatalf("userIDFromPlayerID(%q) = (%q, %v), want (%q, %v)",
-					tt.playerID, got, ok, tt.want, tt.ok)
-			}
-		})
-	}
-}
-
-func TestProjectHistoryLinksNumericPlatformPlayerIDs(t *testing.T) {
+func TestProjectHistoryDoesNotInferUserIDsFromPlayerIDs(t *testing.T) {
 	ctx := context.Background()
 	plugin := &Plugin{}
 	state, err := plugin.InitRoom(ctx, game.RoomConfig{
@@ -66,11 +43,9 @@ func TestProjectHistoryLinksNumericPlatformPlayerIDs(t *testing.T) {
 	if len(projection.Players) != 2 {
 		t.Fatalf("history players = %d, want 2", len(projection.Players))
 	}
-	userIDs := map[string]string{}
 	for _, player := range projection.Players {
-		userIDs[player.PlayerID] = player.UserID
-	}
-	if userIDs["137"] != "137" || userIDs["204"] != "204" {
-		t.Fatalf("history user IDs = %+v", userIDs)
+		if player.UserID != "" {
+			t.Fatalf("history player %+v inferred a user ID", player)
+		}
 	}
 }

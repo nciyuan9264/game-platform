@@ -48,6 +48,9 @@ func (f roleAuthClient) UploadAvatar(context.Context, authclient.UploadAvatarReq
 func (f roleAuthClient) GetUser(context.Context, string) (contracts.UserIdentity, error) {
 	return f.identity, nil
 }
+func (f roleAuthClient) BatchGetPublicProfiles(context.Context, []string) (map[string]string, error) {
+	return map[string]string{}, f.listUsersError
+}
 func (f roleAuthClient) ListUsers(ctx context.Context, _ authclient.ListUsersRequest) (authclient.ListUsersResponse, error) {
 	userID, roles, _ := rpcmeta.UserIdentityFromContext(ctx)
 	if f.listUserID != nil {

@@ -6,8 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"strconv"
-	"strings"
 	"time"
 
 	acquireai "github.com/nciyuan9264/game-platform/internal/acquire/ai"
@@ -25,6 +23,8 @@ const (
 	EngineVersion    = "acquire-v2"
 	maxNoHumanChecks = 3
 )
+
+const ReplaySchemaVersion = 2
 
 var timeoutByStatus = map[domain.RoomStatus]time.Duration{
 	domain.RoomStatusSetTile:          30 * time.Second,
@@ -46,6 +46,7 @@ func Definition() game.Definition {
 		AI:                plugin,
 		Scheduler:         plugin,
 		History:           plugin,
+		LegacyReplay:      plugin,
 	}
 }
 
@@ -80,16 +81,11 @@ func (p *Plugin) Roster(ctx context.Context, state game.State) ([]game.RosterPla
 		if connection == nil {
 			continue
 		}
-		userID, ok := userIDFromPlayerID(playerID)
-		if !ok {
-			userID = playerID
-		}
 		displayName := ""
 		if connection.AI {
-			displayName = playerID
+			displayName = "AI"
 		}
 		players = append(players, game.RosterPlayer{
-			UserID:      userID,
 			PlayerID:    playerID,
 			DisplayName: displayName,
 			Online:      connection.Online,
@@ -574,10 +570,8 @@ func (p *Plugin) ProjectHistory(ctx context.Context, state game.State) (game.His
 	}
 	finished := room.State.RoomStatus == domain.RoomStatusEnd
 	winnerPlayerID := ""
-	winnerUserID := ""
 	if finished && len(scores) > 0 {
 		winnerPlayerID = scores[0].playerID
-		winnerUserID, _ = userIDFromPlayerID(winnerPlayerID)
 	}
 	players := make([]game.HistoryPlayer, 0, len(scores))
 	for index, item := range scores {
@@ -585,9 +579,7 @@ func (p *Plugin) ProjectHistory(ctx context.Context, state game.State) (game.His
 		finalRank := rankByPlayer[item.playerID]
 		finalScore := item.total
 		finalMoney := item.money
-		userID, _ := userIDFromPlayerID(item.playerID)
 		players = append(players, game.HistoryPlayer{
-			UserID:      userID,
 			PlayerID:    item.playerID,
 			SeatIndex:   acquireSeatIndex(connection, index),
 			IsAI:        connection != nil && connection.AI,
@@ -605,17 +597,18 @@ func (p *Plugin) ProjectHistory(ctx context.Context, state game.State) (game.His
 		}
 	}
 	return game.HistoryProjection{
-		Started:           true,
-		Finished:          finished,
-		AbandonedEligible: placedTiles*2 >= 108,
-		StartedAt:         room.State.GameStartTime,
-		MaxPlayers:        room.State.MaxPlayers,
-		InitialState:      initialState,
-		StateBlob:         stateBlob,
-		FinalResult:       result,
-		WinnerUserID:      winnerUserID,
-		WinnerPlayerID:    winnerPlayerID,
-		Players:           players,
+		Started:             true,
+		Finished:            finished,
+		AbandonedEligible:   placedTiles*2 >= 108,
+		StartedAt:           room.State.GameStartTime,
+		MaxPlayers:          room.State.MaxPlayers,
+		ReplaySchemaVersion: ReplaySchemaVersion,
+		ReplayFrame:         acquireReplayFrame(room, result),
+		InitialState:        initialState,
+		StateBlob:           stateBlob,
+		FinalResult:         result,
+		WinnerPlayerID:      winnerPlayerID,
+		Players:             players,
 	}, nil
 }
 
@@ -625,6 +618,19 @@ func (p *Plugin) BuildReplaySnapshot(ctx context.Context, state game.State, seq,
 		return nil, err
 	}
 	result, _ := rules.RecomputeDerivedState(room)
+	snapshot := acquireReplayFrame(room, result)
+	snapshot["seq"] = seq
+	snapshot["totalEvents"] = total
+	if commandType != "" {
+		payloadJSON, _ := json.Marshal(payload)
+		snapshot["currentEvent"] = map[string]any{
+			"seq": seq, "playerID": playerID, "cmdType": commandType, "payloadJSON": string(payloadJSON),
+		}
+	}
+	return snapshot, nil
+}
+
+func acquireReplayFrame(room *domain.Room, result map[string]interface{}) map[string]any {
 	players := make(map[string]any, len(room.Connections))
 	playersData := make(map[string]any, len(room.State.Players))
 	for id, connection := range room.Connections {
@@ -642,9 +648,7 @@ func (p *Plugin) BuildReplaySnapshot(ctx context.Context, state game.State, seq,
 	for id, player := range room.State.Players {
 		playersData[id] = player
 	}
-	snapshot := map[string]any{
-		"seq":         seq,
-		"totalEvents": total,
+	return map[string]any{
 		"roomData": map[string]any{
 			"companyInfo":   room.State.Companies,
 			"currentPlayer": room.State.CurrentPlayer,
@@ -656,13 +660,6 @@ func (p *Plugin) BuildReplaySnapshot(ctx context.Context, state game.State, seq,
 		"playersData": playersData,
 		"result":      result,
 	}
-	if commandType != "" {
-		payloadJSON, _ := json.Marshal(payload)
-		snapshot["currentEvent"] = map[string]any{
-			"seq": seq, "playerID": playerID, "cmdType": commandType, "payloadJSON": string(payloadJSON),
-		}
-	}
-	return snapshot, nil
 }
 
 func (p *Plugin) DecodeReplayState(
@@ -958,19 +955,4 @@ func removeString(values []string, target string) []string {
 		}
 	}
 	return values
-}
-
-func userIDFromPlayerID(playerID string) (string, bool) {
-	value := playerID
-	if index := strings.LastIndex(playerID, "-"); index >= 0 {
-		if index == len(playerID)-1 {
-			return "", false
-		}
-		value = playerID[index+1:]
-	}
-	parsed, err := strconv.ParseInt(value, 10, 64)
-	if err != nil || parsed <= 0 {
-		return "", false
-	}
-	return value, true
 }

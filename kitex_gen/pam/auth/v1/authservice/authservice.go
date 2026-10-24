@@ -160,6 +160,13 @@ var serviceMethods = map[string]kitex.MethodInfo{
 		false,
 		kitex.WithStreamingMode(kitex.StreamingNone),
 	),
+	"BatchGetPublicProfiles": kitex.NewMethodInfo(
+		batchGetPublicProfilesHandler,
+		newAuthServiceBatchGetPublicProfilesArgs,
+		newAuthServiceBatchGetPublicProfilesResult,
+		false,
+		kitex.WithStreamingMode(kitex.StreamingNone),
+	),
 	"ListUsers": kitex.NewMethodInfo(
 		listUsersHandler,
 		newAuthServiceListUsersArgs,
@@ -744,6 +751,30 @@ func newAuthServiceGetUserResult() interface{} {
 	return v1.NewAuthServiceGetUserResult()
 }
 
+func batchGetPublicProfilesHandler(ctx context.Context, handler interface{}, arg, result interface{}) error {
+	realArg := arg.(*v1.AuthServiceBatchGetPublicProfilesArgs)
+	realResult := result.(*v1.AuthServiceBatchGetPublicProfilesResult)
+	success, err := handler.(v1.AuthService).BatchGetPublicProfiles(ctx, realArg.Req)
+	if err != nil {
+		switch v := err.(type) {
+		case *v1.AuthError:
+			realResult.Err = v
+		default:
+			return err
+		}
+	} else {
+		realResult.Success = success
+	}
+	return nil
+}
+func newAuthServiceBatchGetPublicProfilesArgs() interface{} {
+	return v1.NewAuthServiceBatchGetPublicProfilesArgs()
+}
+
+func newAuthServiceBatchGetPublicProfilesResult() interface{} {
+	return v1.NewAuthServiceBatchGetPublicProfilesResult()
+}
+
 func listUsersHandler(ctx context.Context, handler interface{}, arg, result interface{}) error {
 	realArg := arg.(*v1.AuthServiceListUsersArgs)
 	realResult := result.(*v1.AuthServiceListUsersResult)
@@ -1087,6 +1118,20 @@ func (p *kClient) GetUser(ctx context.Context, req *v1.GetUserReq) (r *v1.UserRe
 	_args.Req = req
 	var _result v1.AuthServiceGetUserResult
 	if err = p.c.Call(ctx, "GetUser", &_args, &_result); err != nil {
+		return
+	}
+	switch {
+	case _result.Err != nil:
+		return r, _result.Err
+	}
+	return _result.GetSuccess(), nil
+}
+
+func (p *kClient) BatchGetPublicProfiles(ctx context.Context, req *v1.BatchGetPublicProfilesReq) (r *v1.BatchGetPublicProfilesResp, err error) {
+	var _args v1.AuthServiceBatchGetPublicProfilesArgs
+	_args.Req = req
+	var _result v1.AuthServiceBatchGetPublicProfilesResult
+	if err = p.c.Call(ctx, "BatchGetPublicProfiles", &_args, &_result); err != nil {
 		return
 	}
 	switch {

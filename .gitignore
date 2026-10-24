@@ -19,3 +19,4 @@ build/
 .env.*.local
 .archify/
 *.md
+!docs/game-release-runbook.md

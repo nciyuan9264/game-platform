@@ -127,7 +127,7 @@ func errorHTTPStatus(code string) int {
 		return http.StatusNotFound
 	case "idempotency_conflict", "match_active", "room_not_open":
 		return http.StatusConflict
-	case "replay_not_supported":
+	case "replay_not_supported", "replay_materialization_missing", "replay_schema_unsupported", "game_disabled":
 		return http.StatusUnprocessableEntity
 	case "too_many_rooms":
 		return http.StatusTooManyRequests

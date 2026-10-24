@@ -168,6 +168,7 @@ type fakeRoomhostStore struct {
 	operationEvents []contracts.GameLogEvent
 	startedHistory  []history.Game
 	finishedHistory []int64
+	appendedHistory []history.Event
 	historyLookup   fakeHistoryLookup
 	visibilityErr   error
 	visibilityCalls []string
@@ -346,11 +347,16 @@ func (s *fakeRoomhostStore) FindHistoryGameByStart(
 	return s.historyLookup.id, s.historyLookup.nextSeq, s.historyLookup.finished, nil
 }
 
+func (s *fakeRoomhostStore) SetHistoryReplayMetadata(context.Context, int64, string, int, []byte) error {
+	return nil
+}
+
 func (s *fakeRoomhostStore) ResetOpenHistoryGame(context.Context, string, string) error {
 	return nil
 }
 
-func (s *fakeRoomhostStore) AppendHistoryEvent(context.Context, history.Event) error {
+func (s *fakeRoomhostStore) AppendHistoryEvent(_ context.Context, event history.Event) error {
+	s.appendedHistory = append(s.appendedHistory, event)
 	return nil
 }
 
@@ -526,8 +532,8 @@ func TestBroadcastDoesNotPublishWhenReliablePersistenceFails(t *testing.T) {
 func TestValidateGatewayCommandBindsSessionIdentity(t *testing.T) {
 	session := contracts.SessionRecord{
 		ConnectionRef: contracts.ConnectionRef{GatewayNode: "gateway-1", SessionID: "session-1"},
-		UserID:        "user-1",
-		PlayerID:      "player-1",
+		UserID:        "7",
+		PlayerID:      "7",
 	}
 	host := NewHost("roomhost-1", &fakeRoomhostStore{session: session}, nil, nil, nil)
 
@@ -715,6 +721,69 @@ func TestHostShutdownSnapshotsAndReleasesRooms(t *testing.T) {
 	}
 }
 
+func TestHostDrainRejectsOnlyNewRoomCreation(t *testing.T) {
+	st := &fakeRoomhostStore{}
+	engine := &roomhostTestEngine{gameType: "test-game", version: "test-v1"}
+	host := NewHost("roomhost-1", st, nil, &fakeRoomhostRouter{}, nil)
+	actor := &RoomActor{
+		host: host,
+		record: contracts.RoomRecord{
+			RoomID:        "existing-room",
+			GameType:      "test-game",
+			EngineVersion: "test-v1",
+		},
+		match:      contracts.MatchRecord{MatchID: "existing-room-r1"},
+		definition: game.Definition{GameType: "test-game", Version: "test-v1", Engine: engine},
+		state:      map[string]any{"turn": 1},
+		processed:  map[string]contracts.CommandAck{},
+	}
+	host.rooms[actor.record.RoomID] = actor
+
+	host.Drain()
+	if host.Status() != contracts.NodeStatusDraining {
+		t.Fatalf("status = %q, want draining", host.Status())
+	}
+	rejected := host.HandleCommand(context.Background(), contracts.RoomCommand{
+		CommandID: "create-new",
+		RoomID:    "new-room",
+		Type:      contracts.RuntimeCommandRoomCreate,
+	})
+	if rejected.Accepted || rejected.ErrorCode != "roomhost_draining" {
+		t.Fatalf("new room create ack = %+v", rejected)
+	}
+	existing := host.HandleCommand(context.Background(), contracts.RoomCommand{
+		CommandID: "create-existing",
+		RoomID:    "existing-room",
+		Type:      contracts.RuntimeCommandRoomCreate,
+	})
+	if !existing.Accepted {
+		t.Fatalf("existing room command rejected while draining: %+v", existing)
+	}
+	if !host.shouldRecover(context.Background(), contracts.RoomRecord{
+		RoomID:      "recoverable-room",
+		Status:      contracts.RoomStatusOpen,
+		PlayerCount: 1,
+	}) {
+		t.Fatal("draining host stopped considering compatible rooms for recovery")
+	}
+	if !host.Resume() || host.Status() != contracts.NodeStatusReady {
+		t.Fatalf("resume failed, status = %q", host.Status())
+	}
+}
+
+func TestHostCannotResumeAfterShutdown(t *testing.T) {
+	host := NewHost("roomhost-1", &fakeRoomhostStore{}, nil, &fakeRoomhostRouter{}, nil)
+	if err := host.Shutdown(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if host.Resume() {
+		t.Fatal("host resumed after shutdown")
+	}
+	if host.Status() != contracts.NodeStatusDraining {
+		t.Fatalf("status = %q, want draining", host.Status())
+	}
+}
+
 func TestNewRoomActorInitializesStateThroughGamePlugin(t *testing.T) {
 	engine := &roomhostTestEngine{gameType: "test-game", version: "test-v1"}
 	host := NewHost("roomhost-a", &fakeRoomhostStore{}, nil, nil, game.NewRegistry(game.Definition{
@@ -754,8 +823,8 @@ func TestSyncRosterUsesLogicalPlayersInsteadOfPresenceSessions(t *testing.T) {
 		gameType: "roster",
 		version:  "roster-v1",
 		roster: []game.RosterPlayer{
-			{UserID: "1", PlayerID: "alice-1", Online: true},
-			{UserID: "ai_001", PlayerID: "ai_001", DisplayName: "ai_001", Online: true, IsAI: true},
+			{PlayerID: "1", Online: true},
+			{PlayerID: "ai_001", DisplayName: "AI", Online: true, IsAI: true},
 		},
 	}
 	st := &fakeRoomhostStore{}
@@ -769,7 +838,7 @@ func TestSyncRosterUsesLogicalPlayersInsteadOfPresenceSessions(t *testing.T) {
 		RoomID:        "room-1",
 		GameType:      "roster",
 		OwnerNode:     "roomhost-a",
-		OwnerPlayerID: "alice-1",
+		OwnerPlayerID: "1",
 		MaxPlayers:    6,
 	})
 	if err != nil {
@@ -777,7 +846,7 @@ func TestSyncRosterUsesLogicalPlayersInsteadOfPresenceSessions(t *testing.T) {
 	}
 	presences := make([]contracts.PresenceRecord, 7)
 	for index := range presences {
-		presences[index] = contracts.PresenceRecord{RoomID: "room-1", PlayerID: "alice-1"}
+		presences[index] = contracts.PresenceRecord{RoomID: "room-1", UserID: "1", PlayerID: "1"}
 	}
 	if err := actor.syncRosterLocked(context.Background(), presences); err != nil {
 		t.Fatal(err)
@@ -872,7 +941,11 @@ func TestRoomActorPostEndCommandDoesNotReopenFinishedHistory(t *testing.T) {
 	room.State.GameStartTime = time.Now().Add(-time.Minute)
 	room.State.RoomStatus = acquiredomain.RoomStatusEnd
 
-	st := &fakeRoomhostStore{}
+	st := &fakeRoomhostStore{matchPlayers: []contracts.MatchPlayerRecord{{
+		UserID:      "1",
+		PlayerID:    "1",
+		DisplayName: "Alice-Cooper-1",
+	}}}
 	actor := &RoomActor{
 		host:       &Host{store: st},
 		record:     contracts.RoomRecord{RoomID: room.ID, GameType: acquiregame.GameType},
@@ -924,9 +997,12 @@ func TestRoomActorHistoryRebuildReusesFinishedGameByStart(t *testing.T) {
 		definition:     acquiregame.Definition(),
 		historyRebuild: true,
 	}
-	projection := game.HistoryProjection{StartedAt: startedAt}
+	projection := game.HistoryProjection{
+		StartedAt:           startedAt,
+		ReplaySchemaVersion: 1,
+	}
 
-	if err := actor.ensureHistoryLocked(context.Background(), projection); err != nil {
+	if err := actor.ensureHistoryLocked(context.Background(), projection, []byte("replay")); err != nil {
 		t.Fatal(err)
 	}
 	if actor.historyID != 598 {
@@ -1358,11 +1434,12 @@ func TestRoomActorCloseContinuesWhenHistoryReconciliationFails(t *testing.T) {
 			OwnerNode: "roomhost-a",
 			Epoch:     1,
 		},
-		match:        contracts.MatchRecord{MatchID: "history-dirty-room-r1", Status: contracts.MatchStatusEnded},
-		definition:   acquiregame.Definition(),
-		state:        state,
-		processed:    map[string]contracts.CommandAck{},
-		historyDirty: true,
+		match:          contracts.MatchRecord{MatchID: "history-dirty-room-r1", Status: contracts.MatchStatusEnded},
+		definition:     acquiregame.Definition(),
+		state:          state,
+		processed:      map[string]contracts.CommandAck{},
+		historyDirty:   true,
+		operationDirty: false,
 	}
 
 	ack := actor.Close(ctx, contracts.RoomCommand{

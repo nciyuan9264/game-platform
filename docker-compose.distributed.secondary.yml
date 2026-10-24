@@ -74,6 +74,8 @@ services:
       NODE_ID: gateway-b
       PUBLIC_ADDR: "${SECONDARY_HOST:-10.37.4.66}:${GATEWAY_B_PORT:-18081}"
       AUTH_RPC_ADDR: "${PRIMARY_HOST:-10.37.223.1}:19090"
+      AUTH_RPC_TIMEOUT: "${AUTH_RPC_TIMEOUT:-2s}"
+      PROFILE_REFRESH_INTERVAL: "${PROFILE_REFRESH_INTERVAL:-60s}"
       NATS_URL: "nats://gateway-b:${NATS_GATEWAY_B_PASSWORD:-local-gateway-b}@${PRIMARY_HOST:-10.37.223.1}:4222"
       WS_ALLOWED_ORIGINS: *browser_origins
     ports:

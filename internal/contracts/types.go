@@ -28,8 +28,15 @@ const (
 	MatchStatusEnded     = "ended"
 	MatchStatusAborted   = "aborted"
 
-	NodeTypeGateway  = "gateway"
-	NodeTypeRoomHost = "roomhost"
+	NodeTypeGateway    = "gateway"
+	NodeTypeRoomHost   = "roomhost"
+	NodeStatusReady    = "ready"
+	NodeStatusDraining = "draining"
+
+	GameCatalogActionRegister = "register"
+	GameCatalogActionPromote  = "promote"
+	GameCatalogActionDisable  = "disable"
+	GameCatalogActionRollback = "rollback"
 
 	MessageTypeMatchSync     = "MATCH_SYNC"
 	MessageTypeRoomSync      = "ROOM_SYNC"
@@ -84,6 +91,28 @@ type NodeInfo struct {
 	ActiveRooms    int               `json:"activeRooms"`
 	ActiveSessions int               `json:"activeSessions"`
 	LastHeartbeat  time.Time         `json:"lastHeartbeat"`
+}
+
+type GameCatalogEntry struct {
+	GameType            string    `json:"gameType"`
+	ActiveEngineVersion string    `json:"activeEngineVersion"`
+	DefaultMaxPlayers   int       `json:"defaultMaxPlayers"`
+	ReplaySchemaVersion int       `json:"replaySchemaVersion"`
+	EnabledForNewRooms  bool      `json:"enabledForNewRooms"`
+	IsDefault           bool      `json:"isDefault"`
+	Revision            int64     `json:"revision"`
+	UpdatedAt           time.Time `json:"updatedAt"`
+}
+
+type GameCatalogEvent struct {
+	EventID   int64             `json:"eventID"`
+	GameType  string            `json:"gameType"`
+	Action    string            `json:"action"`
+	Previous  *GameCatalogEntry `json:"previous,omitempty"`
+	Current   *GameCatalogEntry `json:"current,omitempty"`
+	Artifact  string            `json:"artifact,omitempty"`
+	Actor     string            `json:"actor,omitempty"`
+	CreatedAt time.Time         `json:"createdAt"`
 }
 
 type RoomRecord struct {

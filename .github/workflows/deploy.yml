@@ -2,6 +2,22 @@ name: Deploy
 
 on:
   workflow_dispatch:
+    inputs:
+      component:
+        description: Component override
+        type: choice
+        required: true
+        default: auto
+        options:
+          - auto
+          - center
+          - acquire
+          - davinci
+          - splendor
+      compatibility_ack:
+        description: Reason an engine implementation change is version-compatible
+        type: string
+        required: false
   push:
     branches:
       - main
@@ -10,73 +26,192 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  detect:
+    runs-on: ubuntu-24.04
+    outputs:
+      center: ${{ steps.matrix.outputs.center }}
+      games: ${{ steps.matrix.outputs.games }}
+      migration: ${{ steps.matrix.outputs.migration }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute release matrix
+        id: matrix
+        env:
+          EVENT_BASE_SHA: ${{ github.event.before }}
+          COMPONENT_OVERRIDE: ${{ inputs.component || 'auto' }}
+          COMPATIBILITY_ACK: ${{ inputs.compatibility_ack }}
+        run: |
+          base="${EVENT_BASE_SHA}"
+          if [ -z "${base}" ] || [ "${base}" = "0000000000000000000000000000000000000000" ]; then
+            base="$(git rev-parse HEAD^)"
+          fi
+          matrix="$(./scripts/changed-release-components.sh "${base}" HEAD)"
+          center="$(jq -c '.center' <<<"${matrix}")"
+          games="$(jq -c '.games' <<<"${matrix}")"
+          migration="$(jq -r '.productionChange' <<<"${matrix}")"
+          case "${COMPONENT_OVERRIDE}" in
+            center)
+              center='["control-plane","gateway","migrate-schema","platform-rpc"]'
+              games='[]'
+              ;;
+            acquire|davinci|splendor)
+              center='[]'
+              games="$(jq -cn --arg game "${COMPONENT_OVERRIDE}" '[$game]')"
+              ;;
+          esac
+          if [ -n "${COMPATIBILITY_ACK}" ]; then
+            ./scripts/validate-engine-version-bump.sh \
+              "${base}" HEAD \
+              --compatibility-ack "${COMPATIBILITY_ACK}"
+          else
+            ./scripts/validate-engine-version-bump.sh "${base}" HEAD
+          fi
+          echo "center=${center}" >>"${GITHUB_OUTPUT}"
+          echo "games=${games}" >>"${GITHUB_OUTPUT}"
+          echo "migration=${migration}" >>"${GITHUB_OUTPUT}"
+          jq -cn --argjson center "${center}" --argjson games "${games}" \
+            '{center: $center, games: $games}'
+
+  build-center:
+    needs: detect
+    if: needs.detect.outputs.center != '[]'
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
-        service:
-          - migrate-schema
-          - platform-rpc
-          - control-plane
-          - gateway
-          - roomhost
-          - migrate-game-history
+        service: ${{ fromJSON(needs.detect.outputs.center) }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Login to Tencent Cloud TCR
-        uses: docker/login-action@v3
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
         with:
           registry: ${{ secrets.TCR_LOGIN_SERVER }}
           username: ${{ secrets.TCR_USERNAME }}
           password: ${{ secrets.TCR_PASSWORD }}
-
-      - name: Build and push image
+      - name: Build immutable center image
         env:
           REGISTRY: ${{ secrets.TCR_LOGIN_SERVER }}
           SERVICE: ${{ matrix.service }}
         run: |
-          tag="${GITHUB_SHA::7}"
-          image="${REGISTRY}/tengxuntcr/game-platform-${SERVICE}"
+          image="${REGISTRY}/tengxuntcr/game-platform-${SERVICE}:${GITHUB_SHA}"
           docker build \
             --build-arg SERVICE="${SERVICE}" \
             -f deployments/Dockerfile \
-            -t "${image}:${tag}" \
-            -t "${image}:latest" \
+            -t "${image}" \
             .
-          docker push "${image}:${tag}"
-          docker push "${image}:latest"
+          docker push "${image}"
 
-  deploy:
+  build-games:
+    needs: detect
+    if: needs.detect.outputs.games != '[]'
     runs-on: ubuntu-24.04
-    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        game: ${{ fromJSON(needs.detect.outputs.games) }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.TCR_LOGIN_SERVER }}
+          username: ${{ secrets.TCR_USERNAME }}
+          password: ${{ secrets.TCR_PASSWORD }}
+      - name: Build immutable game RoomHost image
+        env:
+          REGISTRY: ${{ secrets.TCR_LOGIN_SERVER }}
+          GAME: ${{ matrix.game }}
+        run: |
+          service="roomhost-${GAME}"
+          image="${REGISTRY}/tengxuntcr/game-platform-${service}:${GITHUB_SHA}"
+          docker build \
+            --build-arg SERVICE="${service}" \
+            -f deployments/Dockerfile \
+            -t "${image}" \
+            .
+          docker push "${image}"
 
+  build-release-tool:
+    needs: detect
+    if: needs.detect.outputs.games != '[]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.TCR_LOGIN_SERVER }}
+          username: ${{ secrets.TCR_USERNAME }}
+          password: ${{ secrets.TCR_PASSWORD }}
+      - name: Build game release tool
+        env:
+          REGISTRY: ${{ secrets.TCR_LOGIN_SERVER }}
+        run: |
+          image="${REGISTRY}/tengxuntcr/game-platform-game-release:${GITHUB_SHA}"
+          docker build \
+            --build-arg SERVICE=game-release \
+            -f deployments/Dockerfile \
+            -t "${image}" \
+            .
+          docker push "${image}"
+
+  build-identity-migration:
+    needs: detect
+    if: needs.detect.outputs.migration == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.TCR_LOGIN_SERVER }}
+          username: ${{ secrets.TCR_USERNAME }}
+          password: ${{ secrets.TCR_PASSWORD }}
+      - name: Build player identity migration tool
+        env:
+          REGISTRY: ${{ secrets.TCR_LOGIN_SERVER }}
+        run: |
+          image="${REGISTRY}/tengxuntcr/game-platform-identity-migration:${GITHUB_SHA}"
+          docker build \
+            -f deployments/IdentityMigration.Dockerfile \
+            -t "${image}" \
+            .
+          docker push "${image}"
+
+  deploy-center:
+    needs:
+      - detect
+      - build-center
+      - build-identity-migration
+    if: >-
+      always() &&
+      needs.detect.outputs.center != '[]' &&
+      needs.build-center.result == 'success' &&
+      (needs.build-identity-migration.result == 'success' || needs.build-identity-migration.result == 'skipped')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
       - name: Upload production configuration
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: 'docker-compose.prod.yml,scripts/validate-prod-config.sh'
+          source: docker-compose.prod.yml,scripts/validate-prod-config.sh,scripts/normalize-prod-player-identities.sh
           target: /home/game-platform
-
-      - name: Migrate and roll out services
+      - name: Roll out changed center services
         uses: appleboy/ssh-action@v1.2.0
         env:
           TCR_LOGIN_SERVER: ${{ secrets.TCR_LOGIN_SERVER }}
           TCR_USERNAME: ${{ secrets.TCR_USERNAME }}
           TCR_PASSWORD: ${{ secrets.TCR_PASSWORD }}
           IMAGE_TAG: ${{ github.sha }}
+          CENTER_SERVICES: ${{ needs.detect.outputs.center }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: TCR_LOGIN_SERVER,TCR_USERNAME,TCR_PASSWORD,IMAGE_TAG
+          envs: TCR_LOGIN_SERVER,TCR_USERNAME,TCR_PASSWORD,IMAGE_TAG,CENTER_SERVICES
           script: |
             set -eu
             cd /home/game-platform
@@ -85,53 +220,103 @@ jobs:
             . ./.env
             set +a
             export GAME_PLATFORM_IMAGE_REGISTRY="${TCR_LOGIN_SERVER}/tengxuntcr"
-            export GAME_PLATFORM_IMAGE_TAG="$(printf '%s' "${IMAGE_TAG}" | cut -c1-7)"
+            export GAME_PLATFORM_IMAGE_TAG="${IMAGE_TAG}"
+            export PLAYER_IDENTITY_MIGRATION_IMAGE="${TCR_LOGIN_SERVER}/tengxuntcr/game-platform-identity-migration:${IMAGE_TAG}"
             printf '%s' "${TCR_PASSWORD}" | docker login "${TCR_LOGIN_SERVER}" \
               --username "${TCR_USERNAME}" --password-stdin
-            docker network inspect global-network >/dev/null
             chmod +x scripts/validate-prod-config.sh
             ./scripts/validate-prod-config.sh
-            for attempt in $(seq 1 5); do
-              if docker compose -f docker-compose.prod.yml pull \
-                schema-migrate control-plane platform-rpc gateway roomhost; then
-                break
-              fi
-              if [ "${attempt}" -eq 5 ]; then
-                echo "service image pull failed" >&2
-                exit 1
-              fi
-              sleep $((attempt * 5))
-            done
-            docker compose -f docker-compose.prod.yml \
-              run --rm --no-deps schema-migrate
-            docker compose -f docker-compose.prod.yml \
-              up -d --no-deps control-plane platform-rpc
-            for attempt in $(seq 1 30); do
-              if curl --fail --silent http://127.0.0.1:18093/readyz >/dev/null; then
-                break
-              fi
-              if [ "${attempt}" -eq 30 ]; then
-                echo "platform-rpc readiness check failed" >&2
-                exit 1
-              fi
-              sleep 2
-            done
-            docker compose -f docker-compose.prod.yml \
-              up -d --no-deps --remove-orphans gateway roomhost
-            for attempt in $(seq 1 30); do
-              if curl --fail --silent http://127.0.0.1:18000/healthz >/dev/null; then
-                break
-              fi
-              if [ "${attempt}" -eq 30 ]; then
-                echo "gateway readiness check failed" >&2
-                exit 1
-              fi
-              sleep 2
-            done
-            docker image prune -f
+            docker pull "${PLAYER_IDENTITY_MIGRATION_IMAGE}"
+            services="$(printf '%s' "${CENTER_SERVICES}" | jq -r '.[]')"
+            docker compose -f docker-compose.prod.yml pull ${services}
+            if printf '%s\n' "${services}" | grep -Fxq migrate-schema; then
+              docker compose -f docker-compose.prod.yml run --rm --no-deps schema-migrate
+            fi
+            runtime_services="$(
+              printf '%s\n' "${services}" |
+                grep -v '^migrate-schema$' |
+                tr '\n' ' '
+            )"
+            if [ -n "${runtime_services}" ]; then
+              docker compose -f docker-compose.prod.yml \
+                up -d --no-deps ${runtime_services}
+            fi
+            if printf '%s\n' "${services}" | grep -Fxq platform-rpc; then
+              for attempt in $(seq 1 30); do
+                curl --fail --silent http://127.0.0.1:18093/readyz >/dev/null && break
+                test "${attempt}" -lt 30
+                sleep 2
+              done
+            fi
 
+  deploy-games:
+    needs:
+      - detect
+      - build-games
+      - build-release-tool
+      - deploy-center
+    if: >-
+      always() &&
+      needs.detect.outputs.games != '[]' &&
+      needs.build-games.result == 'success' &&
+      needs.build-release-tool.result == 'success' &&
+      (needs.deploy-center.result == 'success' || needs.deploy-center.result == 'skipped')
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: true
+      max-parallel: 1
+      matrix:
+        game: ${{ fromJSON(needs.detect.outputs.games) }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Upload game release scripts
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: docker-compose.prod.yml,scripts/deploy-game-slot.sh,scripts/validate-prod-config.sh
+          target: /home/game-platform
+      - name: Deploy game slot
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          TCR_LOGIN_SERVER: ${{ secrets.TCR_LOGIN_SERVER }}
+          TCR_USERNAME: ${{ secrets.TCR_USERNAME }}
+          TCR_PASSWORD: ${{ secrets.TCR_PASSWORD }}
+          IMAGE_TAG: ${{ github.sha }}
+          GAME: ${{ matrix.game }}
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          envs: TCR_LOGIN_SERVER,TCR_USERNAME,TCR_PASSWORD,IMAGE_TAG,GAME
+          script: |
+            set -eu
+            cd /home/game-platform
+            set -a
+            . ./.env
+            set +a
+            printf '%s' "${TCR_PASSWORD}" | docker login "${TCR_LOGIN_SERVER}" \
+              --username "${TCR_USERNAME}" --password-stdin
+            chmod +x scripts/deploy-game-slot.sh scripts/validate-prod-config.sh
+            ./scripts/validate-prod-config.sh
+            registry="${TCR_LOGIN_SERVER}/tengxuntcr"
+            export GAME_RELEASE_IMAGE="${registry}/game-platform-game-release:${IMAGE_TAG}"
+            target_image="${registry}/game-platform-roomhost-${GAME}:${IMAGE_TAG}"
+            docker pull "${GAME_RELEASE_IMAGE}"
+            docker pull "${target_image}"
+            ./scripts/deploy-game-slot.sh "${GAME}" "${target_image}"
+
+  notify:
+    needs:
+      - deploy-center
+      - deploy-games
+    if: >-
+      always() &&
+      (needs.deploy-center.result == 'success' || needs.deploy-games.result == 'success')
+    runs-on: ubuntu-24.04
+    steps:
       - name: Notify Feishu
-        if: success()
         continue-on-error: true
         run: |
           curl --fail-with-body -X POST \

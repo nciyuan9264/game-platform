@@ -45,10 +45,9 @@ func (p *Plugin) ProjectHistory(
 	}
 	scores := scoreItems(typed)
 	finished := typed.RoomStatus == domain.RoomStatusEnd
-	winnerPlayerID, winnerUserID := "", ""
+	winnerPlayerID := ""
 	if finished && len(scores) > 0 {
 		winnerPlayerID = scores[0].playerID
-		winnerUserID = userIDFromPlayerID(winnerPlayerID)
 	}
 	players := make([]game.HistoryPlayer, 0, len(scores))
 	rank := 0
@@ -61,7 +60,6 @@ func (p *Plugin) ProjectHistory(
 		finalScore, finalRank := score.score, rank
 		roster := typed.Roster[score.playerID]
 		players = append(players, game.HistoryPlayer{
-			UserID:     userIDFromPlayerID(score.playerID),
 			PlayerID:   score.playerID,
 			SeatIndex:  index,
 			IsAI:       roster != nil && roster.AI,
@@ -71,17 +69,18 @@ func (p *Plugin) ProjectHistory(
 		})
 	}
 	return game.HistoryProjection{
-		Started:           true,
-		Finished:          finished,
-		AbandonedEligible: maxScore(typed)*2 >= 15,
-		StartedAt:         typed.GameStartTime,
-		MaxPlayers:        typed.MaxPlayers,
-		InitialState:      initialState,
-		StateBlob:         stateBlob,
-		FinalResult:       result,
-		WinnerUserID:      winnerUserID,
-		WinnerPlayerID:    winnerPlayerID,
-		Players:           players,
+		Started:             true,
+		Finished:            finished,
+		AbandonedEligible:   maxScore(typed)*2 >= 15,
+		StartedAt:           typed.GameStartTime,
+		MaxPlayers:          typed.MaxPlayers,
+		ReplaySchemaVersion: ReplaySchemaVersion,
+		ReplayFrame:         splendorReplayFrame(typed, result),
+		InitialState:        initialState,
+		StateBlob:           stateBlob,
+		FinalResult:         result,
+		WinnerPlayerID:      winnerPlayerID,
+		Players:             players,
 	}, nil
 }
 
@@ -117,7 +116,7 @@ func (p *Plugin) DecodeReplayState(
 		for _, player := range players {
 			state.PlayerOrder = append(state.PlayerOrder, player.PlayerID)
 			state.Roster[player.PlayerID] = &domain.Player{
-				UserID: userIDFromPlayerID(player.PlayerID), PlayerID: player.PlayerID,
+				UserID: player.UserID, PlayerID: player.PlayerID,
 				AI: player.IsAI, SeatIndex: player.SeatIndex, Ready: true,
 			}
 		}
@@ -139,9 +138,21 @@ func (p *Plugin) BuildReplaySnapshot(
 		return nil, err
 	}
 	result := rules.RecomputeDerivedState(domain.NewRoom(typed))
-	snapshot := map[string]any{
-		"seq":         seq,
-		"totalEvents": total,
+	snapshot := splendorReplayFrame(typed, result)
+	snapshot["seq"] = seq
+	snapshot["totalEvents"] = total
+	if commandType != "" {
+		payloadJSON, _ := json.Marshal(payload)
+		snapshot["currentEvent"] = map[string]any{
+			"seq": seq, "playerID": playerID, "cmdType": commandType,
+			"payloadJSON": string(payloadJSON),
+		}
+	}
+	return snapshot, nil
+}
+
+func splendorReplayFrame(typed *domain.GameState, result any) map[string]any {
+	return map[string]any{
 		"roomData": map[string]any{
 			"normalCards":   typed.NormalCards,
 			"nobleCards":    typed.NobleCards,
@@ -155,14 +166,6 @@ func (p *Plugin) BuildReplaySnapshot(
 		"playersData": typed.Players,
 		"result":      result,
 	}
-	if commandType != "" {
-		payloadJSON, _ := json.Marshal(payload)
-		snapshot["currentEvent"] = map[string]any{
-			"seq": seq, "playerID": playerID, "cmdType": commandType,
-			"payloadJSON": string(payloadJSON),
-		}
-	}
-	return snapshot, nil
 }
 
 type scoreItem struct {

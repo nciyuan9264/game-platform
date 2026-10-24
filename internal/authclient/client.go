@@ -100,6 +100,10 @@ type UserDirectory interface {
 	ListUsers(ctx context.Context, req ListUsersRequest) (ListUsersResponse, error)
 }
 
+type PublicProfileDirectory interface {
+	BatchGetPublicProfiles(ctx context.Context, userIDs []string) (map[string]string, error)
+}
+
 type JWKSService interface {
 	GetJWKS(ctx context.Context) (string, error)
 }
@@ -109,6 +113,7 @@ type Client interface {
 	LoginService
 	ProfileService
 	UserDirectory
+	PublicProfileDirectory
 	JWKSService
 }
 

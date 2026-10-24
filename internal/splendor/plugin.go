@@ -26,6 +26,8 @@ const (
 	maxNoHumanChecks  = 3
 )
 
+const ReplaySchemaVersion = 2
+
 const splendorTurnTimeout = 60 * time.Second
 
 type Plugin struct{}
@@ -40,6 +42,7 @@ func Definition() game.Definition {
 		AI:                plugin,
 		Scheduler:         plugin,
 		History:           plugin,
+		LegacyReplay:      plugin,
 	}
 }
 
@@ -119,10 +122,13 @@ func (p *Plugin) Roster(_ context.Context, state game.State) ([]game.RosterPlaye
 		if player == nil {
 			continue
 		}
+		displayName := ""
+		if player.AI {
+			displayName = player.DisplayName
+		}
 		result = append(result, game.RosterPlayer{
-			UserID:      player.UserID,
 			PlayerID:    player.PlayerID,
-			DisplayName: player.DisplayName,
+			DisplayName: displayName,
 			Online:      player.Online,
 			IsAI:        player.AI,
 			SeatIndex:   player.SeatIndex,
@@ -790,11 +796,4 @@ func deckCounts(state *domain.GameState) map[string]int {
 		}
 	}
 	return result
-}
-
-func userIDFromPlayerID(playerID string) string {
-	if strings.HasPrefix(playerID, "ai_") {
-		return ""
-	}
-	return playerID
 }

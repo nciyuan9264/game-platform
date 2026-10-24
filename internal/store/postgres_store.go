@@ -29,6 +29,7 @@ var (
 	ErrRoomNotOpen           = errors.New("room is not open")
 	ErrSpectatorUnavailable  = errors.New("room is not available for spectating")
 	ErrSpectatorParticipant  = errors.New("room participants must use the live game connection")
+	ErrInvalidPlayerIdentity = errors.New("invalid player identity")
 )
 
 func NewPostgresStore(ctx context.Context, dsn string) (*PostgresStore, error) {
@@ -202,6 +203,46 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 		`ALTER TABLE match_players ADD COLUMN IF NOT EXISTS seat_index INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE match_players ADD COLUMN IF NOT EXISTS ready BOOLEAN NOT NULL DEFAULT false`,
 		`CREATE INDEX IF NOT EXISTS idx_match_players_user_id ON match_players (user_id)`,
+		`CREATE TABLE IF NOT EXISTS game_catalog (
+			game_type TEXT PRIMARY KEY,
+			active_engine_version TEXT NOT NULL,
+			default_max_players INTEGER NOT NULL CHECK (default_max_players > 0),
+			replay_schema_version INTEGER NOT NULL CHECK (replay_schema_version > 0),
+			enabled_for_new_rooms BOOLEAN NOT NULL,
+			is_default BOOLEAN NOT NULL,
+			revision BIGINT NOT NULL CHECK (revision > 0),
+			updated_at TIMESTAMPTZ NOT NULL
+		)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_game_catalog_enabled_default
+			ON game_catalog (is_default)
+			WHERE is_default AND enabled_for_new_rooms`,
+		`CREATE TABLE IF NOT EXISTS game_catalog_events (
+			event_id BIGSERIAL PRIMARY KEY,
+			game_type TEXT NOT NULL,
+			action TEXT NOT NULL,
+			previous_entry JSONB,
+			current_entry JSONB,
+			artifact TEXT NOT NULL DEFAULT '',
+			actor TEXT NOT NULL DEFAULT '',
+			created_at TIMESTAMPTZ NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_game_catalog_events_game
+			ON game_catalog_events (game_type, event_id DESC)`,
+		`INSERT INTO game_catalog (
+			game_type, active_engine_version, default_max_players,
+			replay_schema_version, enabled_for_new_rooms, is_default,
+			revision, updated_at
+		) VALUES
+			('davinci', 'davinci-v2', 2, 1, true, true, 1, NOW()),
+			('acquire', 'acquire-v2', 6, 2, true, false, 1, NOW()),
+			('splendor', 'splendor-v2', 4, 2, true, false, 1, NOW())
+		ON CONFLICT (game_type) DO NOTHING`,
+		`UPDATE game_catalog
+		SET replay_schema_version = 2,
+			revision = revision + 1,
+			updated_at = NOW()
+		WHERE game_type IN ('acquire', 'splendor')
+			AND replay_schema_version < 2`,
 		`CREATE TABLE IF NOT EXISTS games (
 			id BIGSERIAL PRIMARY KEY,
 			room_id TEXT NOT NULL,
@@ -225,6 +266,9 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 		`ALTER TABLE games ALTER COLUMN end_reason SET DEFAULT ''`,
 		`ALTER TABLE games ALTER COLUMN end_reason SET NOT NULL`,
 		`CREATE INDEX IF NOT EXISTS idx_games_type_started ON games (game_type, started_at DESC)`,
+		`ALTER TABLE games ADD COLUMN IF NOT EXISTS engine_version TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE games ADD COLUMN IF NOT EXISTS replay_schema_version INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE games ADD COLUMN IF NOT EXISTS initial_replay_payload BYTEA`,
 		`ALTER TABLE games ADD COLUMN IF NOT EXISTS legacy_source TEXT`,
 		`ALTER TABLE games ADD COLUMN IF NOT EXISTS legacy_game_id BIGINT`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_games_legacy_identity ON games (legacy_source, legacy_game_id) WHERE legacy_source IS NOT NULL`,
@@ -234,6 +278,7 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 			game_id BIGINT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
 			user_id BIGINT,
 			player_id TEXT NOT NULL,
+			display_name TEXT NOT NULL DEFAULT '',
 			seat_index INTEGER NOT NULL,
 			is_ai BOOLEAN NOT NULL,
 			final_score INTEGER,
@@ -243,6 +288,7 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 			is_winner BOOLEAN NOT NULL DEFAULT false,
 			created_at TIMESTAMPTZ NOT NULL
 		)`,
+		`ALTER TABLE game_players ADD COLUMN IF NOT EXISTS display_name TEXT NOT NULL DEFAULT ''`,
 		`UPDATE game_players
 		SET user_id = CASE
 			WHEN player_id ~ '^[0-9]+$' THEN player_id::BIGINT
@@ -260,6 +306,18 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 			AND player.user_id IS NOT NULL`,
 		`CREATE INDEX IF NOT EXISTS idx_game_players_game ON game_players (game_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_game_players_user ON game_players (user_id, game_id)`,
+		`CREATE TABLE IF NOT EXISTS player_identity_aliases (
+			game_id BIGINT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+			match_id TEXT NOT NULL,
+			source_player_id TEXT NOT NULL,
+			player_id TEXT NOT NULL,
+			user_id BIGINT,
+			is_ai BOOLEAN NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL,
+			PRIMARY KEY (game_id, source_player_id)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_player_identity_aliases_match_source
+			ON player_identity_aliases (match_id, source_player_id)`,
 		`CREATE TABLE IF NOT EXISTS game_events (
 			id BIGSERIAL PRIMARY KEY,
 			game_id BIGINT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
@@ -273,6 +331,7 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 			UNIQUE (game_id, seq)
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_game_events_game ON game_events (game_id, seq)`,
+		`ALTER TABLE game_events ADD COLUMN IF NOT EXISTS replay_payload BYTEA`,
 		`CREATE TABLE IF NOT EXISTS game_operation_events (
 			event_id TEXT PRIMARY KEY,
 			room_id TEXT NOT NULL,
@@ -1342,8 +1401,11 @@ func (s *PostgresStore) GetMatch(ctx context.Context, matchID string) (contracts
 }
 
 func (s *PostgresStore) UpsertMatchPlayer(ctx context.Context, matchID string, player contracts.MatchPlayerRecord) error {
-	if matchID == "" || player.PlayerID == "" {
-		return nil
+	if strings.TrimSpace(matchID) == "" {
+		return fmt.Errorf("%w: match ID is required", ErrInvalidPlayerIdentity)
+	}
+	if err := validateMatchPlayerIdentity(player); err != nil {
+		return err
 	}
 	now := time.Now().UTC()
 	if player.JoinedAt.IsZero() {
@@ -1351,9 +1413,6 @@ func (s *PostgresStore) UpsertMatchPlayer(ctx context.Context, matchID string, p
 	}
 	if player.LastSeen.IsZero() {
 		player.LastSeen = player.JoinedAt
-	}
-	if player.UserID == "" {
-		player.UserID = player.PlayerID
 	}
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO match_players (
@@ -1376,6 +1435,51 @@ func (s *PostgresStore) UpsertMatchPlayer(ctx context.Context, matchID string, p
 		matchID, player.UserID, player.PlayerID, player.DisplayName, player.Name, player.Email, player.Avatar,
 		player.GatewayNode, player.Online, player.IsAI, player.SeatIndex, player.Ready,
 		nullableTime(player.JoinedAt), nullableTime(player.LastSeen))
+	return err
+}
+
+func validateMatchPlayerIdentity(player contracts.MatchPlayerRecord) error {
+	if strings.TrimSpace(player.PlayerID) == "" {
+		return fmt.Errorf("%w: player ID is required", ErrInvalidPlayerIdentity)
+	}
+	if player.IsAI {
+		if player.UserID != "" {
+			return fmt.Errorf("%w: AI player %q must not have a user ID", ErrInvalidPlayerIdentity, player.PlayerID)
+		}
+		return nil
+	}
+	if player.UserID == "" || player.PlayerID != player.UserID {
+		return fmt.Errorf(
+			"%w: human player ID %q must equal user ID %q",
+			ErrInvalidPlayerIdentity,
+			player.PlayerID,
+			player.UserID,
+		)
+	}
+	userID, err := strconv.ParseUint(player.UserID, 10, 64)
+	if err != nil || userID == 0 {
+		return fmt.Errorf("%w: human user ID %q must be a positive integer", ErrInvalidPlayerIdentity, player.UserID)
+	}
+	return nil
+}
+
+func (s *PostgresStore) UpdateMatchPlayerDisplayName(
+	ctx context.Context,
+	userID,
+	displayName string,
+) error {
+	parsed, err := strconv.ParseUint(userID, 10, 64)
+	if err != nil || parsed == 0 {
+		return fmt.Errorf("%w: human user ID %q must be a positive integer", ErrInvalidPlayerIdentity, userID)
+	}
+	_, err = s.db.ExecContext(ctx, `
+		UPDATE match_players
+		SET display_name = $2
+		WHERE user_id = $1
+			AND is_ai = false`,
+		userID,
+		displayName,
+	)
 	return err
 }
 

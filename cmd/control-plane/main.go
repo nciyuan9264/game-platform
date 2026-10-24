@@ -14,7 +14,6 @@ import (
 	"github.com/nciyuan9264/game-platform/internal/coordination"
 	"github.com/nciyuan9264/game-platform/internal/observability"
 	"github.com/nciyuan9264/game-platform/internal/platform/node"
-	"github.com/nciyuan9264/game-platform/internal/plugins"
 	"github.com/nciyuan9264/game-platform/internal/servicediscovery"
 	"github.com/nciyuan9264/game-platform/internal/store"
 	"github.com/nciyuan9264/game-platform/internal/transport"
@@ -56,11 +55,10 @@ func main() {
 	})
 	schedulerPolicy := observability.Env("ROOM_SCHEDULER", control.SchedulerLoadAware)
 	pendingWindow := observability.EnvDuration("ROOM_SCHEDULER_PENDING_WINDOW", 2*time.Minute)
-	games := plugins.Registry()
 	srv := control.NewServerWithConfig(st, coord, control.Config{
 		SchedulerPolicy: schedulerPolicy,
 		PendingWindow:   pendingWindow,
-		Games:           games,
+		GameCatalog:     st,
 		RoomCommands:    router,
 		AdminAuth:       authClient,
 	})

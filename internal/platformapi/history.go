@@ -1,14 +1,15 @@
 package platformapi
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
 
-	"github.com/nciyuan9264/game-platform/internal/acquire/domain/domain"
-	rules "github.com/nciyuan9264/game-platform/internal/acquire/rules"
 	"github.com/nciyuan9264/game-platform/internal/history"
+	"github.com/nciyuan9264/game-platform/internal/playerprofile"
 )
 
 func (s *Server) historyGames(w http.ResponseWriter, r *http.Request) {
@@ -33,6 +34,7 @@ func (s *Server) historyGames(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "history_error", err)
 		return
 	}
+	s.resolveHistoryGames(r.Context(), games)
 	writeJSON(w, http.StatusOK, apiResponse{StatusCode: http.StatusOK, Message: "ok", Data: map[string]any{"games": games}})
 }
 
@@ -63,10 +65,20 @@ func (s *Server) historyGame(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", err)
 		return
 	}
+	s.resolveHistoryPlayers(r.Context(), players)
+	displayNames := historyDisplayNames(players)
+	for index := range events {
+		events[index].DisplayName = displayNames[events[index].PlayerID]
+	}
 	if len(parts) == 1 {
 		metas := make([]history.EventMeta, 0, len(events))
 		for _, event := range events {
-			metas = append(metas, history.EventMeta{Seq: event.Seq, PlayerID: event.PlayerID, CommandType: event.CommandType})
+			metas = append(metas, history.EventMeta{
+				Seq:         event.Seq,
+				PlayerID:    event.PlayerID,
+				DisplayName: event.DisplayName,
+				CommandType: event.CommandType,
+			})
 		}
 		writeJSON(w, http.StatusOK, apiResponse{StatusCode: http.StatusOK, Message: "ok", Data: map[string]any{
 			"game": gameRecord, "players": players, "events": metas,
@@ -78,7 +90,7 @@ func (s *Server) historyGame(w http.ResponseWriter, r *http.Request) {
 		target := queryInt(r, "seq", -1)
 		snapshot, err := acquireSnapshot(gameRecord, players, events, target)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "replay_error", err)
+			writeError(w, http.StatusInternalServerError, materializedReplayErrorCode(err), err)
 			return
 		}
 		writeJSON(w, http.StatusOK, apiResponse{StatusCode: http.StatusOK, Message: "ok", Data: snapshot})
@@ -86,14 +98,14 @@ func (s *Server) historyGame(w http.ResponseWriter, r *http.Request) {
 		snapshots := make([]any, 0, len(events)+1)
 		initial, err := acquireSnapshot(gameRecord, players, events, -1)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "replay_error", err)
+			writeError(w, http.StatusInternalServerError, materializedReplayErrorCode(err), err)
 			return
 		}
 		snapshots = append(snapshots, initial)
 		for _, event := range events {
 			snapshot, err := acquireSnapshot(gameRecord, players, events, event.Seq)
 			if err != nil {
-				writeError(w, http.StatusInternalServerError, "replay_error", err)
+				writeError(w, http.StatusInternalServerError, materializedReplayErrorCode(err), err)
 				return
 			}
 			snapshots = append(snapshots, snapshot)
@@ -139,21 +151,16 @@ func (s *Server) rankings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "history_error", err)
 		return
 	}
+	s.resolveLeaderboard(r.Context(), entries)
 	writeJSON(w, http.StatusOK, apiResponse{StatusCode: http.StatusOK, Message: "ok", Data: map[string]any{
 		"gameType": gameType, "entries": entries,
 	}})
 }
 
 func acquireSnapshot(gameRecord history.Game, players []history.Player, events []history.Event, targetSeq int) (any, error) {
-	var state *domain.GameState
-	result := map[string]any{}
 	var current *history.Event
-	if targetSeq < 0 {
-		state = &domain.GameState{}
-		if err := json.Unmarshal(gameRecord.InitialState, state); err != nil {
-			return nil, err
-		}
-	} else {
+	payload := gameRecord.InitialReplayPayload
+	if targetSeq >= 0 {
 		for index := range events {
 			event := &events[index]
 			if event.Seq > targetSeq {
@@ -164,49 +171,35 @@ func acquireSnapshot(gameRecord history.Game, players []history.Player, events [
 		if current == nil {
 			return acquireSnapshot(gameRecord, players, events, -1)
 		}
-		decoded, derived, ok := rules.DecodeStateSnapshot(current.StateBlob)
-		if !ok {
-			decoded, derived, ok = rules.DecodeStateSnapshot(current.StateSnapshot)
-		}
-		if !ok {
-			return nil, strconv.ErrSyntax
-		}
-		state = decoded
-		result = derived
+		payload = current.ReplayPayload
 	}
-	playerMeta := map[string]any{}
-	playersData := map[string]any{}
-	for _, player := range players {
-		playerMeta[player.PlayerID] = map[string]any{
-			"playerID": player.PlayerID,
-			"online":   false,
-			"ai":       player.IsAI,
-		}
+	encoded, err := history.MaterializedReplayJSON(
+		gameRecord.ReplaySchemaVersion,
+		payload,
+		targetSeq,
+		len(events),
+		current,
+		players,
+	)
+	if err != nil {
+		return nil, err
 	}
-	for playerID, player := range state.Players {
-		playersData[playerID] = player
-	}
-	snapshot := map[string]any{
-		"seq":         targetSeq,
-		"totalEvents": len(events),
-		"roomData": map[string]any{
-			"companyInfo":   state.Companies,
-			"currentPlayer": state.CurrentPlayer,
-			"gameStatus":    state.RoomStatus,
-			"tiles":         state.BoardTiles,
-			"players":       playerMeta,
-		},
-		"playersData": playersData,
-		"result":      result,
-	}
-	if current != nil {
-		var payload any
-		_ = json.Unmarshal(current.Payload, &payload)
-		snapshot["currentEvent"] = map[string]any{
-			"seq": current.Seq, "playerID": current.PlayerID, "cmdType": current.CommandType, "payload": payload,
-		}
+	var snapshot any
+	if err := json.Unmarshal(encoded, &snapshot); err != nil {
+		return nil, err
 	}
 	return snapshot, nil
+}
+
+func materializedReplayErrorCode(err error) string {
+	switch {
+	case errors.Is(err, history.ErrReplayMaterializationMissing):
+		return "replay_materialization_missing"
+	case errors.Is(err, history.ErrReplaySchemaUnsupported):
+		return "replay_schema_unsupported"
+	default:
+		return "replay_error"
+	}
 }
 
 func historyGameType(r *http.Request) string {
@@ -226,4 +219,65 @@ func queryInt(r *http.Request, key string, fallback int) int {
 		return fallback
 	}
 	return value
+}
+
+func (s *Server) resolveHistoryGames(ctx context.Context, games []history.Game) {
+	subjects := make([]playerprofile.Player, 0)
+	for _, gameRecord := range games {
+		subjects = append(subjects, historyProfileSubjects(gameRecord.Players)...)
+	}
+	displayNames := s.profiles.Resolve(ctx, subjects)
+	for gameIndex := range games {
+		for playerIndex := range games[gameIndex].Players {
+			player := &games[gameIndex].Players[playerIndex]
+			player.DisplayName = displayNames[player.PlayerID]
+		}
+	}
+}
+
+func (s *Server) resolveHistoryPlayers(ctx context.Context, players []history.Player) {
+	displayNames := s.profiles.Resolve(ctx, historyProfileSubjects(players))
+	for index := range players {
+		players[index].DisplayName = displayNames[players[index].PlayerID]
+	}
+}
+
+func (s *Server) resolveLeaderboard(ctx context.Context, entries []history.LeaderboardEntry) {
+	subjects := make([]playerprofile.Player, 0, len(entries))
+	for _, entry := range entries {
+		subjects = append(subjects, playerprofile.Player{
+			UserID:      strconv.FormatInt(entry.UserID, 10),
+			PlayerID:    entry.PlayerID,
+			DisplayName: entry.DisplayName,
+		})
+	}
+	displayNames := s.profiles.Resolve(ctx, subjects)
+	for index := range entries {
+		entries[index].DisplayName = displayNames[entries[index].PlayerID]
+	}
+}
+
+func historyProfileSubjects(players []history.Player) []playerprofile.Player {
+	subjects := make([]playerprofile.Player, 0, len(players))
+	for _, player := range players {
+		userID := ""
+		if player.UserID != nil {
+			userID = strconv.FormatInt(*player.UserID, 10)
+		}
+		subjects = append(subjects, playerprofile.Player{
+			UserID:      userID,
+			PlayerID:    player.PlayerID,
+			DisplayName: player.DisplayName,
+			IsAI:        player.IsAI,
+		})
+	}
+	return subjects
+}
+
+func historyDisplayNames(players []history.Player) map[string]string {
+	displayNames := make(map[string]string, len(players))
+	for _, player := range players {
+		displayNames[player.PlayerID] = player.DisplayName
+	}
+	return displayNames
 }

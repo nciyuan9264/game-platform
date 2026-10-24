@@ -1,0 +1,120 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -ne 2 ]]; then
+  printf 'usage: %s <base-commit> <head-commit>\n' "$0" >&2
+  exit 2
+fi
+
+base="$1"
+head="$2"
+declare -A centers=()
+declare -A games=()
+production_change=0
+
+mark_all_games() {
+  games[acquire]=1
+  games[davinci]=1
+  games[splendor]=1
+}
+
+mark_all_centers() {
+  centers[migrate-schema]=1
+  centers[control-plane]=1
+  centers[platform-rpc]=1
+  centers[gateway]=1
+}
+
+mark_all() {
+  mark_all_games
+  mark_all_centers
+}
+
+if [[ -n "${CHANGED_FILES_FILE:-}" ]]; then
+  mapfile -t files <"$CHANGED_FILES_FILE"
+else
+  mapfile -t files < <(git diff --name-only "$base" "$head")
+fi
+
+for path in "${files[@]}"; do
+  [[ -z "$path" ]] && continue
+  case "$path" in
+    *.md|docs/*|.trae/*)
+      continue
+      ;;
+    *_test.go|testdata/*|*/testdata/*)
+      continue
+      ;;
+  esac
+  production_change=1
+
+  case "$path" in
+    internal/acquire/*|cmd/roomhost-acquire/*)
+      games[acquire]=1
+      ;;
+    internal/davinci/*|cmd/roomhost-davinci/*)
+      games[davinci]=1
+      ;;
+    internal/splendor/*|cmd/roomhost-splendor/*)
+      games[splendor]=1
+      ;;
+    internal/game/*|internal/roomhost/*|internal/roomhostapp/*|internal/gamelog/*)
+      mark_all_games
+      ;;
+    internal/history/*)
+      mark_all_games
+      centers[platform-rpc]=1
+      ;;
+    internal/transport/*)
+      mark_all
+      ;;
+    internal/store/*|internal/contracts/*)
+      mark_all
+      ;;
+    internal/control/*|internal/controlclient/*|cmd/control-plane/*)
+      centers[control-plane]=1
+      ;;
+    internal/rpc/*|cmd/platform-rpc/*)
+      centers[platform-rpc]=1
+      ;;
+    internal/gateway/*|cmd/gateway/*)
+      centers[gateway]=1
+      ;;
+    cmd/migrate-schema/*)
+      centers[migrate-schema]=1
+      ;;
+    cmd/game-release/*|cmd/backfill-replay/*|scripts/*|docker-compose*.yml|.github/workflows/*|.env.example)
+      ;;
+    deployments/Dockerfile|go.mod|go.sum|kitex_gen/*)
+      mark_all
+      ;;
+    internal/*|cmd/*)
+      mark_all
+      ;;
+    *)
+      mark_all
+      ;;
+  esac
+done
+
+center_json="$(
+  for value in "${!centers[@]}"; do
+    printf '%s\n' "$value"
+  done | sort | jq -Rsc 'split("\n") | map(select(length > 0))'
+)"
+game_json="$(
+  for value in "${!games[@]}"; do
+    printf '%s\n' "$value"
+  done | sort | jq -Rsc 'split("\n") | map(select(length > 0))'
+)"
+
+jq -cn \
+  --argjson center "$center_json" \
+  --argjson games "$game_json" \
+  --argjson productionChange "$production_change" \
+  '{
+    center: $center,
+    games: $games,
+    productionChange: ($productionChange == 1),
+    docsOnly: ($productionChange == 0)
+  }'

@@ -50,6 +50,10 @@ func TestPluginLifecycleAndHistory(t *testing.T) {
 	if len(projection.InitialState) == 0 || len(projection.StateBlob) == 0 {
 		t.Fatal("history snapshots were not generated")
 	}
+	if projection.ReplaySchemaVersion != ReplaySchemaVersion || projection.ReplayFrame == nil {
+		t.Fatalf("materialized replay projection = %+v", projection)
+	}
+	assertReplayFrameMatchesGolden(t, projection.ReplayFrame)
 }
 
 func TestPluginSnapshotDoesNotExposeHiddenCards(t *testing.T) {

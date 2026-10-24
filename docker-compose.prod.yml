@@ -17,11 +17,32 @@ x-runtime-env: &runtime-env
   OTEL_TRACES_SAMPLER: ${OTEL_TRACES_SAMPLER:-parentbased_traceidratio}
   OTEL_TRACES_SAMPLER_ARG: ${OTEL_TRACES_SAMPLER_ARG:-0.1}
 
+x-roomhost-service: &roomhost-service
+  stop_grace_period: 15s
+  depends_on:
+    schema-migrate:
+      condition: service_completed_successfully
+  networks:
+    - global-network
+  restart: unless-stopped
+
 services:
   schema-migrate:
     image: ${GAME_PLATFORM_IMAGE_REGISTRY:-sgccr.ccs.tencentyun.com/tengxuntcr}/game-platform-migrate-schema:${GAME_PLATFORM_IMAGE_TAG:-latest}
     environment:
       POSTGRES_DSN: ${POSTGRES_DSN:?set Game Platform RDS DSN}
+    networks:
+      - global-network
+    restart: 'no'
+
+  normalize-player-identities:
+    profiles:
+      - tools
+    image: ${PLAYER_IDENTITY_MIGRATION_IMAGE:-${GAME_PLATFORM_IMAGE_REGISTRY:-sgccr.ccs.tencentyun.com/tengxuntcr}/game-platform-identity-migration:${GAME_PLATFORM_IMAGE_TAG:-latest}}
+    environment:
+      POSTGRES_DSN: ${POSTGRES_DSN:?set Game Platform RDS DSN}
+    volumes:
+      - /home/game-platform/backups:/backup
     networks:
       - global-network
     restart: 'no'
@@ -64,6 +85,9 @@ services:
       CONTROL_RPC_ADDR: control-plane:18091
       CONTROL_RPC_PSM: game.platform.control
       CONTROL_RPC_TIMEOUT: ${CONTROL_RPC_TIMEOUT:-30s}
+      AUTH_RPC_ADDR: ${AUTH_RPC_ADDR:-auth-backend:19090}
+      AUTH_RPC_PSM: ${AUTH_RPC_PSM:-pam.auth.rpc}
+      AUTH_RPC_TIMEOUT: ${AUTH_RPC_TIMEOUT:-2s}
     ports:
       - '127.0.0.1:18092:18092'
       - '127.0.0.1:18093:18093'
@@ -87,6 +111,8 @@ services:
       PUBLIC_ADDR: gateway:8080
       AUTH_RPC_ADDR: ${AUTH_RPC_ADDR:-auth-backend:19090}
       AUTH_RPC_PSM: ${AUTH_RPC_PSM:-pam.auth.rpc}
+      AUTH_RPC_TIMEOUT: ${AUTH_RPC_TIMEOUT:-2s}
+      PROFILE_REFRESH_INTERVAL: ${PROFILE_REFRESH_INTERVAL:-60s}
       WS_ALLOWED_ORIGINS: ${WS_ALLOWED_ORIGINS:?set Game Platform WebSocket origins}
     ports:
       - '127.0.0.1:18000:8080'
@@ -99,19 +125,59 @@ services:
           - game-platform-gateway
     restart: unless-stopped
 
-  roomhost:
-    image: ${GAME_PLATFORM_IMAGE_REGISTRY:-sgccr.ccs.tencentyun.com/tengxuntcr}/game-platform-roomhost:${GAME_PLATFORM_IMAGE_TAG:-latest}
+  roomhost-acquire-a:
+    <<: *roomhost-service
+    image: ${ACQUIRE_ROOMHOST_A_IMAGE:?set Acquire RoomHost A image}
     environment:
       <<: *runtime-env
-      NODE_ID: roomhost
-      PUBLIC_ADDR: roomhost:9000
-    stop_grace_period: 15s
-    depends_on:
-      schema-migrate:
-        condition: service_completed_successfully
-    networks:
-      - global-network
-    restart: unless-stopped
+      NODE_ID: roomhost-acquire-a
+      PUBLIC_ADDR: roomhost-acquire-a:9000
+      SERVICE_VERSION: ${ACQUIRE_ROOMHOST_A_VERSION:?set Acquire RoomHost A artifact version}
+
+  roomhost-acquire-b:
+    <<: *roomhost-service
+    image: ${ACQUIRE_ROOMHOST_B_IMAGE:?set Acquire RoomHost B image}
+    environment:
+      <<: *runtime-env
+      NODE_ID: roomhost-acquire-b
+      PUBLIC_ADDR: roomhost-acquire-b:9000
+      SERVICE_VERSION: ${ACQUIRE_ROOMHOST_B_VERSION:?set Acquire RoomHost B artifact version}
+
+  roomhost-davinci-a:
+    <<: *roomhost-service
+    image: ${DAVINCI_ROOMHOST_A_IMAGE:?set DaVinci RoomHost A image}
+    environment:
+      <<: *runtime-env
+      NODE_ID: roomhost-davinci-a
+      PUBLIC_ADDR: roomhost-davinci-a:9000
+      SERVICE_VERSION: ${DAVINCI_ROOMHOST_A_VERSION:?set DaVinci RoomHost A artifact version}
+
+  roomhost-davinci-b:
+    <<: *roomhost-service
+    image: ${DAVINCI_ROOMHOST_B_IMAGE:?set DaVinci RoomHost B image}
+    environment:
+      <<: *runtime-env
+      NODE_ID: roomhost-davinci-b
+      PUBLIC_ADDR: roomhost-davinci-b:9000
+      SERVICE_VERSION: ${DAVINCI_ROOMHOST_B_VERSION:?set DaVinci RoomHost B artifact version}
+
+  roomhost-splendor-a:
+    <<: *roomhost-service
+    image: ${SPLENDOR_ROOMHOST_A_IMAGE:?set Splendor RoomHost A image}
+    environment:
+      <<: *runtime-env
+      NODE_ID: roomhost-splendor-a
+      PUBLIC_ADDR: roomhost-splendor-a:9000
+      SERVICE_VERSION: ${SPLENDOR_ROOMHOST_A_VERSION:?set Splendor RoomHost A artifact version}
+
+  roomhost-splendor-b:
+    <<: *roomhost-service
+    image: ${SPLENDOR_ROOMHOST_B_IMAGE:?set Splendor RoomHost B image}
+    environment:
+      <<: *runtime-env
+      NODE_ID: roomhost-splendor-b
+      PUBLIC_ADDR: roomhost-splendor-b:9000
+      SERVICE_VERSION: ${SPLENDOR_ROOMHOST_B_VERSION:?set Splendor RoomHost B artifact version}
 
 networks:
   global-network:

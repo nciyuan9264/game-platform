@@ -8,7 +8,6 @@ import (
 	"hash/fnv"
 	"math/rand/v2"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/nciyuan9264/game-platform/internal/contracts"
@@ -119,16 +118,11 @@ func (p *Plugin) Roster(ctx context.Context, state game.State) ([]game.RosterPla
 		if player == nil {
 			continue
 		}
-		userID := playerID
-		displayName := playerID
-		if !player.AI {
-			displayName = ""
-			if index := strings.LastIndex(playerID, "-"); index >= 0 && index+1 < len(playerID) {
-				userID = playerID[index+1:]
-			}
+		displayName := ""
+		if player.AI {
+			displayName = "AI"
 		}
 		players = append(players, game.RosterPlayer{
-			UserID:      userID,
 			PlayerID:    playerID,
 			DisplayName: displayName,
 			Online:      player.Online,

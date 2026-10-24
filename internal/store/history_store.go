@@ -26,11 +26,14 @@ func (s *PostgresStore) StartHistoryGame(ctx context.Context, gameRecord history
 	var gameID int64
 	err = tx.QueryRowContext(ctx, `
 		INSERT INTO games (
-			room_id, game_type, started_at, max_players, initial_state, created_at, updated_at
-		) VALUES ($1,$2,$3,$4,$5,$6,$6)
+			room_id, game_type, engine_version, replay_schema_version,
+			started_at, max_players, initial_state, initial_replay_payload,
+			created_at, updated_at
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$9)
 		RETURNING id`,
-		gameRecord.RoomID, gameRecord.GameType, gameRecord.StartedAt, gameRecord.MaxPlayers,
-		nullableJSON(gameRecord.InitialState), now,
+		gameRecord.RoomID, gameRecord.GameType, gameRecord.EngineVersion,
+		gameRecord.ReplaySchemaVersion, gameRecord.StartedAt, gameRecord.MaxPlayers,
+		nullableJSON(gameRecord.InitialState), nullableBytes(gameRecord.InitialReplayPayload), now,
 	).Scan(&gameID)
 	if err != nil {
 		return 0, err
@@ -38,9 +41,11 @@ func (s *PostgresStore) StartHistoryGame(ctx context.Context, gameRecord history
 	for _, player := range players {
 		_, err = tx.ExecContext(ctx, `
 			INSERT INTO game_players (
-				game_id, user_id, player_id, seat_index, is_ai, final_stocks, is_winner, created_at
-			) VALUES ($1,$2,$3,$4,$5,0,false,$6)`,
-			gameID, nullableInt64(player.UserID), player.PlayerID, player.SeatIndex, player.IsAI, now)
+				game_id, user_id, player_id, display_name, seat_index, is_ai,
+				final_stocks, is_winner, created_at
+			) VALUES ($1,$2,$3,$4,$5,$6,0,false,$7)`,
+			gameID, nullableInt64(player.UserID), player.PlayerID, player.DisplayName,
+			player.SeatIndex, player.IsAI, now)
 		if err != nil {
 			return 0, err
 		}
@@ -101,6 +106,48 @@ func (s *PostgresStore) FindHistoryGameByStart(
 	return gameID, nextSeq, finished, nil
 }
 
+func (s *PostgresStore) SetHistoryReplayMetadata(
+	ctx context.Context,
+	gameID int64,
+	engineVersion string,
+	replaySchemaVersion int,
+	initialReplayPayload []byte,
+) error {
+	result, err := s.db.ExecContext(ctx, `
+		UPDATE games
+		SET engine_version = CASE
+				WHEN engine_version = '' THEN $2
+				ELSE engine_version
+			END,
+			replay_schema_version = CASE
+				WHEN replay_schema_version = 0 THEN $3
+				ELSE replay_schema_version
+			END,
+			initial_replay_payload = COALESCE(initial_replay_payload, $4)
+		WHERE id = $1
+			AND (engine_version = '' OR engine_version = $2)
+			AND (replay_schema_version = 0 OR replay_schema_version = $3)`,
+		gameID,
+		engineVersion,
+		replaySchemaVersion,
+		nullableBytes(initialReplayPayload),
+	)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected != 1 {
+		return fmt.Errorf(
+			"history replay metadata conflict for game %d",
+			gameID,
+		)
+	}
+	return nil
+}
+
 func (s *PostgresStore) ResetOpenHistoryGame(ctx context.Context, roomID, gameType string) error {
 	_, err := s.db.ExecContext(ctx, `
 		DELETE FROM games
@@ -119,11 +166,14 @@ func (s *PostgresStore) AppendHistoryEvent(ctx context.Context, event history.Ev
 	}
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO game_events (
-			game_id, seq, occurred_at, player_id, cmd_type, payload, state_snapshot, state_blob
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-		ON CONFLICT (game_id, seq) DO NOTHING`,
+			game_id, seq, occurred_at, player_id, cmd_type, payload,
+			state_snapshot, state_blob, replay_payload
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+		ON CONFLICT (game_id, seq) DO UPDATE SET
+			replay_payload = COALESCE(game_events.replay_payload, EXCLUDED.replay_payload)`,
 		event.GameID, event.Seq, event.OccurredAt, event.PlayerID, event.CommandType,
-		nullableJSON(event.Payload), nullableJSON(event.StateSnapshot), nullableBytes(event.StateBlob))
+		nullableJSON(event.Payload), nullableJSON(event.StateSnapshot),
+		nullableBytes(event.StateBlob), nullableBytes(event.ReplayPayload))
 	return err
 }
 
@@ -162,13 +212,14 @@ func (s *PostgresStore) FinishHistoryGame(ctx context.Context, gameID int64, inp
 		_, err = tx.ExecContext(ctx, `
 			UPDATE game_players SET
 				user_id = COALESCE($3, user_id),
-				final_score = $4,
-				final_money = $5,
-				final_stocks = $6,
-				final_rank = $7,
-				is_winner = $8
+				display_name = COALESCE(NULLIF($4, ''), display_name),
+				final_score = $5,
+				final_money = $6,
+				final_stocks = $7,
+				final_rank = $8,
+				is_winner = $9
 			WHERE game_id = $1 AND player_id = $2`,
-			gameID, player.PlayerID, nullableInt64(player.UserID), player.FinalScore,
+			gameID, player.PlayerID, nullableInt64(player.UserID), player.DisplayName, player.FinalScore,
 			player.FinalMoney, player.FinalStocks, player.FinalRank, player.IsWinner)
 		if err != nil {
 			return err
@@ -190,9 +241,11 @@ func (s *PostgresStore) ListHistoryGames(ctx context.Context, userID int64, game
 		offset = 0
 	}
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT DISTINCT g.id, g.room_id, g.game_type, g.started_at, g.ended_at,
+		SELECT DISTINCT g.id, g.room_id, g.game_type, g.engine_version,
+			g.replay_schema_version, g.started_at, g.ended_at,
 			g.duration_seconds, g.winner_user_id, g.winner_player_id, g.end_reason,
-			g.max_players, NULL::jsonb, NULL::jsonb, g.created_at, g.updated_at
+			g.max_players, NULL::jsonb, NULL::bytea, NULL::jsonb,
+			g.created_at, g.updated_at
 		FROM games g
 		JOIN game_players gp ON gp.game_id = g.id
 		WHERE gp.user_id = $1 AND g.game_type = $2 AND g.ended_at IS NOT NULL
@@ -241,9 +294,10 @@ func (s *PostgresStore) CountHistoryGames(ctx context.Context, userID int64, gam
 
 func (s *PostgresStore) GetHistoryGame(ctx context.Context, gameID int64, gameType string, includeEvents bool) (history.Game, []history.Player, []history.Event, error) {
 	row := s.db.QueryRowContext(ctx, `
-		SELECT id, room_id, game_type, started_at, ended_at, duration_seconds,
+		SELECT id, room_id, game_type, engine_version, replay_schema_version,
+			started_at, ended_at, duration_seconds,
 			winner_user_id, winner_player_id, end_reason, max_players,
-			initial_state, final_result, created_at, updated_at
+			initial_state, initial_replay_payload, final_result, created_at, updated_at
 		FROM games WHERE id = $1 AND game_type = $2`, gameID, gameType)
 	gameRecord, err := scanHistoryGame(row)
 	if err != nil {
@@ -259,9 +313,11 @@ func (s *PostgresStore) GetHistoryGame(ctx context.Context, gameID int64, gameTy
 
 func (s *PostgresStore) GetCompletedHistoryGameForUser(ctx context.Context, gameID, userID int64, gameType string, includeEvents bool) (history.Game, []history.Player, []history.Event, error) {
 	row := s.db.QueryRowContext(ctx, `
-		SELECT g.id, g.room_id, g.game_type, g.started_at, g.ended_at, g.duration_seconds,
+		SELECT g.id, g.room_id, g.game_type, g.engine_version,
+			g.replay_schema_version, g.started_at, g.ended_at, g.duration_seconds,
 			g.winner_user_id, g.winner_player_id, g.end_reason, g.max_players,
-			g.initial_state, g.final_result, g.created_at, g.updated_at
+			g.initial_state, g.initial_replay_payload, g.final_result,
+			g.created_at, g.updated_at
 		FROM games g
 		WHERE g.id = $1
 			AND g.game_type = $2
@@ -285,7 +341,7 @@ func (s *PostgresStore) GetCompletedHistoryGameForUser(ctx context.Context, game
 
 func (s *PostgresStore) HistoryPlayers(ctx context.Context, gameID int64) ([]history.Player, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, game_id, user_id, player_id, seat_index, is_ai, final_score,
+		SELECT id, game_id, user_id, player_id, display_name, seat_index, is_ai, final_score,
 			final_money, final_stocks, final_rank, is_winner, created_at
 		FROM game_players WHERE game_id = $1 ORDER BY seat_index ASC`, gameID)
 	if err != nil {
@@ -309,7 +365,7 @@ func (s *PostgresStore) historyPlayersByGameIDs(ctx context.Context, gameIDs []i
 		return playersByGameID, nil
 	}
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, game_id, user_id, player_id, seat_index, is_ai, final_score,
+		SELECT id, game_id, user_id, player_id, display_name, seat_index, is_ai, final_score,
 			final_money, final_stocks, final_rank, is_winner, created_at
 		FROM game_players
 		WHERE game_id = ANY($1)
@@ -329,9 +385,9 @@ func (s *PostgresStore) historyPlayersByGameIDs(ctx context.Context, gameIDs []i
 }
 
 func (s *PostgresStore) HistoryEvents(ctx context.Context, gameID int64, includeState bool) ([]history.Event, error) {
-	stateColumns := "NULL::jsonb, NULL::bytea"
+	stateColumns := "NULL::jsonb, NULL::bytea, replay_payload"
 	if includeState {
-		stateColumns = "state_snapshot, state_blob"
+		stateColumns = "state_snapshot, state_blob, replay_payload"
 	}
 	rows, err := s.db.QueryContext(ctx, fmt.Sprintf(`
 		SELECT id, game_id, seq, occurred_at, player_id, cmd_type, payload, %s
@@ -345,7 +401,8 @@ func (s *PostgresStore) HistoryEvents(ctx context.Context, gameID int64, include
 		var event history.Event
 		var payload, snapshot []byte
 		if err := rows.Scan(&event.ID, &event.GameID, &event.Seq, &event.OccurredAt,
-			&event.PlayerID, &event.CommandType, &payload, &snapshot, &event.StateBlob); err != nil {
+			&event.PlayerID, &event.CommandType, &payload, &snapshot,
+			&event.StateBlob, &event.ReplayPayload); err != nil {
 			return nil, err
 		}
 		event.Payload = payload
@@ -376,7 +433,7 @@ func (s *PostgresStore) HistoryReplayPageForUser(
 	}
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, game_id, seq, occurred_at, player_id, cmd_type, payload,
-			state_snapshot, state_blob
+			state_snapshot, state_blob, replay_payload
 		FROM game_events
 		WHERE game_id = $1
 		ORDER BY seq ASC
@@ -399,6 +456,7 @@ func (s *PostgresStore) HistoryReplayPageForUser(
 			&payload,
 			&snapshot,
 			&event.StateBlob,
+			&event.ReplayPayload,
 		); err != nil {
 			return history.Game{}, nil, 0, nil, err
 		}
@@ -446,7 +504,12 @@ func (s *PostgresStore) HistoryLeaderboardSorted(ctx context.Context, gameType, 
 				COUNT(*) AS total_games,
 				COUNT(*) FILTER (WHERE gp.is_winner) AS wins,
 				1.0 * COUNT(*) FILTER (WHERE gp.is_winner) / COUNT(*) AS win_rate,
-				(ARRAY_AGG(gp.player_id ORDER BY g.started_at DESC))[1]
+				gp.user_id::text,
+				COALESCE(
+					(ARRAY_AGG(gp.display_name ORDER BY g.started_at DESC)
+						FILTER (WHERE gp.display_name <> ''))[1],
+					''
+				)
 			FROM game_players gp
 			JOIN games g ON g.id = gp.game_id
 			WHERE g.game_type = $1 AND g.ended_at IS NOT NULL
@@ -463,14 +526,27 @@ func (s *PostgresStore) HistoryLeaderboardSorted(ctx context.Context, gameType, 
 			var entry history.LeaderboardEntry
 			var wins int
 			var winRate float64
-			if err := rows.Scan(&entry.UserID, &entry.TotalGames, &wins, &winRate, &entry.PlayerID); err != nil {
+			if err := rows.Scan(
+				&entry.UserID,
+				&entry.TotalGames,
+				&wins,
+				&winRate,
+				&entry.PlayerID,
+				&entry.DisplayName,
+			); err != nil {
 				return nil, err
 			}
 			entry.Wins = &wins
 			entry.WinRate = &winRate
 			entries = append(entries, entry)
 		}
-		return entries, rows.Err()
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+		if err := rows.Close(); err != nil {
+			return nil, err
+		}
+		return entries, nil
 	}
 	order := "avg_rank ASC, total_games DESC, gp.user_id ASC"
 	if sortBy == "totalGames" {
@@ -478,7 +554,12 @@ func (s *PostgresStore) HistoryLeaderboardSorted(ctx context.Context, gameType, 
 	}
 	rows, err := s.db.QueryContext(ctx, fmt.Sprintf(`
 		SELECT gp.user_id, COUNT(*) AS total_games, AVG(gp.final_rank)::float8 AS avg_rank,
-			(ARRAY_AGG(gp.player_id ORDER BY g.started_at DESC))[1]
+			gp.user_id::text,
+			COALESCE(
+				(ARRAY_AGG(gp.display_name ORDER BY g.started_at DESC)
+					FILTER (WHERE gp.display_name <> ''))[1],
+				''
+			)
 		FROM game_players gp
 		JOIN games g ON g.id = gp.game_id
 		WHERE g.game_type = $1 AND g.ended_at IS NOT NULL
@@ -494,13 +575,25 @@ func (s *PostgresStore) HistoryLeaderboardSorted(ctx context.Context, gameType, 
 	for rows.Next() {
 		var entry history.LeaderboardEntry
 		var avgRank float64
-		if err := rows.Scan(&entry.UserID, &entry.TotalGames, &avgRank, &entry.PlayerID); err != nil {
+		if err := rows.Scan(
+			&entry.UserID,
+			&entry.TotalGames,
+			&avgRank,
+			&entry.PlayerID,
+			&entry.DisplayName,
+		); err != nil {
 			return nil, err
 		}
 		entry.AvgRank = &avgRank
 		entries = append(entries, entry)
 	}
-	return entries, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	return entries, nil
 }
 
 func (s *PostgresStore) CountLeaderboardEntries(ctx context.Context, gameType string) (int, error) {
@@ -516,6 +609,132 @@ func (s *PostgresStore) CountLeaderboardEntries(ctx context.Context, gameType st
 		WHERE g.game_type = $1 AND g.ended_at IS NOT NULL
 			AND gp.user_id IS NOT NULL`+extra, gameType).Scan(&total)
 	return total, err
+}
+
+func (s *PostgresStore) ListReplayBackfillGameIDs(
+	ctx context.Context,
+	gameType string,
+	afterID int64,
+	limit int,
+) ([]int64, error) {
+	if limit <= 0 || limit > 1000 {
+		limit = 100
+	}
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT g.id
+		FROM games g
+		WHERE g.game_type = $1
+			AND g.id > $2
+			AND (
+				g.initial_replay_payload IS NULL
+				OR EXISTS (
+					SELECT 1
+					FROM game_events ge
+					WHERE ge.game_id = g.id AND ge.replay_payload IS NULL
+				)
+			)
+		ORDER BY g.id ASC
+		LIMIT $3`,
+		gameType,
+		afterID,
+		limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	ids := make([]int64, 0, limit)
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+func (s *PostgresStore) BackfillReplayPayloads(
+	ctx context.Context,
+	gameID int64,
+	engineVersion string,
+	replaySchemaVersion int,
+	initialReplayPayload []byte,
+	eventPayloads map[int][]byte,
+) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	result, err := tx.ExecContext(ctx, `
+		UPDATE games
+		SET engine_version = CASE
+				WHEN engine_version = '' THEN $2
+				ELSE engine_version
+			END,
+			replay_schema_version = CASE
+				WHEN replay_schema_version = 0 THEN $3
+				ELSE replay_schema_version
+			END,
+			initial_replay_payload = COALESCE(initial_replay_payload, $4)
+		WHERE id = $1
+			AND (engine_version = '' OR engine_version = $2)
+			AND (replay_schema_version = 0 OR replay_schema_version = $3)`,
+		gameID,
+		engineVersion,
+		replaySchemaVersion,
+		nullableBytes(initialReplayPayload),
+	)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected != 1 {
+		return fmt.Errorf("replay backfill metadata conflict for game %d", gameID)
+	}
+	for seq, payload := range eventPayloads {
+		if _, err := tx.ExecContext(ctx, `
+			UPDATE game_events
+			SET replay_payload = COALESCE(replay_payload, $3)
+			WHERE game_id = $1 AND seq = $2`,
+			gameID,
+			seq,
+			nullableBytes(payload),
+		); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func (s *PostgresStore) CountMissingReplayPayloads(
+	ctx context.Context,
+	gameType string,
+) (history.ReplayMissingCounts, error) {
+	var counts history.ReplayMissingCounts
+	err := s.db.QueryRowContext(ctx, `
+		SELECT
+			(
+				SELECT COUNT(*)
+				FROM games g
+				WHERE g.game_type = $1
+					AND g.initial_replay_payload IS NULL
+			),
+			(
+				SELECT COUNT(*)
+				FROM game_events ge
+				JOIN games g ON g.id = ge.game_id
+				WHERE g.game_type = $1
+					AND ge.replay_payload IS NULL
+			)`,
+		gameType,
+	).Scan(&counts.Games, &counts.Events)
+	return counts, err
 }
 
 type historyGameScanner interface {
@@ -534,6 +753,7 @@ func scanHistoryPlayer(scanner historyPlayerScanner) (history.Player, error) {
 		&player.GameID,
 		&userID,
 		&player.PlayerID,
+		&player.DisplayName,
 		&player.SeatIndex,
 		&player.IsAI,
 		&finalScore,
@@ -558,12 +778,13 @@ func scanHistoryGame(scanner historyGameScanner) (history.Game, error) {
 	var endedAt sql.NullTime
 	var winnerUserID sql.NullInt64
 	var winnerPlayerID, endReason sql.NullString
-	var initialState, finalResult []byte
+	var initialState, initialReplayPayload, finalResult []byte
 	err := scanner.Scan(
-		&gameRecord.ID, &gameRecord.RoomID, &gameRecord.GameType, &gameRecord.StartedAt,
+		&gameRecord.ID, &gameRecord.RoomID, &gameRecord.GameType,
+		&gameRecord.EngineVersion, &gameRecord.ReplaySchemaVersion, &gameRecord.StartedAt,
 		&endedAt, &gameRecord.DurationSeconds, &winnerUserID, &winnerPlayerID,
-		&endReason, &gameRecord.MaxPlayers, &initialState, &finalResult,
-		&gameRecord.CreatedAt, &gameRecord.UpdatedAt,
+		&endReason, &gameRecord.MaxPlayers, &initialState, &initialReplayPayload,
+		&finalResult, &gameRecord.CreatedAt, &gameRecord.UpdatedAt,
 	)
 	if err != nil {
 		return history.Game{}, err
@@ -581,6 +802,7 @@ func scanHistoryGame(scanner historyGameScanner) (history.Game, error) {
 		gameRecord.EndReason = endReason.String
 	}
 	gameRecord.InitialState = initialState
+	gameRecord.InitialReplayPayload = initialReplayPayload
 	gameRecord.FinalResult = finalResult
 	return gameRecord, nil
 }

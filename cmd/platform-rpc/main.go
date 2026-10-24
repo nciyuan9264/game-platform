@@ -16,10 +16,11 @@ import (
 	"github.com/cloudwego/kitex/server"
 	"github.com/kitex-contrib/obs-opentelemetry/tracing"
 	platformservice "github.com/nciyuan9264/game-platform-client/kitex_gen/pam/game/platform/v1/gameplatformservice"
+	authkitex "github.com/nciyuan9264/game-platform/internal/authclient/kitex"
 	"github.com/nciyuan9264/game-platform/internal/controlclient"
 	"github.com/nciyuan9264/game-platform/internal/health"
 	"github.com/nciyuan9264/game-platform/internal/observability"
-	"github.com/nciyuan9264/game-platform/internal/plugins"
+	"github.com/nciyuan9264/game-platform/internal/playerprofile"
 	platformrpc "github.com/nciyuan9264/game-platform/internal/rpc"
 	"github.com/nciyuan9264/game-platform/internal/servicediscovery"
 	"github.com/nciyuan9264/game-platform/internal/store"
@@ -70,7 +71,14 @@ func run() (runErr error) {
 	if err != nil {
 		return fmt.Errorf("initialize control client: %w", err)
 	}
-	handler := platformrpc.NewHandler(st, control, plugins.Registry())
+	authClient, err := authkitex.New(
+		observability.Env("AUTH_RPC_ADDR", "localhost:19090"),
+		observability.EnvDuration("AUTH_RPC_TIMEOUT", 2*time.Second),
+	)
+	if err != nil {
+		return fmt.Errorf("initialize Auth client: %w", err)
+	}
+	handler := platformrpc.NewHandler(st, control, playerprofile.NewResolver(authClient))
 	readiness := health.NewChecker(2*time.Second, health.Check{Name: "store", Ping: st.Ping})
 
 	healthAddr := observability.Env("GAME_PLATFORM_HEALTH_ADDR", ":18093")

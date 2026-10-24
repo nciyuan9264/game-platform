@@ -10,6 +10,6 @@ type Verifier interface {
 	Verify(ctx context.Context, token string) (contracts.UserIdentity, error)
 }
 
-func LegacyPlayerID(identity contracts.UserIdentity) string {
+func PlayerID(identity contracts.UserIdentity) string {
 	return identity.UserID
 }

@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 2,
+  "frameFields": [
+    "roomData",
+    "playersData",
+    "result"
+  ],
+  "roomDataFields": [
+    "companyInfo",
+    "currentPlayer",
+    "gameStatus",
+    "tiles",
+    "players",
+    "endGame"
+  ]
+}

@@ -87,3 +87,43 @@ newgrp docker <<'EOF'
 docker compose down
 EOF
 ```
+
+## 单游戏 A/B 发布验收
+
+先确认目录与节点：
+
+```bash
+game-release status --game acquire --json | jq .
+```
+
+发布不可变镜像：
+
+```bash
+GAME_RELEASE_IMAGE=<registry>/game-platform-game-release:<git-sha> \
+  ./scripts/deploy-game-slot.sh \
+  acquire \
+  <registry>/game-platform-roomhost-acquire:<git-sha>
+```
+
+手工验收：
+
+1. candidate 连续三个心跳为 `ready`，只声明 Acquire 版本。
+2. promotion 前新房间仍使用旧 active version。
+3. promotion 后新房间使用 candidate version。
+4. 旧版本节点为 `draining`，已有房间命令继续成功。
+5. 分别终止新旧节点时，房间只由相同 engine version 恢复。
+6. rollback 后只切回新房间流量，candidate 上已有房间不中断。
+7. A/B 都有 active rooms 时，第三个版本发布被拒绝。
+
+回放切读前检查缺帧：
+
+```bash
+go run ./cmd/backfill-replay \
+  --game-type acquire \
+  --engine-version acquire-v2 \
+  --replay-schema-version 1 \
+  --dry-run
+```
+
+去掉 `--dry-run` 完成回填；输出中的 `remaining.games` 和
+`remaining.events` 必须都为 `0`。

@@ -19,16 +19,19 @@ import (
 	"github.com/nciyuan9264/game-platform/internal/coordination"
 	"github.com/nciyuan9264/game-platform/internal/observability"
 	"github.com/nciyuan9264/game-platform/internal/platform/token"
+	"github.com/nciyuan9264/game-platform/internal/playerprofile"
 	"github.com/nciyuan9264/game-platform/internal/store"
 	"github.com/nciyuan9264/game-platform/internal/transport"
 )
 
 type Server struct {
-	nodeID   string
-	verifier token.Verifier
-	store    *store.Store
-	router   *transport.Router
-	owners   ownerResolver
+	nodeID                 string
+	verifier               token.Verifier
+	store                  *store.Store
+	router                 *transport.Router
+	owners                 ownerResolver
+	profiles               *playerprofile.Resolver
+	profileRefreshInterval time.Duration
 
 	mu    sync.RWMutex
 	conns map[string]*clientConnection
@@ -38,8 +41,25 @@ type ownerResolver interface {
 	ReadyRoomOwner(context.Context, string) (coordination.RoomOwner, error)
 }
 
-func NewServer(nodeID string, verifier token.Verifier, st *store.Store, router *transport.Router, owners ownerResolver) *Server {
-	return &Server{nodeID: nodeID, verifier: verifier, store: st, router: router, owners: owners, conns: map[string]*clientConnection{}}
+func NewServer(
+	nodeID string,
+	verifier token.Verifier,
+	st *store.Store,
+	router *transport.Router,
+	owners ownerResolver,
+	profiles *playerprofile.Resolver,
+	profileRefreshInterval time.Duration,
+) *Server {
+	return &Server{
+		nodeID:                 nodeID,
+		verifier:               verifier,
+		store:                  st,
+		router:                 router,
+		owners:                 owners,
+		profiles:               profiles,
+		profileRefreshInterval: profileRefreshInterval,
+		conns:                  map[string]*clientConnection{},
+	}
 }
 
 const (
@@ -90,6 +110,62 @@ func (s *Server) Start(ctx context.Context) error {
 		return err
 	}
 	go s.inactiveGatewaySessionLoop(ctx)
+	if s.profileRefreshInterval > 0 {
+		go s.profileRefreshLoop(ctx)
+	}
+	return nil
+}
+
+func (s *Server) profileRefreshLoop(ctx context.Context) {
+	ticker := time.NewTicker(s.profileRefreshInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := s.refreshProfiles(ctx); err != nil {
+				observability.Warn("gateway profile refresh failed", "nodeID", s.nodeID, "error", err)
+			}
+		}
+	}
+}
+
+func (s *Server) refreshProfiles(ctx context.Context) error {
+	sessions, err := s.store.ListGatewaySessions(ctx, s.nodeID)
+	if err != nil {
+		return err
+	}
+	players := make([]playerprofile.Player, 0, len(sessions))
+	for _, session := range sessions {
+		players = append(players, playerprofile.Player{
+			UserID:      session.UserID,
+			PlayerID:    session.PlayerID,
+			DisplayName: session.DisplayName,
+		})
+	}
+	displayNames := s.profiles.Resolve(ctx, players)
+	updatedUsers := make(map[string]string)
+	for _, session := range sessions {
+		displayName := displayNames[session.PlayerID]
+		if displayName == "" || displayName == session.DisplayName {
+			continue
+		}
+		ttl := time.Until(session.ExpiresAt)
+		if ttl <= 0 {
+			continue
+		}
+		session.DisplayName = displayName
+		if err := s.store.SetSession(ctx, session, ttl); err != nil {
+			return err
+		}
+		updatedUsers[session.UserID] = displayName
+	}
+	for userID, displayName := range updatedUsers {
+		if err := s.store.UpdateMatchPlayerDisplayName(ctx, userID, displayName); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -297,7 +373,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	}
 	conn.SetReadLimit(websocketReadLimit)
 	sessionID := uuid.NewString()
-	playerID := token.LegacyPlayerID(identity)
+	playerID := token.PlayerID(identity)
 	observability.Info("websocket connected", "nodeID", s.nodeID, "roomID", roomID, "sessionID", sessionID, "playerID", playerID)
 	_ = s.store.SaveRuntimeEvent(ctx, contracts.RuntimeEvent{
 		RoomID:    roomID,

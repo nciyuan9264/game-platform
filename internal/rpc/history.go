@@ -10,7 +10,6 @@ import (
 
 	platform "github.com/nciyuan9264/game-platform-client/kitex_gen/pam/game/platform/v1"
 	"github.com/nciyuan9264/game-platform/internal/contracts"
-	"github.com/nciyuan9264/game-platform/internal/game"
 	"github.com/nciyuan9264/game-platform/internal/history"
 )
 
@@ -29,7 +28,7 @@ func (h *Handler) ListHistoryGames(ctx context.Context, req *platform.ListHistor
 	if req == nil {
 		return nil, platformError("invalid_request", errors.New("request is required"))
 	}
-	gameType, err := h.validGameType(req.GetGameType())
+	gameType, err := h.validGameType(ctx, req.GetGameType())
 	if err != nil {
 		return nil, err
 	}
@@ -41,6 +40,7 @@ func (h *Handler) ListHistoryGames(ctx context.Context, req *platform.ListHistor
 	if err != nil {
 		return nil, platformError("history_error", err)
 	}
+	h.resolveHistoryGames(ctx, games)
 	total, err := h.store.CountHistoryGames(ctx, userID, gameType)
 	if err != nil {
 		return nil, platformError("history_error", err)
@@ -67,7 +67,7 @@ func (h *Handler) GetHistoryDetail(ctx context.Context, req *platform.GetHistory
 	if req == nil || req.GetId() <= 0 {
 		return nil, platformError("invalid_request", errors.New("positive history id is required"))
 	}
-	gameType, err := h.validGameType(req.GetGameType())
+	gameType, err := h.validGameType(ctx, req.GetGameType())
 	if err != nil {
 		return nil, err
 	}
@@ -84,12 +84,16 @@ func (h *Handler) GetHistoryDetail(ctx context.Context, req *platform.GetHistory
 	if err != nil {
 		return nil, platformError("history_error", err)
 	}
+	h.resolveHistoryPlayers(ctx, players)
+	displayNames := historyDisplayNames(players)
 	metas := make([]*platform.HistoryEventMeta, 0, len(events))
 	for _, event := range events {
+		event.DisplayName = displayNames[event.PlayerID]
 		metas = append(metas, &platform.HistoryEventMeta{
-			Seq:      int32(event.Seq),
-			PlayerID: event.PlayerID,
-			CmdType:  event.CommandType,
+			Seq:         int32(event.Seq),
+			PlayerID:    event.PlayerID,
+			CmdType:     event.CommandType,
+			DisplayName: stringPointer(event.DisplayName),
 		})
 	}
 	return &platform.HistoryDetailResp{
@@ -111,7 +115,7 @@ func (h *Handler) GetSnapshot(ctx context.Context, req *platform.GetSnapshotReq)
 	if req == nil || req.GetId() <= 0 || req.GetSeq() < -1 {
 		return nil, platformError("invalid_request", errors.New("valid history id and seq are required"))
 	}
-	gameType, err := h.replayGameType(req.GetGameType())
+	gameType, err := h.replayGameType(ctx, req.GetGameType())
 	if err != nil {
 		return nil, err
 	}
@@ -134,6 +138,7 @@ func (h *Handler) GetSnapshot(ctx context.Context, req *platform.GetSnapshotReq)
 	if err != nil {
 		return nil, platformError("history_error", err)
 	}
+	h.resolveHistoryPlayers(ctx, players)
 	var event *history.Event
 	if req.GetSeq() >= 0 {
 		if len(events) != 1 || events[0].Seq != int(req.GetSeq()) {
@@ -156,7 +161,7 @@ func (h *Handler) ListSnapshots(ctx context.Context, req *platform.ListSnapshots
 	if req == nil || req.GetId() <= 0 {
 		return nil, platformError("invalid_request", errors.New("positive history id is required"))
 	}
-	gameType, err := h.replayGameType(req.GetGameType())
+	gameType, err := h.replayGameType(ctx, req.GetGameType())
 	if err != nil {
 		return nil, err
 	}
@@ -185,6 +190,7 @@ func (h *Handler) ListSnapshots(ctx context.Context, req *platform.ListSnapshots
 	if err != nil {
 		return nil, platformError("history_error", err)
 	}
+	h.resolveHistoryPlayers(ctx, players)
 	snapshots := make([]*platform.ReplaySnapshot, 0, len(events)+1)
 	if includeInitial {
 		initial, err := h.buildReplaySnapshot(ctx, gameRecord, players, nil, -1, totalEvents)
@@ -222,7 +228,7 @@ func (h *Handler) GetStats(ctx context.Context, req *platform.GetStatsReq) (*pla
 	if req == nil {
 		return nil, platformError("invalid_request", errors.New("request is required"))
 	}
-	gameType, err := h.validGameType(req.GetGameType())
+	gameType, err := h.validGameType(ctx, req.GetGameType())
 	if err != nil {
 		return nil, err
 	}
@@ -246,7 +252,7 @@ func (h *Handler) GetLeaderboard(ctx context.Context, req *platform.GetLeaderboa
 	if req == nil {
 		return nil, platformError("invalid_request", errors.New("request is required"))
 	}
-	gameType, err := h.validGameType(req.GetGameType())
+	gameType, err := h.validGameType(ctx, req.GetGameType())
 	if err != nil {
 		return nil, err
 	}
@@ -265,6 +271,7 @@ func (h *Handler) GetLeaderboard(ctx context.Context, req *platform.GetLeaderboa
 	if err != nil {
 		return nil, platformError("history_error", err)
 	}
+	h.resolveLeaderboard(ctx, entries)
 	total, err := h.store.CountLeaderboardEntries(ctx, gameType)
 	if err != nil {
 		return nil, platformError("history_error", err)
@@ -281,10 +288,11 @@ func (h *Handler) GetLeaderboard(ctx context.Context, req *platform.GetLeaderboa
 			metric.Rank = &platform.RankLeaderboardMetric{AvgRank: floatValueOrZero(entry.AvgRank)}
 		}
 		mapped = append(mapped, &platform.LeaderboardEntry{
-			UserID:     entry.UserID,
-			PlayerID:   entry.PlayerID,
-			TotalGames: int32(entry.TotalGames),
-			Metric:     metric,
+			UserID:      entry.UserID,
+			PlayerID:    entry.PlayerID,
+			TotalGames:  int32(entry.TotalGames),
+			Metric:      metric,
+			DisplayName: stringPointer(entry.DisplayName),
 		})
 	}
 	return &platform.LeaderboardResp{
@@ -298,16 +306,15 @@ func (h *Handler) GetLeaderboard(ctx context.Context, req *platform.GetLeaderboa
 	}, nil
 }
 
-func (h *Handler) replayGameType(value string) (string, error) {
-	gameType, err := h.validGameType(value)
+func (h *Handler) replayGameType(ctx context.Context, value string) (string, error) {
+	gameType, err := h.validGameType(ctx, value)
 	if err != nil {
 		return "", err
 	}
 	if gameType == contracts.GameDaVinci {
 		return "", platformError("replay_not_supported", errors.New("davinci replay is not supported"))
 	}
-	definition, ok := h.games.Get(gameType)
-	if !ok || definition.History == nil {
+	if gameType != contracts.GameAcquire && gameType != contracts.GameSplendor {
 		return "", platformError("replay_not_supported", errors.New("game replay is not supported"))
 	}
 	return gameType, nil
@@ -321,61 +328,24 @@ func (h *Handler) buildReplaySnapshot(
 	seq,
 	total int,
 ) (*platform.ReplaySnapshot, error) {
-	definition, ok := h.games.Get(gameRecord.GameType)
-	if !ok || definition.History == nil {
-		return nil, platformError("replay_not_supported", errors.New("game replay is not supported"))
-	}
-	historyPlayers := make([]game.HistoryPlayer, 0, len(players))
-	for _, player := range players {
-		historyPlayers = append(historyPlayers, game.HistoryPlayer{
-			UserID:      numericPointerString(player.UserID),
-			PlayerID:    player.PlayerID,
-			SeatIndex:   player.SeatIndex,
-			IsAI:        player.IsAI,
-			FinalScore:  player.FinalScore,
-			FinalMoney:  player.FinalMoney,
-			FinalStocks: player.FinalStocks,
-			FinalRank:   player.FinalRank,
-			IsWinner:    player.IsWinner,
-		})
-	}
-	var stateSnapshot, stateBlob []byte
-	commandType, playerID := "", ""
-	var payload any
+	_ = ctx
 	if event != nil {
-		stateSnapshot = event.StateSnapshot
-		stateBlob = event.StateBlob
-		commandType = event.CommandType
-		playerID = event.PlayerID
-		if len(event.Payload) > 0 {
-			_ = json.Unmarshal(event.Payload, &payload)
-		}
+		event.DisplayName = historyDisplayNames(players)[event.PlayerID]
 	}
-	state, err := definition.History.DecodeReplayState(
-		ctx,
-		gameRecord.InitialState,
-		stateSnapshot,
-		stateBlob,
-		historyPlayers,
-	)
-	if err != nil {
-		return nil, platformError("replay_error", err)
+	payload := gameRecord.InitialReplayPayload
+	if event != nil {
+		payload = event.ReplayPayload
 	}
-	value, err := definition.History.BuildReplaySnapshot(
-		ctx,
-		state,
+	encoded, err := history.MaterializedReplayJSON(
+		gameRecord.ReplaySchemaVersion,
+		payload,
 		seq,
 		total,
-		commandType,
-		playerID,
-		payload,
+		event,
+		players,
 	)
 	if err != nil {
-		return nil, platformError("replay_error", err)
-	}
-	encoded, err := json.Marshal(value)
-	if err != nil {
-		return nil, platformError("replay_error", err)
+		return nil, replayMaterializationError(err)
 	}
 	result := &platform.ReplaySnapshot{}
 	switch gameRecord.GameType {
@@ -393,6 +363,17 @@ func (h *Handler) buildReplaySnapshot(
 		return nil, platformError("replay_not_supported", errors.New("game replay is not supported"))
 	}
 	return result, nil
+}
+
+func replayMaterializationError(err error) error {
+	switch {
+	case errors.Is(err, history.ErrReplayMaterializationMissing):
+		return platformError("replay_materialization_missing", err)
+	case errors.Is(err, history.ErrReplaySchemaUnsupported):
+		return platformError("replay_schema_unsupported", err)
+	default:
+		return platformError("replay_error", err)
+	}
 }
 
 func numericUserID(ctx context.Context) (int64, error) {
@@ -436,13 +417,6 @@ func pageInfo(limit, offset, total int) *platform.PageInfo {
 		result.NextOffset = &value
 	}
 	return result
-}
-
-func numericPointerString(value *int64) string {
-	if value == nil {
-		return ""
-	}
-	return strconv.FormatInt(*value, 10)
 }
 
 func valueOrZero(value *int) int {

@@ -50,6 +50,8 @@ type AuthService interface {
 
 	GetUser(ctx context.Context, req *GetUserReq) (r *UserResp, err error)
 
+	BatchGetPublicProfiles(ctx context.Context, req *BatchGetPublicProfilesReq) (r *BatchGetPublicProfilesResp, err error)
+
 	ListUsers(ctx context.Context, req *ListUsersReq) (r *ListUsersResp, err error)
 
 	GetJWKS(ctx context.Context, req *JWKSReq) (r *JWKSResp, err error)
@@ -2025,6 +2027,100 @@ func (p *AuthServiceGetUserResult) String() string {
 }
 
 var fieldIDToName_AuthServiceGetUserResult = map[int16]string{
+	0: "success",
+	1: "err",
+}
+
+type AuthServiceBatchGetPublicProfilesArgs struct {
+	Req *BatchGetPublicProfilesReq `thrift:"req,1,required" frugal:"1,required,BatchGetPublicProfilesReq" json:"req"`
+}
+
+func NewAuthServiceBatchGetPublicProfilesArgs() *AuthServiceBatchGetPublicProfilesArgs {
+	return &AuthServiceBatchGetPublicProfilesArgs{}
+}
+
+func (p *AuthServiceBatchGetPublicProfilesArgs) InitDefault() {
+}
+
+var AuthServiceBatchGetPublicProfilesArgs_Req_DEFAULT *BatchGetPublicProfilesReq
+
+func (p *AuthServiceBatchGetPublicProfilesArgs) GetReq() (v *BatchGetPublicProfilesReq) {
+	if !p.IsSetReq() {
+		return AuthServiceBatchGetPublicProfilesArgs_Req_DEFAULT
+	}
+	return p.Req
+}
+func (p *AuthServiceBatchGetPublicProfilesArgs) SetReq(val *BatchGetPublicProfilesReq) {
+	p.Req = val
+}
+
+func (p *AuthServiceBatchGetPublicProfilesArgs) IsSetReq() bool {
+	return p.Req != nil
+}
+
+func (p *AuthServiceBatchGetPublicProfilesArgs) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("AuthServiceBatchGetPublicProfilesArgs(%+v)", *p)
+}
+
+var fieldIDToName_AuthServiceBatchGetPublicProfilesArgs = map[int16]string{
+	1: "req",
+}
+
+type AuthServiceBatchGetPublicProfilesResult struct {
+	Success *BatchGetPublicProfilesResp `thrift:"success,0,optional" frugal:"0,optional,BatchGetPublicProfilesResp" json:"success,omitempty"`
+	Err     *AuthError                  `thrift:"err,1,optional" frugal:"1,optional,AuthError" json:"err,omitempty"`
+}
+
+func NewAuthServiceBatchGetPublicProfilesResult() *AuthServiceBatchGetPublicProfilesResult {
+	return &AuthServiceBatchGetPublicProfilesResult{}
+}
+
+func (p *AuthServiceBatchGetPublicProfilesResult) InitDefault() {
+}
+
+var AuthServiceBatchGetPublicProfilesResult_Success_DEFAULT *BatchGetPublicProfilesResp
+
+func (p *AuthServiceBatchGetPublicProfilesResult) GetSuccess() (v *BatchGetPublicProfilesResp) {
+	if !p.IsSetSuccess() {
+		return AuthServiceBatchGetPublicProfilesResult_Success_DEFAULT
+	}
+	return p.Success
+}
+
+var AuthServiceBatchGetPublicProfilesResult_Err_DEFAULT *AuthError
+
+func (p *AuthServiceBatchGetPublicProfilesResult) GetErr() (v *AuthError) {
+	if !p.IsSetErr() {
+		return AuthServiceBatchGetPublicProfilesResult_Err_DEFAULT
+	}
+	return p.Err
+}
+func (p *AuthServiceBatchGetPublicProfilesResult) SetSuccess(x interface{}) {
+	p.Success = x.(*BatchGetPublicProfilesResp)
+}
+func (p *AuthServiceBatchGetPublicProfilesResult) SetErr(val *AuthError) {
+	p.Err = val
+}
+
+func (p *AuthServiceBatchGetPublicProfilesResult) IsSetSuccess() bool {
+	return p.Success != nil
+}
+
+func (p *AuthServiceBatchGetPublicProfilesResult) IsSetErr() bool {
+	return p.Err != nil
+}
+
+func (p *AuthServiceBatchGetPublicProfilesResult) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("AuthServiceBatchGetPublicProfilesResult(%+v)", *p)
+}
+
+var fieldIDToName_AuthServiceBatchGetPublicProfilesResult = map[int16]string{
 	0: "success",
 	1: "err",
 }

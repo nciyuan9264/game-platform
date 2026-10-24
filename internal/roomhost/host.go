@@ -61,6 +61,7 @@ type storeClient interface {
 	StartHistoryGame(context.Context, history.Game, []history.Player) (int64, error)
 	OpenHistoryGame(context.Context, string, string) (int64, int, error)
 	FindHistoryGameByStart(context.Context, string, string, time.Time) (int64, int, bool, error)
+	SetHistoryReplayMetadata(context.Context, int64, string, int, []byte) error
 	ResetOpenHistoryGame(context.Context, string, string) error
 	AppendHistoryEvent(context.Context, history.Event) error
 	FinishHistoryGame(context.Context, int64, history.FinalizeInput) error
@@ -118,10 +119,11 @@ type Host struct {
 	router routerClient
 	games  *game.Registry
 
-	mu         sync.Mutex
-	rooms      map[string]*RoomActor
-	emptySince map[string]time.Time
-	draining   bool
+	mu                sync.Mutex
+	rooms             map[string]*RoomActor
+	emptySince        map[string]time.Time
+	acceptingNewRooms bool
+	shuttingDown      bool
 }
 
 func NewHost(nodeID string, st storeClient, coord coordinatorClient, router routerClient, games *game.Registry) *Host {
@@ -129,13 +131,14 @@ func NewHost(nodeID string, st storeClient, coord coordinatorClient, router rout
 		games = game.NewRegistry()
 	}
 	return &Host{
-		nodeID:     nodeID,
-		store:      st,
-		coord:      coord,
-		router:     router,
-		games:      games,
-		rooms:      map[string]*RoomActor{},
-		emptySince: map[string]time.Time{},
+		nodeID:            nodeID,
+		store:             st,
+		coord:             coord,
+		router:            router,
+		games:             games,
+		rooms:             map[string]*RoomActor{},
+		emptySince:        map[string]time.Time{},
+		acceptingNewRooms: true,
 	}
 }
 
@@ -187,15 +190,17 @@ func (h *Host) bootstrapOwnedRooms(ctx context.Context) {
 
 func (h *Host) HandleCommand(ctx context.Context, cmd contracts.RoomCommand) contracts.CommandAck {
 	h.mu.Lock()
-	draining := h.draining
+	acceptingNewRooms := h.acceptingNewRooms
+	shuttingDown := h.shuttingDown
+	_, roomLoaded := h.rooms[cmd.RoomID]
 	h.mu.Unlock()
-	if draining {
+	if shuttingDown || (cmd.Type == contracts.RuntimeCommandRoomCreate && !acceptingNewRooms && !roomLoaded) {
 		return contracts.CommandAck{
 			CommandID: cmd.CommandID,
 			RoomID:    cmd.RoomID,
 			Accepted:  false,
 			ErrorCode: "roomhost_draining",
-			Message:   "roomhost is shutting down",
+			Message:   "roomhost is not accepting new rooms",
 		}
 	}
 	if err := h.validateCommandSource(ctx, cmd); err != nil {
@@ -283,11 +288,12 @@ func (h *Host) HandleCommand(ctx context.Context, cmd contracts.RoomCommand) con
 
 func (h *Host) Shutdown(ctx context.Context) error {
 	h.mu.Lock()
-	if h.draining {
+	if h.shuttingDown {
 		h.mu.Unlock()
 		return nil
 	}
-	h.draining = true
+	h.shuttingDown = true
+	h.acceptingNewRooms = false
 	rooms := make([]*RoomActor, 0, len(h.rooms))
 	for _, room := range h.rooms {
 		rooms = append(rooms, room)
@@ -322,6 +328,31 @@ func (h *Host) Shutdown(ctx context.Context) error {
 	return shutdownErr
 }
 
+func (h *Host) Drain() {
+	h.mu.Lock()
+	h.acceptingNewRooms = false
+	h.mu.Unlock()
+}
+
+func (h *Host) Resume() bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.shuttingDown {
+		return false
+	}
+	h.acceptingNewRooms = true
+	return true
+}
+
+func (h *Host) Status() string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.acceptingNewRooms && !h.shuttingDown {
+		return contracts.NodeStatusReady
+	}
+	return contracts.NodeStatusDraining
+}
+
 func (h *Host) validateCommandSource(ctx context.Context, cmd contracts.RoomCommand) error {
 	switch cmd.Type {
 	case contracts.RuntimeCommandRoomCreate, contracts.RuntimeCommandRoomClose, contracts.RuntimeCommandMatchCreate:
@@ -349,6 +380,10 @@ func (h *Host) validateGatewayCommand(ctx context.Context, cmd contracts.RoomCom
 		session.UserID != cmd.UserID ||
 		session.PlayerID != cmd.PlayerID {
 		return errors.New("gateway session identity mismatch")
+	}
+	if cmd.UserID == "" || cmd.PlayerID != cmd.UserID ||
+		session.UserID == "" || session.PlayerID != session.UserID {
+		return errors.New("human player ID must equal authenticated user ID")
 	}
 	return nil
 }
@@ -1664,7 +1699,14 @@ func (r *RoomActor) syncHistoryLocked(ctx context.Context, cmd contracts.RoomCom
 	if projection.Finished && r.historyID == 0 && !r.historyRebuild {
 		return nil
 	}
-	if err := r.ensureHistoryLocked(ctx, projection); err != nil {
+	replayPayload, err := history.EncodeReplayFrame(
+		projection.ReplaySchemaVersion,
+		projection.ReplayFrame,
+	)
+	if err != nil {
+		return err
+	}
+	if err := r.ensureHistoryLocked(ctx, projection, replayPayload); err != nil {
 		return err
 	}
 	if provider.IsRecordableCommand(cmd.Type) {
@@ -1673,13 +1715,14 @@ func (r *RoomActor) syncHistoryLocked(ctx context.Context, cmd contracts.RoomCom
 			return err
 		}
 		if err := r.host.store.AppendHistoryEvent(ctx, history.Event{
-			GameID:      r.historyID,
-			Seq:         r.historySeq,
-			OccurredAt:  time.Now().UTC(),
-			PlayerID:    cmd.PlayerID,
-			CommandType: cmd.Type,
-			Payload:     payload,
-			StateBlob:   projection.StateBlob,
+			GameID:        r.historyID,
+			Seq:           r.historySeq,
+			OccurredAt:    time.Now().UTC(),
+			PlayerID:      cmd.PlayerID,
+			CommandType:   cmd.Type,
+			Payload:       payload,
+			StateBlob:     projection.StateBlob,
+			ReplayPayload: replayPayload,
 		}); err != nil {
 			return err
 		}
@@ -1838,12 +1881,25 @@ func (r *RoomActor) suppressIrrecoverableHistoryProjectionLocked(err error, mess
 	return false
 }
 
-func (r *RoomActor) ensureHistoryLocked(ctx context.Context, projection game.HistoryProjection) error {
+func (r *RoomActor) ensureHistoryLocked(
+	ctx context.Context,
+	projection game.HistoryProjection,
+	initialReplayPayload []byte,
+) error {
 	if r.historyID != 0 {
 		return nil
 	}
 	gameID, nextSeq, err := r.host.store.OpenHistoryGame(ctx, r.record.RoomID, r.record.GameType)
 	if err == nil {
+		if err := r.host.store.SetHistoryReplayMetadata(
+			ctx,
+			gameID,
+			r.definition.Version,
+			projection.ReplaySchemaVersion,
+			initialReplayPayload,
+		); err != nil {
+			return err
+		}
 		r.historyID = gameID
 		r.historySeq = nextSeq
 		return nil
@@ -1861,6 +1917,15 @@ func (r *RoomActor) ensureHistoryLocked(ctx context.Context, projection game.His
 		if finished && !r.historyRebuild && !projection.Finished {
 			return fmt.Errorf("history game %d is already finished", gameID)
 		}
+		if err := r.host.store.SetHistoryReplayMetadata(
+			ctx,
+			gameID,
+			r.definition.Version,
+			projection.ReplaySchemaVersion,
+			initialReplayPayload,
+		); err != nil {
+			return err
+		}
 		r.historyID = gameID
 		if finished {
 			r.historySeq = 0
@@ -1872,13 +1937,19 @@ func (r *RoomActor) ensureHistoryLocked(ctx context.Context, projection game.His
 	if !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}
-	players := historyPlayers(projection.Players, false)
+	players, err := r.historyPlayersLocked(ctx, projection.Players, false)
+	if err != nil {
+		return err
+	}
 	gameID, err = r.host.store.StartHistoryGame(ctx, history.Game{
-		RoomID:       r.record.RoomID,
-		GameType:     r.record.GameType,
-		StartedAt:    projection.StartedAt,
-		MaxPlayers:   projection.MaxPlayers,
-		InitialState: json.RawMessage(projection.InitialState),
+		RoomID:               r.record.RoomID,
+		GameType:             r.record.GameType,
+		EngineVersion:        r.definition.Version,
+		ReplaySchemaVersion:  projection.ReplaySchemaVersion,
+		StartedAt:            projection.StartedAt,
+		MaxPlayers:           projection.MaxPlayers,
+		InitialState:         json.RawMessage(projection.InitialState),
+		InitialReplayPayload: initialReplayPayload,
 	}, players)
 	if err != nil {
 		return err
@@ -1892,6 +1963,10 @@ func (r *RoomActor) finishHistoryLocked(ctx context.Context, projection game.His
 	if r.historyID == 0 {
 		return nil
 	}
+	players, err := r.historyPlayersLocked(ctx, projection.Players, abandoned)
+	if err != nil {
+		return err
+	}
 	finalResult, err := json.Marshal(projection.FinalResult)
 	if err != nil {
 		return err
@@ -1902,14 +1977,16 @@ func (r *RoomActor) finishHistoryLocked(ctx context.Context, projection game.His
 		startedAt = endedAt
 	}
 	var winnerUserID *int64
-	if !abandoned && projection.WinnerUserID != "" {
-		if parsed, err := strconv.ParseInt(projection.WinnerUserID, 10, 64); err == nil {
-			winnerUserID = &parsed
+	winnerPlayerID := ""
+	if !abandoned {
+		for _, player := range players {
+			if !player.IsWinner {
+				continue
+			}
+			winnerUserID = player.UserID
+			winnerPlayerID = player.PlayerID
+			break
 		}
-	}
-	winnerPlayerID := projection.WinnerPlayerID
-	if abandoned {
-		winnerPlayerID = ""
 	}
 	err = r.host.store.FinishHistoryGame(ctx, r.historyID, history.FinalizeInput{
 		EndedAt:         endedAt,
@@ -1918,7 +1995,7 @@ func (r *RoomActor) finishHistoryLocked(ctx context.Context, projection game.His
 		WinnerPlayerID:  winnerPlayerID,
 		EndReason:       reason,
 		FinalResult:     finalResult,
-		Players:         historyPlayers(projection.Players, abandoned),
+		Players:         players,
 	})
 	if err != nil {
 		return err
@@ -1936,7 +2013,14 @@ func (r *RoomActor) closeHistoryLocked(ctx context.Context) error {
 	if err != nil || !projection.Started {
 		return err
 	}
-	if err := r.ensureHistoryLocked(ctx, projection); err != nil {
+	replayPayload, err := history.EncodeReplayFrame(
+		projection.ReplaySchemaVersion,
+		projection.ReplayFrame,
+	)
+	if err != nil {
+		return err
+	}
+	if err := r.ensureHistoryLocked(ctx, projection, replayPayload); err != nil {
 		return err
 	}
 	if projection.Finished {
@@ -1951,14 +2035,47 @@ func (r *RoomActor) closeHistoryLocked(ctx context.Context) error {
 	return err
 }
 
-func historyPlayers(players []game.HistoryPlayer, abandoned bool) []history.Player {
+func (r *RoomActor) historyPlayersLocked(
+	ctx context.Context,
+	players []game.HistoryPlayer,
+	abandoned bool,
+) ([]history.Player, error) {
+	roster, err := r.host.store.ListMatchPlayers(ctx, r.match.MatchID)
+	if err != nil {
+		return nil, err
+	}
+	rosterByPlayerID := make(map[string]contracts.MatchPlayerRecord, len(roster))
+	for _, player := range roster {
+		rosterByPlayerID[player.PlayerID] = player
+	}
 	out := make([]history.Player, 0, len(players))
 	abandonedRank := len(players)
 	for _, player := range players {
 		var userID *int64
-		if player.UserID != "" {
-			if parsed, err := strconv.ParseInt(player.UserID, 10, 64); err == nil {
-				userID = &parsed
+		playerID := player.PlayerID
+		displayName := player.DisplayName
+		identity, found := rosterByPlayerID[player.PlayerID]
+		if player.IsAI {
+			if found && identity.DisplayName != "" {
+				displayName = identity.DisplayName
+			}
+			if displayName == "" {
+				displayName = "AI"
+			}
+		} else {
+			if !found || identity.IsAI {
+				return nil, fmt.Errorf("human history player %q is missing from match roster", player.PlayerID)
+			}
+			parsed, parseErr := strconv.ParseInt(identity.UserID, 10, 64)
+			if parseErr != nil || parsed <= 0 {
+				return nil, fmt.Errorf("human history player %q has invalid user ID %q", player.PlayerID, identity.UserID)
+			}
+			userID = &parsed
+			playerID = identity.UserID
+			if identity.DisplayName != "" {
+				displayName = identity.DisplayName
+			} else if identity.Name != "" {
+				displayName = identity.Name
 			}
 		}
 		finalRank := player.FinalRank
@@ -1969,18 +2086,20 @@ func historyPlayers(players []game.HistoryPlayer, abandoned bool) []history.Play
 			isWinner = false
 		}
 		out = append(out, history.Player{
-			UserID:      userID,
-			PlayerID:    player.PlayerID,
-			SeatIndex:   player.SeatIndex,
-			IsAI:        player.IsAI,
-			FinalScore:  player.FinalScore,
-			FinalMoney:  player.FinalMoney,
-			FinalStocks: player.FinalStocks,
-			FinalRank:   finalRank,
-			IsWinner:    isWinner,
+			UserID:         userID,
+			PlayerID:       playerID,
+			DisplayName:    displayName,
+			SeatIndex:      player.SeatIndex,
+			IsAI:           player.IsAI,
+			FinalScore:     player.FinalScore,
+			FinalMoney:     player.FinalMoney,
+			FinalStocks:    player.FinalStocks,
+			FinalRank:      finalRank,
+			IsWinner:       isWinner,
+			SourcePlayerID: player.PlayerID,
 		})
 	}
-	return out
+	return out, nil
 }
 
 func (r *RoomActor) stopTimerLocked() {
@@ -2405,15 +2524,41 @@ func (r *RoomActor) syncRosterLocked(ctx context.Context, presences []contracts.
 			presenceUserIDs[presence.PlayerID] = presence.UserID
 		}
 	}
+	persistedPlayers, err := r.host.store.ListMatchPlayers(ctx, r.match.MatchID)
+	if err != nil {
+		return err
+	}
+	persistedByPlayerID := make(map[string]contracts.MatchPlayerRecord, len(persistedPlayers))
+	for _, player := range persistedPlayers {
+		persistedByPlayerID[player.PlayerID] = player
+	}
 	for _, player := range roster {
-		userID := player.UserID
-		if !player.IsAI && presenceUserIDs[player.PlayerID] != "" {
-			userID = presenceUserIDs[player.PlayerID]
+		persisted := persistedByPlayerID[player.PlayerID]
+		userID := ""
+		displayName := player.DisplayName
+		if player.IsAI {
+			if displayName == "" {
+				displayName = persisted.DisplayName
+			}
+			if displayName == "" {
+				displayName = "AI"
+			}
+		} else {
+			userID = persisted.UserID
+			if presenceUserIDs[player.PlayerID] != "" {
+				userID = presenceUserIDs[player.PlayerID]
+			}
+			if userID == "" {
+				return fmt.Errorf("human roster player %q is missing a user ID", player.PlayerID)
+			}
+			if displayName == "" {
+				displayName = persisted.DisplayName
+			}
 		}
 		players = append(players, contracts.MatchPlayerRecord{
 			UserID:      userID,
 			PlayerID:    player.PlayerID,
-			DisplayName: player.DisplayName,
+			DisplayName: displayName,
 			Online:      player.Online,
 			IsAI:        player.IsAI,
 			SeatIndex:   player.SeatIndex,

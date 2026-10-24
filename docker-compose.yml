@@ -83,6 +83,9 @@ services:
       KITEX_PORT_TO_REGISTRY: "18092"
       CONTROL_RPC_ADDR: control-plane:18091
       CONTROL_RPC_PSM: game.platform.control
+      AUTH_RPC_ADDR: ${AUTH_RPC_ADDR:-auth-backend:19090}
+      AUTH_RPC_PSM: ${AUTH_RPC_PSM:-pam.auth.rpc}
+      AUTH_RPC_TIMEOUT: ${AUTH_RPC_TIMEOUT:-2s}
     ports:
       - "127.0.0.1:18092:18092"
       - "127.0.0.1:18093:18093"
@@ -109,6 +112,7 @@ services:
       SERVER_ADDR: ":8080"
       AUTH_RPC_ADDR: ${AUTH_RPC_ADDR:-auth-backend:19090}
       AUTH_RPC_PSM: ${AUTH_RPC_PSM:-pam.auth.rpc}
+      AUTH_RPC_TIMEOUT: ${AUTH_RPC_TIMEOUT:-2s}
       CONTROL_RPC_ADDR: control-plane:18091
       CONTROL_RPC_PSM: game.platform.control
       COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
@@ -154,6 +158,8 @@ services:
       PUBLIC_ADDR: gateway-1:8080
       AUTH_RPC_ADDR: ${AUTH_RPC_ADDR:-auth-backend:19090}
       AUTH_RPC_PSM: ${AUTH_RPC_PSM:-pam.auth.rpc}
+      AUTH_RPC_TIMEOUT: ${AUTH_RPC_TIMEOUT:-2s}
+      PROFILE_REFRESH_INTERVAL: ${PROFILE_REFRESH_INTERVAL:-60s}
       WS_ALLOWED_ORIGINS: ${WS_ALLOWED_ORIGINS:-http://localhost:18010,http://localhost:18032}
     ports:
       - "127.0.0.1:8081:8080"

@@ -60,9 +60,14 @@ func TestPluginRunsMatchAndBuildsPrivateView(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ProjectHistory() error = %v", err)
 	}
-	if !projection.Started || len(projection.StateBlob) == 0 || len(projection.Players) != 2 {
+	if !projection.Started ||
+		len(projection.StateBlob) == 0 ||
+		len(projection.Players) != 2 ||
+		projection.ReplaySchemaVersion != ReplaySchemaVersion ||
+		projection.ReplayFrame == nil {
 		t.Fatalf("unexpected history projection: %+v", projection)
 	}
+	assertReplayFrameMatchesGolden(t, projection.ReplayFrame)
 	spectatorView, err := plugin.BuildSpectatorView(ctx, state, 6)
 	if err != nil {
 		t.Fatalf("BuildSpectatorView() error = %v", err)
