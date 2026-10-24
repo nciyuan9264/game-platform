@@ -111,6 +111,16 @@ done
 
 RPC 代码从固定版本的 `pam-idl` 生成。修改 IDL 后运行 `scripts/generate-rpc.sh`，不要手工编辑 `kitex_gen`。
 
+生产拓扑的 HTTP、WebSocket、Control、JetStream 和 PostgreSQL 手动回归统一通过：
+
+```bash
+./scripts/run-regression.sh quality
+./scripts/run-regression.sh probe
+./scripts/run-regression.sh canary
+```
+
+环境变量、生产写入范围和通过标准见 [全链路回归手册](docs/regression-testing.md)。
+
 ## 生产部署
 
 仓库只维护 [`docker-compose.prod.yml`](docker-compose.prod.yml)。它包含：
@@ -159,6 +169,7 @@ go run ./cmd/backfill-replay \
 - [游戏日志架构](docs/game-log-architecture.md)
 - [游戏插件指南](docs/game-plugin-guide.md)
 - [游戏发布手册](docs/game-release-runbook.md)
+- [全链路回归手册](docs/regression-testing.md)
 
 ## 已接受限制
 

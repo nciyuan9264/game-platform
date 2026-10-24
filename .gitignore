@@ -5,6 +5,7 @@
 /.codex/
 /.dbg/
 /.trae/
+/.artifacts/
 /gateway
 
 *.log
@@ -20,3 +21,4 @@ build/
 .archify/
 *.md
 !docs/game-release-runbook.md
+!docs/regression-testing.md
