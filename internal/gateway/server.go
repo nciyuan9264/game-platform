@@ -503,13 +503,14 @@ func (s *Server) readLoop(client *clientConnection, rec contracts.RoomRecord, se
 		_ = client.close()
 		disconnect := contracts.RoomCommand{SchemaVersion: contracts.RealtimeSchemaVersion, CommandID: uuid.NewString(), TraceID: uuid.NewString(), RoomID: rec.RoomID, MatchID: rec.CurrentMatchID, GameType: rec.GameType, Epoch: rec.Epoch, UserID: session.UserID, PlayerID: playerID, ConnectionRef: session.ConnectionRef, Type: "disconnect", SentAt: time.Now().UTC()}
 		ack, sendErr := s.router.SendRoomCommand(context.Background(), rec.OwnerNode, disconnect, 3*time.Second)
-		if roomRouteRefreshRequired(ack, sendErr) {
+		if roomRouteRefreshRequired(ack, sendErr) && ack.ErrorCode != "stale_match" {
 			if latest, err := s.store.GetRoom(context.Background(), rec.RoomID); err == nil {
 				if routed, routeErr := s.readyRoute(context.Background(), latest); routeErr == nil {
-					disconnect.GameType = routed.GameType
-					disconnect.MatchID = routed.CurrentMatchID
-					disconnect.Epoch = routed.Epoch
-					_, _ = s.router.SendRoomCommand(context.Background(), routed.OwnerNode, disconnect, 3*time.Second)
+					if disconnectMatchesCurrentRoute(disconnect, routed) {
+						disconnect.GameType = routed.GameType
+						disconnect.Epoch = routed.Epoch
+						_, _ = s.router.SendRoomCommand(context.Background(), routed.OwnerNode, disconnect, 3*time.Second)
+					}
 				}
 			}
 		}
@@ -703,6 +704,8 @@ func clientCommandPayload(gameType, commandType string, payload any) (any, error
 		variant = "guessCard"
 	case "game_set_card":
 		variant = "setCard"
+	case "game_initialize_hand":
+		variant = "initializeHand"
 	case "game_get_gem":
 		variant = "getGem"
 	case "game_buy_card":
@@ -788,6 +791,13 @@ func roomRouteRefreshRequired(ack contracts.CommandAck, err error) bool {
 		ack.ErrorCode == "stale_match" ||
 		ack.ErrorCode == "room_error" ||
 		ack.ErrorCode == "roomhost_draining"
+}
+
+func disconnectMatchesCurrentRoute(disconnect contracts.RoomCommand, room contracts.RoomRecord) bool {
+	return disconnect.RoomID != "" &&
+		disconnect.RoomID == room.RoomID &&
+		disconnect.MatchID != "" &&
+		disconnect.MatchID == room.CurrentMatchID
 }
 
 func (s *Server) deliver(ctx context.Context, out contracts.OutboundMessage) {

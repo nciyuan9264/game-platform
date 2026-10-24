@@ -272,6 +272,327 @@ func TestDavinciSchedulerPersistsDeadlineAndBuildsTimeoutAction(t *testing.T) {
 	}
 }
 
+func TestDavinciInitialHandSupportsZeroOneAndTwoJokers(t *testing.T) {
+	engine := NewEngine()
+	state := &State{
+		Status:    StatusInitialize,
+		OwnerID:   "alice",
+		PlayerSeq: []string{"alice", "bob"},
+		Players: map[string]*Player{
+			"alice": {
+				PlayerID: "alice",
+				Cards: []Card{
+					{ID: "a-2", Num: 2, Color: 0},
+					{ID: "a-black-joker", Num: NumMinus1, Color: 1},
+					{ID: "a-7", Num: 7, Color: 1},
+					{ID: "a-white-joker", Num: NumMinus1, Color: 0},
+					{ID: "a-4", Num: 4, Color: 0},
+				},
+			},
+			"bob": {
+				PlayerID: "bob",
+				Cards: []Card{
+					{ID: "b-1", Num: 1, Color: 0},
+					{ID: "b-3", Num: 3, Color: 1},
+					{ID: "b-5", Num: 5, Color: 0},
+					{ID: "b-8", Num: 8, Color: 1},
+					{ID: "b-10", Num: 10, Color: 0},
+				},
+			},
+		},
+	}
+	prepareInitialHand(state.Players["alice"])
+	prepareInitialHand(state.Players["bob"])
+	stableOrder := cardIDs(state.Players["alice"].Cards)
+
+	if _, err := engine.ApplyCommand(context.Background(), state, contracts.RoomCommand{
+		Type:     CommandInitialize,
+		PlayerID: "alice",
+		Payload: map[string]any{"jokerPlacements": []map[string]any{
+			{"id": "a-black-joker", "index": 1},
+			{"id": "a-white-joker", "index": 4},
+		}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if state.Status != StatusInitialize || !state.Players["alice"].InitialHandReady {
+		t.Fatalf("first confirmation state = %+v", state)
+	}
+	if got := cardIndexes(state.Players["alice"].Cards); !reflect.DeepEqual(got, map[string]int{
+		"a-2": 0, "a-black-joker": 1, "a-4": 2, "a-7": 3, "a-white-joker": 4,
+	}) {
+		t.Fatalf("alice indexes = %+v", got)
+	}
+	if got := cardIDs(state.Players["alice"].Cards); !reflect.DeepEqual(got, stableOrder) {
+		t.Fatalf("initial placement reordered backing cards: got %v want %v", got, stableOrder)
+	}
+
+	if _, err := engine.ApplyCommand(context.Background(), state, contracts.RoomCommand{
+		Type:     CommandInitialize,
+		PlayerID: "bob",
+		Payload:  map[string]any{"jokerPlacements": []any{}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if state.Status != StatusWaiting || !state.Players["bob"].InitialHandReady {
+		t.Fatalf("completed initialization state = %+v", state)
+	}
+}
+
+func TestDavinciRejectsInvalidInitialJokerPlacementsWithoutMutation(t *testing.T) {
+	base := &Player{
+		PlayerID: "alice",
+		Cards: []Card{
+			{ID: "two", Num: 2, Color: 0},
+			{ID: "black-joker", Num: NumMinus1, Color: 1},
+			{ID: "seven", Num: 7, Color: 1},
+			{ID: "white-joker", Num: NumMinus1, Color: 0},
+			{ID: "four", Num: 4, Color: 0},
+		},
+	}
+	prepareInitialHand(base)
+	tests := []struct {
+		name    string
+		payload any
+	}{
+		{name: "missing payload field", payload: map[string]any{}},
+		{name: "missing joker", payload: map[string]any{"jokerPlacements": []map[string]any{{"id": "black-joker", "index": 0}}}},
+		{name: "number card", payload: map[string]any{"jokerPlacements": []map[string]any{{"id": "two", "index": 0}, {"id": "white-joker", "index": 1}}}},
+		{name: "duplicate joker", payload: map[string]any{"jokerPlacements": []map[string]any{{"id": "black-joker", "index": 0}, {"id": "black-joker", "index": 1}}}},
+		{name: "duplicate index", payload: map[string]any{"jokerPlacements": []map[string]any{{"id": "black-joker", "index": 2}, {"id": "white-joker", "index": 2}}}},
+		{name: "negative index", payload: map[string]any{"jokerPlacements": []map[string]any{{"id": "black-joker", "index": -1}, {"id": "white-joker", "index": 2}}}},
+		{name: "large index", payload: map[string]any{"jokerPlacements": []map[string]any{{"id": "black-joker", "index": 0}, {"id": "white-joker", "index": 5}}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			player := *base
+			player.Cards = append([]Card(nil), base.Cards...)
+			state := &State{
+				Status:    StatusInitialize,
+				PlayerSeq: []string{"alice"},
+				Players:   map[string]*Player{"alice": &player},
+			}
+			before := append([]Card(nil), player.Cards...)
+			if _, err := NewEngine().ApplyCommand(context.Background(), state, contracts.RoomCommand{
+				Type: CommandInitialize, PlayerID: "alice", Payload: tt.payload,
+			}); err == nil {
+				t.Fatal("invalid placement was accepted")
+			}
+			if player.InitialHandReady || !reflect.DeepEqual(player.Cards, before) {
+				t.Fatalf("rejected placement mutated player: before=%+v after=%+v", before, player)
+			}
+		})
+	}
+}
+
+func TestDavinciInitializationDeadlineAndTimeout(t *testing.T) {
+	plugin := NewPlugin()
+	state := &State{
+		RoomID:    "initialization-deadline",
+		OwnerID:   "alice",
+		Status:    StatusInitialize,
+		PlayerSeq: []string{"alice", "bob"},
+		Players: map[string]*Player{
+			"alice": {PlayerID: "alice", Cards: []Card{{ID: "a", Num: 2, Index: 0}}},
+			"bob": {
+				PlayerID: "bob",
+				Cards: []Card{
+					{ID: "b-3", Num: 3, Index: 0},
+					{ID: "b-joker", Num: NumMinus1, Color: 1, Index: -1},
+				},
+			},
+		},
+	}
+	startedAt := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
+	updateTurnDeadline(state, startedAt)
+	deadline := state.TurnDeadline
+	if !deadline.Equal(startedAt.Add(initializationTimeout)) || state.TurnTimeout != initializationTimeout {
+		t.Fatalf("initial deadline = %s/%s", deadline, state.TurnTimeout)
+	}
+	if _, err := plugin.ApplyCommand(context.Background(), state, contracts.RoomCommand{
+		Type:     CommandInitialize,
+		PlayerID: "alice",
+		SentAt:   startedAt.Add(5 * time.Second),
+		Payload:  map[string]any{"jokerPlacements": []any{}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !state.TurnDeadline.Equal(deadline) {
+		t.Fatalf("confirmation extended deadline from %s to %s", deadline, state.TurnDeadline)
+	}
+	pending, err := plugin.PendingCommands(context.Background(), state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pending) != 1 || pending[0].Type != CommandInitTimeout ||
+		pending[0].PlayerID != "alice" || !pending[0].ExecuteAt.Equal(deadline) {
+		t.Fatalf("initialization pending command = %+v", pending)
+	}
+	encoded, err := plugin.EncodeState(context.Background(), state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	restoredRaw, err := plugin.DecodeState(context.Background(), encoded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state = restoredRaw.(*State)
+	restoredPending, err := plugin.PendingCommands(context.Background(), state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(restoredPending) != 1 || !restoredPending[0].ExecuteAt.Equal(deadline) {
+		t.Fatalf("restored initialization pending command = %+v", restoredPending)
+	}
+	if _, err := plugin.ApplyCommand(context.Background(), state, contracts.RoomCommand{
+		Type:          CommandInitTimeout,
+		PlayerID:      "alice",
+		ConnectionRef: contracts.ConnectionRef{GatewayNode: "gateway", SessionID: "session"},
+	}); err == nil {
+		t.Fatal("client initialization timeout was accepted")
+	}
+	if _, err := plugin.ApplyCommand(context.Background(), state, contracts.RoomCommand{
+		Type: CommandInitTimeout, PlayerID: "alice", SentAt: deadline,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if state.Status != StatusWaiting || !state.TurnDeadline.IsZero() || state.TurnTimeout != 0 {
+		t.Fatalf("timeout state = %+v", state)
+	}
+	if got := cardIndexes(state.Players["bob"].Cards); !reflect.DeepEqual(got, map[string]int{"b-3": 0, "b-joker": 1}) {
+		t.Fatalf("timeout fallback indexes = %+v", got)
+	}
+}
+
+func TestDavinciInitializationViewDoesNotLeakOpponentJoker(t *testing.T) {
+	state := &State{
+		RoomID:    "private-initialization",
+		OwnerID:   "alice",
+		Status:    StatusInitialize,
+		PlayerSeq: []string{"alice", "bob"},
+		Players: map[string]*Player{
+			"alice": {
+				PlayerID:         "alice",
+				InitialHandReady: false,
+				Cards:            []Card{{ID: "a-2", Num: 2, Index: 0}},
+			},
+			"bob": {
+				PlayerID:         "bob",
+				InitialHandReady: true,
+				Cards: []Card{
+					{ID: "b-3", Num: 3, Color: 0, Index: 1},
+					{ID: "b-joker", Num: NumMinus1, Color: 1, Index: 0},
+				},
+			},
+		},
+	}
+	raw := NewEngine().BuildRoomSync(state, game.ViewRequest{PlayerID: "alice"})
+	cardData := raw.CardData.(map[string]any)
+	if cardData["initialHandReady"] != false {
+		t.Fatalf("self initialization flag = %#v", cardData["initialHandReady"])
+	}
+	opponents := cardData["opponents"].([]map[string]any)
+	for index, card := range opponents {
+		if card["num"] != nil {
+			t.Fatalf("opponent number leaked: %+v", card)
+		}
+		if card["index"] != index {
+			t.Fatalf("opponent temporary index = %#v, want %d", card["index"], index)
+		}
+	}
+}
+
+func TestDavinciAIConfirmsInitialJokers(t *testing.T) {
+	state := &State{
+		RoomID:    "ai-initialization",
+		Status:    StatusInitialize,
+		PlayerSeq: []string{"AI_2"},
+		Players: map[string]*Player{
+			"AI_2": {
+				PlayerID: "AI_2",
+				AI:       true,
+				Cards: []Card{
+					{ID: "three", Num: 3, Index: 0},
+					{ID: "black-joker", Num: NumMinus1, Color: 1, Index: -1},
+					{ID: "white-joker", Num: NumMinus1, Color: 0, Index: -1},
+				},
+			},
+		},
+	}
+	command, err := NewAIPlanner().Decide(context.Background(), game.AIRequest{
+		RoomID: state.RoomID, GameType: contracts.GameDaVinci, PlayerID: "AI_2", State: state,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if command.Type != CommandInitialize {
+		t.Fatalf("AI initialization command = %+v", command)
+	}
+	if _, err := NewEngine().ApplyCommand(context.Background(), state, command); err != nil {
+		t.Fatal(err)
+	}
+	if !state.Players["AI_2"].InitialHandReady || state.Status != StatusWaiting {
+		t.Fatalf("AI initialization state = %+v", state)
+	}
+	if got := cardIndexes(state.Players["AI_2"].Cards); !reflect.DeepEqual(got, map[string]int{
+		"three": 0, "black-joker": 1, "white-joker": 2,
+	}) {
+		t.Fatalf("AI indexes = %+v", got)
+	}
+}
+
+func TestDavinciMatchBeginSchedulesAIInitializationFallback(t *testing.T) {
+	plugin := NewPlugin()
+	raw, err := plugin.InitRoom(context.Background(), game.RoomConfig{
+		RoomID:        "begin-initialization",
+		OwnerPlayerID: "owner",
+		MaxPlayers:    2,
+		RandomSeed:    42,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := raw.(*State)
+	for _, command := range []contracts.RoomCommand{
+		{Type: CommandConnect, PlayerID: "owner"},
+		{Type: CommandAddAI, PlayerID: "owner", Payload: map[string]any{"seatIndex": 1}},
+	} {
+		if _, err := plugin.ApplyCommand(context.Background(), state, command); err != nil {
+			t.Fatal(err)
+		}
+	}
+	startedAt := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
+	result, err := plugin.ApplyCommand(context.Background(), state, contracts.RoomCommand{
+		Type: CommandMatchBegin, PlayerID: "owner", SentAt: startedAt,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Status != StatusInitialize || !state.TurnDeadline.Equal(startedAt.Add(initializationTimeout)) {
+		t.Fatalf("begin state = %+v", state)
+	}
+	if len(result.AIRequests) != 1 || result.AIRequests[0].FallbackCommand == nil ||
+		result.AIRequests[0].FallbackCommand.Type != CommandInitialize {
+		t.Fatalf("AI initialization request = %+v", result.AIRequests)
+	}
+}
+
+func cardIndexes(cards []Card) map[string]int {
+	indexes := make(map[string]int, len(cards))
+	for _, card := range cards {
+		indexes[card.ID] = card.Index
+	}
+	return indexes
+}
+
+func cardIDs(cards []Card) []string {
+	ids := make([]string, 0, len(cards))
+	for _, card := range cards {
+		ids = append(ids, card.ID)
+	}
+	return ids
+}
+
 func slicesContain(values []string, target string) bool {
 	for _, value := range values {
 		if value == target {

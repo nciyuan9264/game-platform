@@ -25,16 +25,21 @@ const (
 	CommandGetCard     = "game_get_card"
 	CommandGuessCard   = "game_guess_card"
 	CommandSetCard     = "game_set_card"
+	CommandInitialize  = "game_initialize_hand"
 	CommandRestart     = "game_restart_game"
 	CommandTurnTimeout = "turn_timeout"
+	CommandInitTimeout = "initialization_timeout"
 	CommandAIDecide    = "ai_decide"
 	StatusWaiting      = "waiting"
+	StatusInitialize   = "initialize"
 	StatusGetCard      = "getCard"
 	StatusGuessCard    = "guessCard"
 	StatusSetCard      = "setCard"
 	StatusEnd          = "end"
 	NumMinus1          = -1
 )
+
+const initializationTimeout = 15 * time.Second
 
 var turnTimeoutByStatus = map[string]time.Duration{
 	StatusGetCard:   20 * time.Second,
@@ -51,12 +56,13 @@ type Card struct {
 }
 
 type Player struct {
-	PlayerID  string `json:"playerID"`
-	Online    bool   `json:"online"`
-	Ready     bool   `json:"ready"`
-	AI        bool   `json:"ai"`
-	SeatIndex int    `json:"seatIndex"`
-	Cards     []Card `json:"cards"`
+	PlayerID         string `json:"playerID"`
+	Online           bool   `json:"online"`
+	Ready            bool   `json:"ready"`
+	AI               bool   `json:"ai"`
+	SeatIndex        int    `json:"seatIndex"`
+	Cards            []Card `json:"cards"`
+	InitialHandReady bool   `json:"initialHandReady,omitempty"`
 }
 
 type State struct {
@@ -82,7 +88,7 @@ type Engine struct{}
 
 func NewEngine() *Engine { return &Engine{} }
 
-const EngineVersion = "davinci-v4"
+const EngineVersion = "davinci-v5"
 
 func Definition() game.Definition {
 	plugin := NewPlugin()
@@ -208,6 +214,9 @@ func (p *Plugin) ApplyCommand(ctx context.Context, state game.State, cmd contrac
 	}
 	for _, req := range result.AIRequests {
 		fallback := contracts.RoomCommand{Type: CommandTurnTimeout, PlayerID: req.PlayerID}
+		if req.State != nil && req.State.Status == StatusInitialize {
+			fallback = initializeHandCommand(req.State, req.PlayerID)
+		}
 		out.AIRequests = append(out.AIRequests, game.AIRequest{
 			RoomID:          req.RoomID,
 			GameType:        contracts.GameDaVinci,
@@ -223,6 +232,17 @@ func (p *Plugin) PendingCommands(ctx context.Context, state game.State) ([]game.
 	typed, err := asState(state)
 	if err != nil {
 		return nil, err
+	}
+	if typed.Status == StatusInitialize {
+		if typed.TurnDeadline.IsZero() || typed.OwnerID == "" {
+			return nil, nil
+		}
+		return []game.ScheduledCommand{{
+			Key:       fmt.Sprintf("%s:%d", StatusInitialize, typed.TurnDeadline.UnixNano()),
+			ExecuteAt: typed.TurnDeadline,
+			PlayerID:  typed.OwnerID,
+			Type:      CommandInitTimeout,
+		}}, nil
 	}
 	if typed.TurnDeadline.IsZero() || typed.TurnTimeout <= 0 || typed.CurrentPlayer == "" {
 		return nil, nil
@@ -391,6 +411,13 @@ func (e *Engine) ApplyCommand(ctx context.Context, state *State, cmd contracts.R
 		return e.guessCard(state, cmd.PlayerID, cmd.Payload)
 	case CommandSetCard:
 		return e.setCard(state, cmd.PlayerID, cmd.Payload)
+	case CommandInitialize:
+		return e.initializeHand(state, cmd.PlayerID, cmd.Payload)
+	case CommandInitTimeout:
+		if cmd.ConnectionRef.Valid() {
+			return Result{}, errors.New("clients cannot submit initialization timeout")
+		}
+		return e.initializationTimeout(state)
 	case CommandTurnTimeout:
 		if cmd.ConnectionRef.Valid() {
 			return Result{}, errors.New("clients cannot submit turn timeout")
@@ -519,9 +546,10 @@ func (e *Engine) begin(state *State, actor string) (Result, error) {
 				return Result{}, err
 			}
 		}
+		prepareInitialHand(state.Players[pid])
 	}
-	state.Status = StatusWaiting
-	return Result{}, nil
+	state.Status = StatusInitialize
+	return e.initializationAIRequests(state), nil
 }
 
 func (e *Engine) restart(state *State, actor string) error {
@@ -547,6 +575,196 @@ func (e *Engine) gameReady(state *State) (Result, error) {
 		state.Status = StatusGetCard
 	}
 	return e.maybeAI(state), nil
+}
+
+type JokerPlacement struct {
+	ID    string `json:"id"`
+	Index int    `json:"index"`
+}
+
+func (e *Engine) initializeHand(state *State, playerID string, payload any) (Result, error) {
+	if state.Status != StatusInitialize {
+		return Result{}, errors.New("not initializing")
+	}
+	player := state.Players[playerID]
+	if player == nil {
+		return Result{}, errors.New("player not found")
+	}
+	if player.InitialHandReady {
+		return Result{}, errors.New("initial hand already confirmed")
+	}
+	placements, err := parseJokerPlacements(payload)
+	if err != nil {
+		return Result{}, err
+	}
+	if err := applyInitialPlacements(player, placements); err != nil {
+		return Result{}, err
+	}
+	player.InitialHandReady = true
+	if initialHandsReady(state) {
+		state.Status = StatusWaiting
+	}
+	return Result{}, nil
+}
+
+func (e *Engine) initializationTimeout(state *State) (Result, error) {
+	if state.Status != StatusInitialize {
+		return Result{}, errors.New("not initializing")
+	}
+	for _, playerID := range state.PlayerSeq {
+		player := state.Players[playerID]
+		if player == nil || player.InitialHandReady {
+			continue
+		}
+		if err := applyInitialPlacements(player, defaultInitialPlacements(player)); err != nil {
+			return Result{}, err
+		}
+		player.InitialHandReady = true
+	}
+	state.Status = StatusWaiting
+	return Result{}, nil
+}
+
+func (e *Engine) initializationAIRequests(state *State) Result {
+	requests := make([]AIRequest, 0)
+	for _, playerID := range state.PlayerSeq {
+		player := state.Players[playerID]
+		if player == nil || !player.AI || player.InitialHandReady {
+			continue
+		}
+		requests = append(requests, AIRequest{
+			RoomID:   state.RoomID,
+			PlayerID: playerID,
+			State:    cloneState(state),
+		})
+	}
+	return Result{AIRequests: requests}
+}
+
+func initialHandsReady(state *State) bool {
+	if len(state.PlayerSeq) == 0 {
+		return false
+	}
+	for _, playerID := range state.PlayerSeq {
+		player := state.Players[playerID]
+		if player == nil || !player.InitialHandReady {
+			return false
+		}
+	}
+	return true
+}
+
+func parseJokerPlacements(payload any) ([]JokerPlacement, error) {
+	m := payloadMap(payload)
+	raw, ok := m["jokerPlacements"]
+	if !ok {
+		return nil, errors.New("jokerPlacements is required")
+	}
+	data, err := json.Marshal(raw)
+	if err != nil {
+		return nil, errors.New("invalid joker placements")
+	}
+	var placements []JokerPlacement
+	if err := json.Unmarshal(data, &placements); err != nil {
+		return nil, errors.New("invalid joker placements")
+	}
+	if placements == nil {
+		placements = []JokerPlacement{}
+	}
+	return placements, nil
+}
+
+func applyInitialPlacements(player *Player, placements []JokerPlacement) error {
+	if player == nil {
+		return errors.New("player not found")
+	}
+	jokers := make(map[string]*Card)
+	numbers := make([]*Card, 0, len(player.Cards))
+	for index := range player.Cards {
+		card := &player.Cards[index]
+		if card.Num == NumMinus1 {
+			jokers[card.ID] = card
+			continue
+		}
+		numbers = append(numbers, card)
+	}
+	if len(placements) != len(jokers) {
+		return errors.New("all initial jokers must be placed")
+	}
+	sort.Slice(numbers, func(i, j int) bool {
+		return numbers[i].Index < numbers[j].Index
+	})
+	placementByIndex := make(map[int]string, len(placements))
+	placedJokers := make(map[string]bool, len(placements))
+	for _, placement := range placements {
+		if placement.ID == "" || jokers[placement.ID] == nil {
+			return errors.New("initial placement must reference a joker")
+		}
+		if placedJokers[placement.ID] {
+			return errors.New("joker placement is duplicated")
+		}
+		if placement.Index < 0 || placement.Index >= len(player.Cards) {
+			return errors.New("joker placement index is out of range")
+		}
+		if placementByIndex[placement.Index] != "" {
+			return errors.New("joker placement index is duplicated")
+		}
+		placedJokers[placement.ID] = true
+		placementByIndex[placement.Index] = placement.ID
+	}
+	finalIndexes := make(map[string]int, len(player.Cards))
+	numberIndex := 0
+	for index := 0; index < len(player.Cards); index++ {
+		if jokerID := placementByIndex[index]; jokerID != "" {
+			finalIndexes[jokerID] = index
+			continue
+		}
+		if numberIndex >= len(numbers) {
+			return errors.New("initial placement does not produce a complete hand")
+		}
+		finalIndexes[numbers[numberIndex].ID] = index
+		numberIndex++
+	}
+	if numberIndex != len(numbers) {
+		return errors.New("initial placement does not produce a complete hand")
+	}
+	for index := range player.Cards {
+		player.Cards[index].Index = finalIndexes[player.Cards[index].ID]
+	}
+	return nil
+}
+
+func defaultInitialPlacements(player *Player) []JokerPlacement {
+	if player == nil {
+		return []JokerPlacement{}
+	}
+	numberCount := 0
+	jokers := make([]Card, 0, 2)
+	for _, card := range player.Cards {
+		if card.Num == NumMinus1 {
+			jokers = append(jokers, card)
+		} else {
+			numberCount++
+		}
+	}
+	sort.SliceStable(jokers, func(i, j int) bool {
+		return jokers[i].Color == 1 && jokers[j].Color == 0
+	})
+	placements := make([]JokerPlacement, 0, len(jokers))
+	for index, joker := range jokers {
+		placements = append(placements, JokerPlacement{ID: joker.ID, Index: numberCount + index})
+	}
+	return placements
+}
+
+func initializeHandCommand(state *State, playerID string) contracts.RoomCommand {
+	return contracts.RoomCommand{
+		Type:     CommandInitialize,
+		PlayerID: playerID,
+		Payload: map[string]any{
+			"jokerPlacements": defaultInitialPlacements(state.Players[playerID]),
+		},
+	}
 }
 
 func (e *Engine) getCard(state *State, playerID string, payload any) (Result, error) {
@@ -775,17 +993,25 @@ func (e *Engine) BuildRoomSync(state *State, req game.ViewRequest) contracts.Roo
 			Ready:       p.Ready,
 			SeatIndex:   p.SeatIndex,
 		}
-		for _, c := range p.Cards {
+		for cardIndex, c := range p.Cards {
 			if id == req.PlayerID {
 				self = append(self, c)
 				continue
 			}
-			item := map[string]any{"id": c.ID, "color": c.Color, "index": c.Index, "isRevealed": c.IsRevealed}
+			index := c.Index
+			if state.Status == StatusInitialize {
+				index = cardIndex
+			}
+			item := map[string]any{"id": c.ID, "color": c.Color, "index": index, "isRevealed": c.IsRevealed}
 			if c.IsRevealed || state.Status == StatusEnd {
 				item["num"] = c.Num
 			}
 			opponents = append(opponents, item)
 		}
+	}
+	initialHandReady := false
+	if player := state.Players[req.PlayerID]; player != nil {
+		initialHandReady = player.InitialHandReady
 	}
 	return contracts.RoomSync{
 		Type:     contracts.MessageTypeRoomSync,
@@ -802,8 +1028,12 @@ func (e *Engine) BuildRoomSync(state *State, req game.ViewRequest) contracts.Roo
 			"turnDeadline":  turnDeadlineValue(state.TurnDeadline),
 			"turnTimeoutMs": state.TurnTimeout.Milliseconds(),
 		},
-		CardData: map[string]any{"self": self, "opponents": opponents},
-		Result:   map[string]any{"winnerID": state.WinnerID},
+		CardData: map[string]any{
+			"self":             self,
+			"opponents":        opponents,
+			"initialHandReady": initialHandReady,
+		},
+		Result: map[string]any{"winnerID": state.WinnerID},
 	}
 }
 
@@ -833,7 +1063,6 @@ func drawInitialCard(state *State, playerID string) error {
 		return errors.New("player not found")
 	}
 	p.Cards = append(p.Cards, card)
-	sortInitialHand(p.Cards)
 	return nil
 }
 
@@ -913,6 +1142,19 @@ func sortInitialHand(cards []Card) {
 	}
 }
 
+func prepareInitialHand(player *Player) {
+	if player == nil {
+		return
+	}
+	sortInitialHand(player.Cards)
+	for index := range player.Cards {
+		if player.Cards[index].Num == NumMinus1 {
+			player.Cards[index].Index = -1
+		}
+	}
+	player.InitialHandReady = false
+}
+
 func computeInsertIndex(cards []Card, newCard *Card) int {
 	count := 0
 	pos := -1
@@ -945,6 +1187,13 @@ func cardOrderLess(numA, colorA, numB, colorB int) bool {
 }
 
 func updateTurnDeadline(state *State, commandTime time.Time) {
+	if state.Status == StatusInitialize {
+		state.TurnTimeout = initializationTimeout
+		if state.TurnDeadline.IsZero() {
+			state.TurnDeadline = commandTime.Add(initializationTimeout)
+		}
+		return
+	}
 	state.TurnDeadline = time.Time{}
 	state.TurnTimeout = 0
 	if state.Status == StatusEnd {

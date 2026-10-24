@@ -72,6 +72,23 @@ func TestRoomRouteRefreshRequired(t *testing.T) {
 	}
 }
 
+func TestDisconnectMatchesCurrentRoute(t *testing.T) {
+	disconnect := contracts.RoomCommand{RoomID: "room-1", MatchID: "room-1-r1"}
+	if !disconnectMatchesCurrentRoute(disconnect, contracts.RoomRecord{
+		RoomID: "room-1", CurrentMatchID: "room-1-r1",
+	}) {
+		t.Fatal("same-match disconnect was not retryable")
+	}
+	for _, room := range []contracts.RoomRecord{
+		{RoomID: "room-1", CurrentMatchID: "room-1-r2"},
+		{RoomID: "room-2", CurrentMatchID: "room-1-r1"},
+	} {
+		if disconnectMatchesCurrentRoute(disconnect, room) {
+			t.Fatalf("disconnect crossed match or room boundary: %+v", room)
+		}
+	}
+}
+
 func TestReadyRouteOverridesPostgresProjection(t *testing.T) {
 	server := &Server{owners: fakeOwnerResolver{owner: coordination.RoomOwner{
 		RoomID:    "room-1",
@@ -159,6 +176,25 @@ func TestClientCommandPayload(t *testing.T) {
 		}
 		payload, ok := got.(map[string]any)
 		if !ok || payload["tileKey"] != "1A" {
+			t.Fatalf("clientCommandPayload() = %#v", got)
+		}
+	})
+
+	t.Run("davinci initialization payload", func(t *testing.T) {
+		got, err := clientCommandPayload(contracts.GameDaVinci, "game_initialize_hand", map[string]any{
+			"davinci": map[string]any{
+				"initializeHand": map[string]any{
+					"jokerPlacements": []any{
+						map[string]any{"id": "joker-1", "index": float64(2)},
+					},
+				},
+			},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		payload, ok := got.(map[string]any)
+		if !ok || len(payload["jokerPlacements"].([]any)) != 1 {
 			t.Fatalf("clientCommandPayload() = %#v", got)
 		}
 	})

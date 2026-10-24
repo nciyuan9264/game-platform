@@ -17,9 +17,11 @@ import (
 	acquiredomain "github.com/nciyuan9264/game-platform/internal/acquire/domain/domain"
 	"github.com/nciyuan9264/game-platform/internal/contracts"
 	"github.com/nciyuan9264/game-platform/internal/coordination"
+	davincigame "github.com/nciyuan9264/game-platform/internal/davinci"
 	"github.com/nciyuan9264/game-platform/internal/game"
 	"github.com/nciyuan9264/game-platform/internal/gamelog"
 	"github.com/nciyuan9264/game-platform/internal/history"
+	splendorgame "github.com/nciyuan9264/game-platform/internal/splendor"
 	"github.com/nciyuan9264/game-platform/internal/transport"
 )
 
@@ -1031,6 +1033,154 @@ func TestStartMatchReplacesRuntimeInsideExistingRoomActor(t *testing.T) {
 	}
 }
 
+func TestStartMatchRestoresRosterAcrossGames(t *testing.T) {
+	definitions := []game.Definition{
+		acquiregame.Definition(),
+		davincigame.Definition(),
+		splendorgame.Definition(),
+	}
+	scenarios := []struct {
+		name            string
+		setupGuest      bool
+		setupAI         bool
+		guestOnline     bool
+		expectedPlayers int
+		expectedAI      int
+	}{
+		{name: "human and AI", setupAI: true, expectedPlayers: 2, expectedAI: 1},
+		{name: "two online humans", setupGuest: true, guestOnline: true, expectedPlayers: 2},
+		{name: "offline human removed", setupGuest: true, expectedPlayers: 1},
+	}
+	for _, definition := range definitions {
+		for _, scenario := range scenarios {
+			t.Run(definition.GameType+"/"+scenario.name, func(t *testing.T) {
+				const (
+					roomID = "room-1"
+					owner  = "1"
+					guest  = "2"
+				)
+				oldState, err := definition.Engine.InitRoom(context.Background(), game.RoomConfig{
+					RoomID:        roomID,
+					GameType:      definition.GameType,
+					OwnerUserID:   owner,
+					OwnerPlayerID: owner,
+					MaxPlayers:    2,
+					RandomSeed:    1,
+					Visibility:    contracts.VisibilityPrivate,
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				applySetup := func(command contracts.RoomCommand) {
+					t.Helper()
+					if _, err := definition.Engine.ApplyCommand(
+						gamelog.WithSink(context.Background(), gamelog.NopSink{}),
+						oldState,
+						command,
+					); err != nil {
+						t.Fatalf("%s: %v", command.Type, err)
+					}
+				}
+				applySetup(contracts.RoomCommand{Type: "connect", PlayerID: owner})
+				if scenario.setupGuest {
+					applySetup(contracts.RoomCommand{Type: "connect", PlayerID: guest})
+					applySetup(contracts.RoomCommand{
+						Type: "match_ready", PlayerID: guest, Payload: map[string]any{"ready": true},
+					})
+				}
+				if scenario.setupAI {
+					applySetup(contracts.RoomCommand{
+						Type: "match_add_ai", PlayerID: owner, Payload: map[string]any{"seatIndex": 1},
+					})
+				}
+
+				presences := []contracts.PresenceRecord{{
+					RoomID: roomID, UserID: owner, PlayerID: owner, Online: true,
+					ConnectionRef: contracts.ConnectionRef{GatewayNode: "gateway-1", SessionID: "owner-session"},
+				}}
+				if scenario.guestOnline {
+					presences = append(presences,
+						contracts.PresenceRecord{
+							RoomID: roomID, UserID: guest, PlayerID: guest, Online: true,
+							ConnectionRef: contracts.ConnectionRef{GatewayNode: "gateway-1", SessionID: "guest-session-1"},
+						},
+						contracts.PresenceRecord{
+							RoomID: roomID, UserID: guest, PlayerID: guest, Online: true,
+							ConnectionRef: contracts.ConnectionRef{GatewayNode: "gateway-2", SessionID: "guest-session-2"},
+						},
+					)
+				}
+				record := contracts.RoomRecord{
+					RoomID: roomID, GameType: definition.GameType,
+					OwnerUserID: owner, OwnerPlayerID: owner,
+					OwnerNode: "roomhost-1", Epoch: 1,
+					Status: contracts.RoomStatusOpen, Visibility: contracts.VisibilityPrivate,
+					MaxPlayers: 2, EngineVersion: definition.Version, CurrentMatchID: roomID + "-r1",
+				}
+				st := &fakeRoomhostStore{
+					room:      record,
+					presences: presences,
+					match: contracts.MatchRecord{
+						MatchID: roomID + "-r2", RuntimeRoomID: roomID,
+						Status: contracts.MatchStatusPreparing, EngineVersion: definition.Version,
+						RandomSeed: 2, RoundNo: 2,
+					},
+				}
+				host := NewHost(
+					"roomhost-1",
+					st,
+					fakeRoomhostCoordinator{},
+					&fakeRoomhostRouter{},
+					game.NewRegistry(definition),
+				)
+				actor := &RoomActor{
+					host: host, record: record, definition: definition, state: oldState,
+					match: contracts.MatchRecord{
+						MatchID: roomID + "-r1", RuntimeRoomID: roomID,
+						Status: contracts.MatchStatusEnded, EngineVersion: definition.Version, RandomSeed: 1,
+					},
+					processed: map[string]contracts.CommandAck{},
+				}
+				actor.ctx, actor.cancel = context.WithCancel(context.Background())
+				t.Cleanup(actor.cancel)
+
+				if err := actor.StartMatch(context.Background(), roomID+"-r2"); err != nil {
+					t.Fatal(err)
+				}
+				provider := definition.Engine.(game.RosterProvider)
+				roster, err := provider.Roster(context.Background(), actor.state)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(roster) != scenario.expectedPlayers {
+					t.Fatalf("restored roster = %+v", roster)
+				}
+				aiCount := 0
+				for _, player := range roster {
+					if !player.Ready || !player.Online {
+						t.Fatalf("restored player is not ready and online: %+v", player)
+					}
+					if player.IsAI {
+						aiCount++
+					}
+				}
+				if aiCount != scenario.expectedAI {
+					t.Fatalf("restored AI count = %d, roster=%+v", aiCount, roster)
+				}
+				if scenario.expectedPlayers >= 2 {
+					if _, err := definition.Engine.ApplyCommand(
+						context.Background(),
+						actor.state,
+						contracts.RoomCommand{Type: "match_begin", PlayerID: owner},
+					); err != nil {
+						t.Fatalf("restored roster could not start directly: %v", err)
+					}
+				}
+			})
+		}
+	}
+}
+
 func TestHostShutdownSnapshotsAndReleasesRooms(t *testing.T) {
 	st := &fakeRoomhostStore{}
 	coord := &shutdownCoordinator{}
@@ -1207,6 +1357,93 @@ func TestSyncRosterUsesLogicalPlayersInsteadOfPresenceSessions(t *testing.T) {
 	}
 	if st.rosterMatchID != "room-1" || len(st.rosterPlayers) != 2 || !st.rosterPlayers[1].IsAI {
 		t.Fatalf("unexpected synced roster: match=%q players=%+v", st.rosterMatchID, st.rosterPlayers)
+	}
+}
+
+func TestRemovePlayerSynchronizesRosterImmediately(t *testing.T) {
+	definition := davincigame.Definition()
+	raw, err := definition.Engine.InitRoom(context.Background(), game.RoomConfig{
+		RoomID:        "remove-player-room",
+		GameType:      definition.GameType,
+		OwnerUserID:   "1",
+		OwnerPlayerID: "1",
+		MaxPlayers:    2,
+		RandomSeed:    1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, command := range []contracts.RoomCommand{
+		{Type: "connect", PlayerID: "1"},
+		{Type: "connect", PlayerID: "2"},
+	} {
+		if _, err := definition.Engine.ApplyCommand(context.Background(), raw, command); err != nil {
+			t.Fatal(err)
+		}
+	}
+	presences := []contracts.PresenceRecord{
+		{
+			RoomID: "remove-player-room", UserID: "1", PlayerID: "1", Online: true,
+			ConnectionRef: contracts.ConnectionRef{GatewayNode: "gateway-1", SessionID: "owner-session"},
+		},
+		{
+			RoomID: "remove-player-room", UserID: "2", PlayerID: "2", Online: true,
+			ConnectionRef: contracts.ConnectionRef{GatewayNode: "gateway-1", SessionID: "guest-session"},
+		},
+	}
+	st := &fakeRoomhostStore{
+		presences: presences,
+		matchPlayers: []contracts.MatchPlayerRecord{
+			{UserID: "1", PlayerID: "1", Online: true},
+			{UserID: "2", PlayerID: "2", Online: true},
+		},
+	}
+	router := &fakeRoomhostRouter{}
+	host := NewHost(
+		"roomhost-1",
+		st,
+		fakeRoomhostCoordinator{},
+		router,
+		game.NewRegistry(definition),
+	)
+	actor := &RoomActor{
+		host: host,
+		record: contracts.RoomRecord{
+			RoomID: "remove-player-room", GameType: definition.GameType,
+			OwnerUserID: "1", OwnerPlayerID: "1", OwnerNode: "roomhost-1",
+			Epoch: 1, Status: contracts.RoomStatusOpen, MaxPlayers: 2,
+			EngineVersion: definition.Version, CurrentMatchID: "remove-player-room-r1",
+		},
+		match: contracts.MatchRecord{
+			MatchID: "remove-player-room-r1", RuntimeRoomID: "remove-player-room",
+			Status: contracts.MatchStatusPreparing, EngineVersion: definition.Version, RandomSeed: 1,
+		},
+		definition: definition,
+		state:      raw,
+		processed:  map[string]contracts.CommandAck{},
+	}
+	actor.ctx, actor.cancel = context.WithCancel(context.Background())
+	t.Cleanup(actor.cancel)
+
+	ack := actor.Apply(context.Background(), contracts.RoomCommand{
+		SchemaVersion: 1,
+		CommandID:     "remove-guest",
+		TraceID:       "remove-guest",
+		RoomID:        "remove-player-room",
+		MatchID:       "remove-player-room-r1",
+		GameType:      definition.GameType,
+		Epoch:         1,
+		UserID:        "1",
+		PlayerID:      "1",
+		Type:          "match_remove_player",
+		Payload:       map[string]any{"playerID": "2"},
+		SentAt:        time.Now().UTC(),
+	})
+	if !ack.Accepted {
+		t.Fatalf("remove ack = %+v", ack)
+	}
+	if actor.record.PlayerCount != 1 || len(st.rosterPlayers) != 1 || st.rosterPlayers[0].PlayerID != "1" {
+		t.Fatalf("synced roster = count %d players %+v", actor.record.PlayerCount, st.rosterPlayers)
 	}
 }
 

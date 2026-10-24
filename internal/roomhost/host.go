@@ -1061,7 +1061,21 @@ func (r *RoomActor) StartMatch(ctx context.Context, matchID string) error {
 	if r.match.MatchID == match.MatchID && (match.Status != contracts.MatchStatusPreparing || r.seq > 0) {
 		return nil
 	}
-	if r.match.MatchID != "" && r.match.MatchID != match.MatchID {
+	replacingMatch := r.match.MatchID != "" && r.match.MatchID != match.MatchID
+	var (
+		previousRoster    []game.RosterPlayer
+		hasPreviousRoster bool
+	)
+	if replacingMatch {
+		if provider, ok := r.definition.Engine.(game.RosterProvider); ok {
+			previousRoster, err = provider.Roster(ctx, r.state)
+			if err != nil {
+				return fmt.Errorf("read previous match roster: %w", err)
+			}
+			hasPreviousRoster = true
+		}
+	}
+	if replacingMatch {
 		if r.historyDirty {
 			if err := r.reconcileHistoryLocked(ctx); err != nil {
 				return fmt.Errorf("finalize previous match history: %w", err)
@@ -1109,24 +1123,12 @@ func (r *RoomActor) StartMatch(ctx context.Context, matchID string) error {
 		return err
 	}
 	now := time.Now().UTC()
-	for _, presence := range presences {
-		if !presence.Online {
-			continue
+	if hasPreviousRoster {
+		if err := r.restoreNextMatchRoster(ctx, state, match, previousRoster, presences, now); err != nil {
+			return err
 		}
-		cmd := contracts.RoomCommand{
-			SchemaVersion: 1,
-			RoomID:        r.record.RoomID,
-			MatchID:       match.MatchID,
-			GameType:      r.record.GameType,
-			Epoch:         r.record.Epoch,
-			UserID:        presence.UserID,
-			PlayerID:      presence.PlayerID,
-			Type:          "connect",
-			SentAt:        now,
-		}
-		if _, err := r.definition.Engine.ApplyCommand(gamelog.WithSink(ctx, gamelog.NopSink{}), state, cmd); err != nil {
-			return fmt.Errorf("restore lobby player %s: %w", presence.PlayerID, err)
-		}
+	} else if err := r.connectOnlinePresence(ctx, state, match, presences, now); err != nil {
+		return err
 	}
 	if r.cancel != nil {
 		r.cancel()
@@ -1169,6 +1171,115 @@ func (r *RoomActor) StartMatch(ctx context.Context, matchID string) error {
 	}
 	r.rearmScheduledLocked(ctx, "match-create")
 	return nil
+}
+
+func (r *RoomActor) connectOnlinePresence(
+	ctx context.Context,
+	state game.State,
+	match contracts.MatchRecord,
+	presences []contracts.PresenceRecord,
+	commandTime time.Time,
+) error {
+	connected := make(map[string]bool, len(presences))
+	for _, presence := range presences {
+		if !presence.Online || presence.PlayerID == "" || connected[presence.PlayerID] {
+			continue
+		}
+		connected[presence.PlayerID] = true
+		cmd := r.matchSetupCommand(match, presence.UserID, presence.PlayerID, "connect", nil, commandTime)
+		if _, err := r.definition.Engine.ApplyCommand(gamelog.WithSink(ctx, gamelog.NopSink{}), state, cmd); err != nil {
+			return fmt.Errorf("restore lobby player %s: %w", presence.PlayerID, err)
+		}
+	}
+	return nil
+}
+
+func (r *RoomActor) restoreNextMatchRoster(
+	ctx context.Context,
+	state game.State,
+	match contracts.MatchRecord,
+	previous []game.RosterPlayer,
+	presences []contracts.PresenceRecord,
+	commandTime time.Time,
+) error {
+	online := make(map[string]contracts.PresenceRecord, len(presences))
+	for _, presence := range presences {
+		if presence.Online && presence.PlayerID != "" {
+			online[presence.PlayerID] = presence
+		}
+	}
+	roster := append([]game.RosterPlayer(nil), previous...)
+	sort.SliceStable(roster, func(i, j int) bool {
+		if roster[i].SeatIndex != roster[j].SeatIndex {
+			return roster[i].SeatIndex < roster[j].SeatIndex
+		}
+		return roster[i].PlayerID < roster[j].PlayerID
+	})
+	retainedHumans := make([]contracts.PresenceRecord, 0, len(roster))
+	for _, player := range roster {
+		if player.PlayerID == "" {
+			continue
+		}
+		if player.IsAI {
+			cmd := r.matchSetupCommand(
+				match,
+				r.record.OwnerUserID,
+				r.record.OwnerPlayerID,
+				"match_add_ai",
+				map[string]any{"seatIndex": player.SeatIndex},
+				commandTime,
+			)
+			if _, err := r.definition.Engine.ApplyCommand(gamelog.WithSink(ctx, gamelog.NopSink{}), state, cmd); err != nil {
+				return fmt.Errorf("restore AI at seat %d: %w", player.SeatIndex, err)
+			}
+			continue
+		}
+		presence, ok := online[player.PlayerID]
+		if !ok {
+			continue
+		}
+		cmd := r.matchSetupCommand(match, presence.UserID, player.PlayerID, "connect", nil, commandTime)
+		if _, err := r.definition.Engine.ApplyCommand(gamelog.WithSink(ctx, gamelog.NopSink{}), state, cmd); err != nil {
+			return fmt.Errorf("restore online player %s: %w", player.PlayerID, err)
+		}
+		retainedHumans = append(retainedHumans, presence)
+	}
+	for _, presence := range retainedHumans {
+		cmd := r.matchSetupCommand(
+			match,
+			presence.UserID,
+			presence.PlayerID,
+			"match_ready",
+			map[string]any{"ready": true},
+			commandTime,
+		)
+		if _, err := r.definition.Engine.ApplyCommand(gamelog.WithSink(ctx, gamelog.NopSink{}), state, cmd); err != nil {
+			return fmt.Errorf("restore ready player %s: %w", presence.PlayerID, err)
+		}
+	}
+	return nil
+}
+
+func (r *RoomActor) matchSetupCommand(
+	match contracts.MatchRecord,
+	userID,
+	playerID,
+	commandType string,
+	payload any,
+	sentAt time.Time,
+) contracts.RoomCommand {
+	return contracts.RoomCommand{
+		SchemaVersion: 1,
+		RoomID:        r.record.RoomID,
+		MatchID:       match.MatchID,
+		GameType:      r.record.GameType,
+		Epoch:         r.record.Epoch,
+		UserID:        userID,
+		PlayerID:      playerID,
+		Type:          commandType,
+		Payload:       payload,
+		SentAt:        sentAt,
+	}
 }
 
 func (r *RoomActor) Close(ctx context.Context, cmd contracts.RoomCommand) contracts.CommandAck {

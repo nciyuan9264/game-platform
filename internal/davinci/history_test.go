@@ -29,6 +29,7 @@ func TestDavinciHistoryStartsDeterministically(t *testing.T) {
 		{PlayerID: "137", Type: CommandConnect},
 		{PlayerID: "137", Type: CommandAddAI, Payload: map[string]any{"seatIndex": 1}},
 		{PlayerID: "137", Type: CommandMatchBegin},
+		{PlayerID: "137", Type: CommandInitTimeout, SentAt: startedAt, Replay: true},
 		{PlayerID: "137", Type: CommandGameReady, SentAt: startedAt, Replay: true},
 	}
 	for _, command := range commands {
@@ -190,13 +191,35 @@ func TestDavinciHistoryCommandClassification(t *testing.T) {
 		CommandMatchBegin,
 		CommandGameReady,
 		CommandAddAI,
+		CommandInitialize,
+		CommandInitTimeout,
 	} {
 		if plugin.IsRecordableCommand(commandType) {
 			t.Fatalf("%s should not be recordable", commandType)
 		}
 	}
-	if definition := Definition(); definition.Version != "davinci-v4" || definition.History == nil {
+	if definition := Definition(); definition.Version != "davinci-v5" || definition.History == nil {
 		t.Fatalf("definition = %+v", definition)
+	}
+}
+
+func TestDavinciInitializationDoesNotStartHistory(t *testing.T) {
+	state := &State{
+		RoomID:     "initializing-history",
+		Status:     StatusInitialize,
+		MaxPlayers: 2,
+		PlayerSeq:  []string{"137", "AI_2"},
+		Players: map[string]*Player{
+			"137":  {PlayerID: "137"},
+			"AI_2": {PlayerID: "AI_2", AI: true},
+		},
+	}
+	projection, err := NewPlugin().ProjectHistory(context.Background(), state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if projection.Started {
+		t.Fatalf("initialization created history: %+v", projection)
 	}
 }
 

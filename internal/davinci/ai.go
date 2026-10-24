@@ -19,6 +19,8 @@ func (p *AIPlanner) Decide(ctx context.Context, req game.AIRequest) (contracts.R
 		return contracts.RoomCommand{}, err
 	}
 	switch state.Status {
+	case StatusInitialize:
+		return initializeHandCommand(state, req.PlayerID), nil
 	case StatusGetCard:
 		if len(state.Deck) == 0 {
 			return contracts.RoomCommand{}, errors.New("deck empty")

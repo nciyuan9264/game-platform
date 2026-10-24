@@ -69,6 +69,43 @@ func TestPostgresRoomMatchLifecycleIntegration(t *testing.T) {
 	if first.MatchID != roomID+"-r1" || first.RoundNo != 1 || first.RandomSeed != 101 || room.CurrentMatchID != first.MatchID {
 		t.Fatalf("first room/match = %+v/%+v", room, first)
 	}
+	initialRoster := []contracts.MatchPlayerRecord{
+		{UserID: "1", PlayerID: "1", Online: true, SeatIndex: 0, Ready: true},
+		{UserID: "2", PlayerID: "2", Online: true, SeatIndex: 1, Ready: true},
+		{PlayerID: "ai_001", DisplayName: "AI", Online: true, IsAI: true, SeatIndex: 2, Ready: true},
+	}
+	if err := store.SyncMatchRoster(ctx, first.MatchID, initialRoster); err != nil {
+		t.Fatal(err)
+	}
+	if players, err := store.listMatchPlayers(ctx, first.MatchID); err != nil || len(players) != 3 {
+		t.Fatalf("initial roster = %+v, err=%v", players, err)
+	}
+	retainedRoster := []contracts.MatchPlayerRecord{
+		{UserID: "1", PlayerID: "1", Online: false, SeatIndex: 0, Ready: true},
+		{PlayerID: "ai_001", DisplayName: "AI", Online: true, IsAI: true, SeatIndex: 2, Ready: true},
+	}
+	if err := store.SyncMatchRoster(ctx, first.MatchID, retainedRoster); err != nil {
+		t.Fatal(err)
+	}
+	players, err := store.listMatchPlayers(ctx, first.MatchID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(players) != 2 || players[0].PlayerID != "1" || players[0].Online || players[1].PlayerID != "ai_001" {
+		t.Fatalf("roster after human removal = %+v", players)
+	}
+	if err := store.SyncMatchRoster(ctx, first.MatchID, retainedRoster[:1]); err != nil {
+		t.Fatal(err)
+	}
+	if players, err := store.listMatchPlayers(ctx, first.MatchID); err != nil || len(players) != 1 || players[0].PlayerID != "1" {
+		t.Fatalf("roster after AI removal = %+v, err=%v", players, err)
+	}
+	if err := store.SyncMatchRoster(ctx, first.MatchID, nil); err != nil {
+		t.Fatal(err)
+	}
+	if players, err := store.listMatchPlayers(ctx, first.MatchID); err != nil || len(players) != 0 {
+		t.Fatalf("empty roster = %+v, err=%v", players, err)
+	}
 	if err := store.FinishMatch(ctx, roomID, first.MatchID, contracts.MatchStatusEnded, "completed", room.OwnerNode, room.Epoch, 7); err != nil {
 		t.Fatal(err)
 	}

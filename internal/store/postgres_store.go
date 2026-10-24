@@ -1401,6 +1401,19 @@ func (s *PostgresStore) GetMatch(ctx context.Context, matchID string) (contracts
 }
 
 func (s *PostgresStore) UpsertMatchPlayer(ctx context.Context, matchID string, player contracts.MatchPlayerRecord) error {
+	return upsertMatchPlayer(ctx, s.db, matchID, player)
+}
+
+type matchPlayerExecer interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+}
+
+func upsertMatchPlayer(
+	ctx context.Context,
+	execer matchPlayerExecer,
+	matchID string,
+	player contracts.MatchPlayerRecord,
+) error {
 	if strings.TrimSpace(matchID) == "" {
 		return fmt.Errorf("%w: match ID is required", ErrInvalidPlayerIdentity)
 	}
@@ -1414,7 +1427,7 @@ func (s *PostgresStore) UpsertMatchPlayer(ctx context.Context, matchID string, p
 	if player.LastSeen.IsZero() {
 		player.LastSeen = player.JoinedAt
 	}
-	_, err := s.db.ExecContext(ctx, `
+	_, err := execer.ExecContext(ctx, `
 		INSERT INTO match_players (
 			match_id, user_id, player_id, display_name, name, email, avatar,
 				gateway_node, online, is_ai, seat_index, ready, joined_at, last_seen
@@ -1484,25 +1497,38 @@ func (s *PostgresStore) UpdateMatchPlayerDisplayName(
 }
 
 func (s *PostgresStore) SyncMatchRoster(ctx context.Context, matchID string, players []contracts.MatchPlayerRecord) error {
-	aiPlayerIDs := make([]string, 0, len(players))
+	if strings.TrimSpace(matchID) == "" {
+		return fmt.Errorf("%w: match ID is required", ErrInvalidPlayerIdentity)
+	}
 	for _, player := range players {
-		if err := s.UpsertMatchPlayer(ctx, matchID, player); err != nil {
+		if err := validateMatchPlayerIdentity(player); err != nil {
 			return err
 		}
-		if player.IsAI {
-			aiPlayerIDs = append(aiPlayerIDs, player.PlayerID)
-		}
 	}
-	if len(aiPlayerIDs) == 0 {
-		_, err := s.db.ExecContext(ctx, `DELETE FROM match_players WHERE match_id = $1 AND is_ai = true`, matchID)
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
 		return err
 	}
-	_, err := s.db.ExecContext(ctx, `
+	defer tx.Rollback()
+
+	playerIDs := make([]string, 0, len(players))
+	for _, player := range players {
+		if err := upsertMatchPlayer(ctx, tx, matchID, player); err != nil {
+			return err
+		}
+		playerIDs = append(playerIDs, player.PlayerID)
+	}
+	if len(playerIDs) == 0 {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM match_players WHERE match_id = $1`, matchID); err != nil {
+			return err
+		}
+	} else if _, err := tx.ExecContext(ctx, `
 		DELETE FROM match_players
 		WHERE match_id = $1
-			AND is_ai = true
-			AND NOT (player_id = ANY($2))`, matchID, pq.Array(aiPlayerIDs))
-	return err
+			AND NOT (player_id = ANY($2))`, matchID, pq.Array(playerIDs)); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (s *PostgresStore) MarkMatchPlayerOffline(ctx context.Context, matchID, playerID string, lastSeen time.Time) error {
