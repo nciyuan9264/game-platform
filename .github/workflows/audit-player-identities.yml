@@ -66,6 +66,24 @@ jobs:
                 jq -c . "${report}"
               fi
             done
+            cd /home/game-platform
+            set -a
+            . ./.env
+            set +a
+            migration_image="$(
+              docker images --format '{{.Repository}}:{{.Tag}}' |
+                awk '/game-platform-identity-migration/ { print; exit }'
+            )"
+            test -n "${migration_image}"
+            printf 'identity_aliases:\n'
+            docker run --rm \
+              --network global-network \
+              --env POSTGRES_DSN \
+              --entrypoint sh \
+              "${migration_image}" \
+              -c 'psql "$POSTGRES_DSN" -At -v ON_ERROR_STOP=1 \
+                -c "SELECT '\''alias_rows='\'' || COUNT(*) FROM player_identity_aliases" \
+                -c "SELECT '\''alias_games='\'' || COUNT(DISTINCT game_id) FROM player_identity_aliases"'
           REMOTE
           {
             printf '## Production identity reports\n\n```text\n'
