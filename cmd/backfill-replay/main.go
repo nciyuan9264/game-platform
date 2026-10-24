@@ -364,7 +364,32 @@ func canonicalJSON(value []byte) ([]byte, error) {
 	if err := json.Unmarshal(value, &decoded); err != nil {
 		return nil, err
 	}
+	normalizeEmbeddedJSON(decoded)
 	return json.Marshal(decoded)
+}
+
+func normalizeEmbeddedJSON(value any) {
+	switch typed := value.(type) {
+	case []any:
+		for _, item := range typed {
+			normalizeEmbeddedJSON(item)
+		}
+	case map[string]any:
+		for key, item := range typed {
+			if key == "payloadJSON" {
+				raw, ok := item.(string)
+				if !ok {
+					continue
+				}
+				var embedded any
+				if json.Unmarshal([]byte(raw), &embedded) == nil {
+					typed[key] = embedded
+				}
+				continue
+			}
+			normalizeEmbeddedJSON(item)
+		}
+	}
 }
 
 func legacyHistoryPlayers(players []history.Player) []game.HistoryPlayer {

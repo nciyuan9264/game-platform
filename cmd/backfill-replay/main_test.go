@@ -29,7 +29,7 @@ func TestLegacyFrameMaterializationPreservesReplayEnvelope(t *testing.T) {
 		Seq:         3,
 		PlayerID:    "alice",
 		CommandType: "game_move",
-		Payload:     json.RawMessage(`{"value":1}`),
+		Payload:     json.RawMessage(`{"value": 1}`),
 	}
 	if err := compareMaterializedReplay(1, payload, 3, 7, event, legacy); err != nil {
 		t.Fatal(err)
