@@ -52,6 +52,20 @@ jobs:
                 cat "${report_dir}/acceptance-sql.txt"
               fi
             done
+            printf 'mutation_reports:\n'
+            for report in /home/game-platform/backups/player-identity-*/*.json; do
+              [ -f "${report}" ] || continue
+              if jq -e '
+                ((.migratedGames // 0) > 0)
+                or (
+                  (.dryRun == false)
+                  and ((.succeeded // 0) > 0)
+                )
+              ' "${report}" >/dev/null; then
+                printf '%s=' "${report}"
+                jq -c . "${report}"
+              fi
+            done
           REMOTE
           {
             printf '## Production identity reports\n\n```text\n'
