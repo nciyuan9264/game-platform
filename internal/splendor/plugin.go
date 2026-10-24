@@ -21,14 +21,18 @@ import (
 
 const (
 	GameType          = "splendor"
-	EngineVersion     = "splendor-v5"
+	EngineVersion     = "splendor-v6"
 	defaultMaxPlayers = 4
 	maxNoHumanChecks  = 3
 )
 
 const ReplaySchemaVersion = 2
 
-const splendorTurnTimeout = 60 * time.Second
+const (
+	splendorTurnTimeout = 60 * time.Second
+	splendorAIMinDelay  = 3 * time.Second
+	splendorAIMaxDelay  = 5 * time.Second
+)
 
 type Plugin struct{}
 
@@ -329,44 +333,7 @@ func (p *Plugin) Decide(_ context.Context, request game.AIRequest) (contracts.Ro
 	if err != nil {
 		return contracts.RoomCommand{}, err
 	}
-	player := typed.Players[request.PlayerID]
-	if player == nil {
-		return contracts.RoomCommand{}, errors.New("AI player state is missing")
-	}
-	cards := revealedCardPointers(typed)
-	sort.Slice(cards, func(i, j int) bool {
-		if cards[i].Points != cards[j].Points {
-			return cards[i].Points > cards[j].Points
-		}
-		return cards[i].ID < cards[j].ID
-	})
-	for _, card := range cards {
-		if rules.CanBuyCard(player, card) {
-			return contracts.RoomCommand{Type: "game_buy_card", PlayerID: request.PlayerID, Payload: card.ID}, nil
-		}
-	}
-	if len(player.ReserveCard) < 3 && len(cards) > 0 {
-		returns := map[string]int{}
-		if tokenCount(player) >= 10 && typed.Gems["Gold"] > 0 {
-			returns["Gold"] = 1
-		}
-		return contracts.RoomCommand{
-			Type:     "game_preserve_card",
-			PlayerID: request.PlayerID,
-			Payload:  map[string]any{"cardID": cards[0].ID, "returns": returns},
-		}, nil
-	}
-	take := map[string]int{}
-	for _, color := range orderedGemColors[:5] {
-		if typed.Gems[color] > 0 && len(take) < 3 && tokenCount(player)+len(take) < 10 {
-			take[color] = 1
-		}
-	}
-	return contracts.RoomCommand{
-		Type:     "game_get_gem",
-		PlayerID: request.PlayerID,
-		Payload:  map[string]any{"take": take},
-	}, nil
+	return decideSplendorAI(typed, request.PlayerID)
 }
 
 func asState(state game.State) (*domain.GameState, error) {
@@ -635,11 +602,14 @@ func nextAIRequest(state *domain.GameState) *game.AIRequest {
 		(state.RoomStatus != domain.RoomStatusPlaying && state.RoomStatus != domain.RoomStatusLastTurn) {
 		return nil
 	}
+	delayRange := int((splendorAIMaxDelay - splendorAIMinDelay) / time.Millisecond)
 	return &game.AIRequest{
 		RoomID:   state.RoomID,
 		GameType: GameType,
 		PlayerID: player.PlayerID,
-		State:    state,
+		State:    cloneGameState(state),
+		Delay: splendorAIMinDelay +
+			time.Duration(rand.IntN(delayRange+1))*time.Millisecond,
 		FallbackCommand: &contracts.RoomCommand{
 			Type:     "turn_timeout",
 			PlayerID: player.PlayerID,

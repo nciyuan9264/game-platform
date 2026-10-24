@@ -45,19 +45,39 @@ func parseGemTakePayload(data json.RawMessage) (GemTakePayload, *ActionError) {
 }
 
 func parseReserveCardPayload(data json.RawMessage) (ReserveCardPayload, *ActionError) {
-	var legacyCardID int
-	if err := decodeJSON(data, &legacyCardID, false); err == nil {
-		if legacyCardID <= 0 {
-			return ReserveCardPayload{}, actionError("invalid_payload", "发展卡编号无效")
-		}
-		return ReserveCardPayload{CardID: legacyCardID, Legacy: true}, nil
-	}
-
-	var payload ReserveCardPayload
-	if err := decodeJSON(data, &payload, true); err != nil || payload.CardID <= 0 {
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
 		return ReserveCardPayload{}, actionError("invalid_payload", "发展卡编号无效")
 	}
-	return payload, nil
+	if trimmed[0] != '{' {
+		cardID, err := decodeCardID(data)
+		if err != nil {
+			return ReserveCardPayload{}, err
+		}
+		return ReserveCardPayload{CardID: cardID, Legacy: true}, nil
+	}
+
+	var payload struct {
+		CardID  *int           `json:"cardID"`
+		Returns map[string]int `json:"returns,omitempty"`
+	}
+	if err := decodeJSON(data, &payload, true); err != nil ||
+		payload.CardID == nil || *payload.CardID < 0 {
+		return ReserveCardPayload{}, actionError("invalid_payload", "发展卡编号无效")
+	}
+	return ReserveCardPayload{CardID: *payload.CardID, Returns: payload.Returns}, nil
+}
+
+func decodeCardID(data json.RawMessage) (int, *ActionError) {
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
+		return 0, actionError("invalid_payload", "发展卡编号无效")
+	}
+	var cardID int
+	if err := decodeJSON(data, &cardID, false); err != nil || cardID < 0 {
+		return 0, actionError("invalid_payload", "发展卡编号无效")
+	}
+	return cardID, nil
 }
 
 func decodeJSON(data []byte, target interface{}, disallowUnknown bool) error {

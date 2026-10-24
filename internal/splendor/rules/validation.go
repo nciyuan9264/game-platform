@@ -1,7 +1,6 @@
 package rules
 
 import (
-	"encoding/json"
 	"strconv"
 
 	"github.com/nciyuan9264/game-platform/internal/splendor/domain"
@@ -82,14 +81,6 @@ func ValidateAction(r *domain.Room, cmd domain.Command) *ActionError {
 		return validateReserveReturns(r, player, payload)
 	}
 	return nil
-}
-
-func decodeCardID(payload json.RawMessage) (int, *ActionError) {
-	var cardID int
-	if json.Unmarshal(payload, &cardID) != nil || cardID <= 0 {
-		return 0, actionError("invalid_payload", "发展卡编号无效")
-	}
-	return cardID, nil
 }
 
 func validateGemTake(r *domain.Room, player *domain.PlayerState, payload GemTakePayload) *ActionError {
