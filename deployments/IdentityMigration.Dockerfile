@@ -9,6 +9,6 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -buildvcs=false \
     -o /out/normalize-player-identities ./cmd/normalize-player-identities
 
-FROM postgres:16-alpine
+FROM postgres:17-alpine
 COPY --from=builder /out/normalize-player-identities /usr/local/bin/normalize-player-identities
 ENTRYPOINT ["/usr/local/bin/normalize-player-identities"]
