@@ -1,0 +1,62 @@
+name: Audit Player Identities
+
+on:
+  push:
+    tags:
+      - audit-player-identities-*
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Verify production backup and reports
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 5m
+          script: |
+            set -eu
+            report_dir="$(ls -1dt /home/game-platform/backups/player-identity-* | head -n 1)"
+            checksum_file="${report_dir}/game-platform-player-identities.dump.sha256"
+            printf 'report_dir=%s\n' "${report_dir}"
+            printf 'backup_sha256='
+            awk '{print $1}' "${checksum_file}"
+            sha256sum --check "${checksum_file}"
+            for report in "${report_dir}"/*.json; do
+              printf '%s=' "${report##*/}"
+              jq -c . "${report}"
+            done
+            printf 'acceptance_sql:\n'
+            cat "${report_dir}/acceptance-sql.txt"
+
+      - name: Verify public leaderboards
+        run: |
+          set -euo pipefail
+          for game_type in acquire davinci splendor; do
+            response="$(
+              curl --fail --silent --show-error \
+                "https://api.gamebus.online/pam-api/platform/rankings?gameType=${game_type}&limit=5&offset=0&sort=metric"
+            )"
+            printf '%s\n' "${response}" | jq -e '
+              .data.entries
+              | all(
+                  (.playerID == (.userID | tostring))
+                  and (.displayName | type == "string")
+                  and (.displayName | length > 0)
+                )
+            ' >/dev/null
+            printf 'leaderboard_%s=' "${game_type}"
+            printf '%s\n' "${response}" | jq -c '{
+              count: (.data.entries | length),
+              entries: [.data.entries[] | {
+                userID,
+                playerID,
+                displayName
+              }]
+            }'
+          done
