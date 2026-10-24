@@ -21,18 +21,21 @@ jobs:
           command_timeout: 5m
           script: |
             set -eu
-            report_dir="$(ls -1dt /home/game-platform/backups/player-identity-* | head -n 1)"
-            checksum_file="${report_dir}/game-platform-player-identities.dump.sha256"
-            printf 'report_dir=%s\n' "${report_dir}"
-            printf 'backup_sha256='
-            awk '{print $1}' "${checksum_file}"
-            sha256sum --check "${checksum_file}"
-            for report in "${report_dir}"/*.json; do
-              printf '%s=' "${report##*/}"
-              jq -c . "${report}"
+            for report_dir in \
+              /home/game-platform/backups/player-identity-20261024T075547Z \
+              /home/game-platform/backups/player-identity-20261024T085157Z; do
+              checksum_file="${report_dir}/game-platform-player-identities.dump.sha256"
+              printf 'report_dir=%s\n' "${report_dir}"
+              printf 'backup_sha256='
+              awk '{print $1}' "${checksum_file}"
+              sha256sum --check "${checksum_file}"
+              for report in "${report_dir}"/*.json; do
+                printf '%s=' "${report##*/}"
+                jq -c . "${report}"
+              done
+              printf 'acceptance_sql:\n'
+              cat "${report_dir}/acceptance-sql.txt"
             done
-            printf 'acceptance_sql:\n'
-            cat "${report_dir}/acceptance-sql.txt"
 
       - name: Verify public leaderboards
         run: |
