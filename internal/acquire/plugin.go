@@ -20,7 +20,7 @@ import (
 
 const (
 	GameType         = "acquire"
-	EngineVersion    = "acquire-v2"
+	EngineVersion    = "acquire-v3"
 	maxNoHumanChecks = 3
 )
 

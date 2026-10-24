@@ -83,6 +83,9 @@ for path in "${files[@]}"; do
     cmd/migrate-schema/*)
       centers[migrate-schema]=1
       ;;
+    docker-compose.prod.yml|.github/workflows/deploy.yml|scripts/deploy-game-slot.sh)
+      mark_all
+      ;;
     cmd/game-release/*|cmd/backfill-replay/*|scripts/*|docker-compose*.yml|.github/workflows/*|.env.example)
       ;;
     deployments/Dockerfile|go.mod|go.sum|kitex_gen/*)

@@ -43,6 +43,8 @@ services=(
 )
 maintenance=0
 completed=0
+legacy_stopped=0
+legacy_containers=()
 
 on_exit() {
   local status=$?
@@ -53,6 +55,11 @@ on_exit() {
       printf 'Recovery command: docker compose -f docker-compose.prod.yml up -d --no-deps'
       printf ' %q' "${services[@]}"
       printf '\n'
+      if [[ "$legacy_stopped" -eq 1 ]]; then
+        printf 'Legacy RoomHost recovery command: docker start'
+        printf ' %q' "${legacy_containers[@]}"
+        printf '\n'
+      fi
     } >&2
   fi
   exit "$status"
@@ -135,6 +142,16 @@ fi
 
 printf '%s\n' "${services[@]}" >"$report_dir/stopped-services.txt"
 "${compose[@]}" stop "${services[@]}"
+mapfile -t legacy_containers < <(
+  docker ps -q \
+    --filter label=com.docker.compose.project=game-platform \
+    --filter label=com.docker.compose.service=roomhost
+)
+if [[ "${#legacy_containers[@]}" -gt 0 ]]; then
+  printf '%s\n' "${legacy_containers[@]}" >"$report_dir/stopped-legacy-containers.txt"
+  docker stop "${legacy_containers[@]}"
+  legacy_stopped=1
+fi
 maintenance=1
 
 run_migration "$report_dir/dry-run-stopped.json" --dry-run
@@ -161,6 +178,10 @@ jq -e '.remainingCompositeIDs == 0 and .replayV1Games == 0' \
 run_acceptance
 
 "${compose[@]}" up -d --no-deps "${services[@]}"
+if [[ "$legacy_stopped" -eq 1 ]]; then
+  docker start "${legacy_containers[@]}"
+  legacy_stopped=0
+fi
 maintenance=0
 completed=1
 printf 'Player identity migration completed. Reports: %s\n' "$report_dir"

@@ -81,7 +81,7 @@ type Engine struct{}
 
 func NewEngine() *Engine { return &Engine{} }
 
-const EngineVersion = "davinci-v2"
+const EngineVersion = "davinci-v3"
 
 func Definition() game.Definition {
 	plugin := NewPlugin()

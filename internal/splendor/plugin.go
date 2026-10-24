@@ -21,7 +21,7 @@ import (
 
 const (
 	GameType          = "splendor"
-	EngineVersion     = "splendor-v2"
+	EngineVersion     = "splendor-v3"
 	defaultMaxPlayers = 4
 	maxNoHumanChecks  = 3
 )

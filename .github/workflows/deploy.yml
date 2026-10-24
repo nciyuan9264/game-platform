@@ -219,9 +219,22 @@ jobs:
             set -a
             . ./.env
             set +a
-            export GAME_PLATFORM_IMAGE_REGISTRY="${TCR_LOGIN_SERVER}/tengxuntcr"
+            registry="${TCR_LOGIN_SERVER}/tengxuntcr"
+            export GAME_PLATFORM_IMAGE_REGISTRY="${registry}"
             export GAME_PLATFORM_IMAGE_TAG="${IMAGE_TAG}"
             export PLAYER_IDENTITY_MIGRATION_IMAGE="${TCR_LOGIN_SERVER}/tengxuntcr/game-platform-identity-migration:${IMAGE_TAG}"
+            export ACQUIRE_ROOMHOST_A_IMAGE="${ACQUIRE_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-acquire:${IMAGE_TAG}}"
+            export ACQUIRE_ROOMHOST_B_IMAGE="${ACQUIRE_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-acquire:${IMAGE_TAG}}"
+            export ACQUIRE_ROOMHOST_A_VERSION="${ACQUIRE_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
+            export ACQUIRE_ROOMHOST_B_VERSION="${ACQUIRE_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
+            export DAVINCI_ROOMHOST_A_IMAGE="${DAVINCI_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-davinci:${IMAGE_TAG}}"
+            export DAVINCI_ROOMHOST_B_IMAGE="${DAVINCI_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-davinci:${IMAGE_TAG}}"
+            export DAVINCI_ROOMHOST_A_VERSION="${DAVINCI_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
+            export DAVINCI_ROOMHOST_B_VERSION="${DAVINCI_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
+            export SPLENDOR_ROOMHOST_A_IMAGE="${SPLENDOR_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-splendor:${IMAGE_TAG}}"
+            export SPLENDOR_ROOMHOST_B_IMAGE="${SPLENDOR_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-splendor:${IMAGE_TAG}}"
+            export SPLENDOR_ROOMHOST_A_VERSION="${SPLENDOR_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
+            export SPLENDOR_ROOMHOST_B_VERSION="${SPLENDOR_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
             printf '%s' "${TCR_PASSWORD}" | docker login "${TCR_LOGIN_SERVER}" \
               --username "${TCR_USERNAME}" --password-stdin
             chmod +x scripts/validate-prod-config.sh
@@ -296,11 +309,23 @@ jobs:
             set -a
             . ./.env
             set +a
+            registry="${TCR_LOGIN_SERVER}/tengxuntcr"
+            export ACQUIRE_ROOMHOST_A_IMAGE="${ACQUIRE_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-acquire:${IMAGE_TAG}}"
+            export ACQUIRE_ROOMHOST_B_IMAGE="${ACQUIRE_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-acquire:${IMAGE_TAG}}"
+            export ACQUIRE_ROOMHOST_A_VERSION="${ACQUIRE_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
+            export ACQUIRE_ROOMHOST_B_VERSION="${ACQUIRE_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
+            export DAVINCI_ROOMHOST_A_IMAGE="${DAVINCI_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-davinci:${IMAGE_TAG}}"
+            export DAVINCI_ROOMHOST_B_IMAGE="${DAVINCI_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-davinci:${IMAGE_TAG}}"
+            export DAVINCI_ROOMHOST_A_VERSION="${DAVINCI_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
+            export DAVINCI_ROOMHOST_B_VERSION="${DAVINCI_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
+            export SPLENDOR_ROOMHOST_A_IMAGE="${SPLENDOR_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-splendor:${IMAGE_TAG}}"
+            export SPLENDOR_ROOMHOST_B_IMAGE="${SPLENDOR_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-splendor:${IMAGE_TAG}}"
+            export SPLENDOR_ROOMHOST_A_VERSION="${SPLENDOR_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
+            export SPLENDOR_ROOMHOST_B_VERSION="${SPLENDOR_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
             printf '%s' "${TCR_PASSWORD}" | docker login "${TCR_LOGIN_SERVER}" \
               --username "${TCR_USERNAME}" --password-stdin
             chmod +x scripts/deploy-game-slot.sh scripts/validate-prod-config.sh
             ./scripts/validate-prod-config.sh
-            registry="${TCR_LOGIN_SERVER}/tengxuntcr"
             export GAME_RELEASE_IMAGE="${registry}/game-platform-game-release:${IMAGE_TAG}"
             target_image="${registry}/game-platform-roomhost-${GAME}:${IMAGE_TAG}"
             docker pull "${GAME_RELEASE_IMAGE}"

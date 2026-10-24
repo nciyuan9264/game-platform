@@ -44,4 +44,9 @@ assert_case \
   '{"center":["control-plane","gateway","migrate-schema","platform-rpc"],"games":["acquire","davinci","splendor"],"productionChange":true,"docsOnly":false}' \
   internal/contracts/types.go
 
+assert_case \
+  '{"center":["control-plane","gateway","migrate-schema","platform-rpc"],"games":["acquire","davinci","splendor"],"productionChange":true,"docsOnly":false}' \
+  docker-compose.prod.yml \
+  .github/workflows/deploy.yml
+
 printf 'changed release component tests passed\n'

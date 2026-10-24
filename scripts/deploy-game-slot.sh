@@ -37,6 +37,17 @@ if [[ -f "$ENV_FILE" ]]; then
   . "$ENV_FILE"
   set +a
 fi
+for slot_name in A B; do
+  image_name="${image_prefix}_${slot_name}_IMAGE"
+  version_name="${image_prefix}_${slot_name}_VERSION"
+  if [[ -z "${!image_name:-}" ]]; then
+    printf -v "$image_name" '%s' "$target_image"
+  fi
+  if [[ -z "${!version_name:-}" ]]; then
+    printf -v "$version_name" '%s' "$target_image"
+  fi
+  export "$image_name" "$version_name"
+done
 command -v jq >/dev/null
 if [[ -z "$GAME_RELEASE_IMAGE" ]]; then
   command -v "$GAME_RELEASE_BIN" >/dev/null
@@ -253,8 +264,12 @@ for old_slot in a b; do
   fi
 done
 
-persist_image_reference "$image_variable" "$target_image"
-persist_image_reference "$version_variable" "$target_image"
+for slot_name in A B; do
+  image_name="${image_prefix}_${slot_name}_IMAGE"
+  version_name="${image_prefix}_${slot_name}_VERSION"
+  persist_image_reference "$image_name" "${!image_name}"
+  persist_image_reference "$version_name" "${!version_name}"
+done
 trap - ERR
 printf '%s release complete: %s@%s on %s\n' \
   "$game" "$game" "$candidate_version" "$candidate"
