@@ -68,11 +68,9 @@ jobs:
             report_dir="$(ls -1dt /home/game-platform/backups/player-identity-* | head -n 1)"
             printf 'report_dir=%s\n' "${report_dir}"
             sha256sum --check "${report_dir}/game-platform-player-identities.dump.sha256"
-            for report in dry-run-live.json dry-run-stopped.json apply.json verify.json; do
-              if [ -f "${report_dir}/${report}" ]; then
-                printf '%s=' "${report}"
-                jq -c . "${report_dir}/${report}"
-              fi
+            for report in "${report_dir}"/*.json; do
+              printf '%s=' "${report##*/}"
+              jq -c . "${report}"
             done
             printf 'acceptance_sql:\n'
             cat "${report_dir}/acceptance-sql.txt"

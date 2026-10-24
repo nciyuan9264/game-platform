@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+shopt -s nullglob
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -41,6 +42,7 @@ services=(
   roomhost-splendor-a
   roomhost-splendor-b
 )
+backfill_games=(acquire splendor)
 maintenance=0
 completed=0
 legacy_stopped=0
@@ -50,10 +52,10 @@ on_exit() {
   local status=$?
   if [[ "$status" -ne 0 ]]; then
     printf 'Migration failed. Reports: %s\n' "$report_dir" >&2
-    for report in dry-run-live.json dry-run-stopped.json apply.json verify.json; do
-      if [[ -s "$report_dir/$report" ]]; then
-        printf '%s=' "$report" >&2
-        jq -c . "$report_dir/$report" >&2 || true
+    for report in "$report_dir"/*.json; do
+      if [[ -s "$report" ]]; then
+        printf '%s=' "${report##*/}" >&2
+        jq -c . "$report" >&2 || true
       fi
     done
   fi
@@ -79,6 +81,30 @@ run_migration() {
   local output="$1"
   shift
   "${compose[@]}" run --rm --no-deps normalize-player-identities "$@" >"$output"
+}
+
+run_backfill() {
+  local game_type="$1"
+  local output="$2"
+  shift 2
+  "${compose[@]}" run --rm --no-deps \
+    --env "REDIS_ADDR=${REDIS_ADDR:-global-redis:6379}" \
+    --env "REDIS_PASSWORD=${REDIS_PASSWORD:-}" \
+    --env "REDIS_DB=${GAME_REDIS_DB:-0}" \
+    --entrypoint backfill-replay \
+    normalize-player-identities \
+    --game-type "$game_type" \
+    --engine-version "${game_type}-v2" \
+    --replay-schema-version 1 \
+    --batch-size 100 \
+    "$@" >"$output"
+}
+
+validate_backfill_report() {
+  local report="$1"
+  jq -e '
+    (.failedGameIDs | length) == 0
+  ' "$report" >/dev/null
 }
 
 run_acceptance() {
@@ -130,24 +156,42 @@ sha256sum "$backup" >"$backup.sha256"
   normalize-player-identities --list "$backup_container" \
   >"$report_dir/backup-contents.txt"
 
-run_migration "$report_dir/dry-run-live.json" --dry-run
-jq -e '
-  .conflicts == 0 and
-  .unknownReferences == 0 and
-  .activeLegacyRooms == 0 and
-  (.failedGameIDs | length) == 0
-' "$report_dir/dry-run-live.json" >/dev/null
+run_migration "$report_dir/preflight.json" --verify-only
+jq -e '.activeLegacyRooms == 0' "$report_dir/preflight.json" >/dev/null
 
-migratable="$(jq -r '.migratableGames' "$report_dir/dry-run-live.json")"
-mutable_rows="$(jq -r '.mutableRows' "$report_dir/dry-run-live.json")"
-if [[ "$migratable" -eq 0 && "$mutable_rows" -eq 0 ]]; then
-  run_migration "$report_dir/verify.json" --verify-only
-  jq -e '.remainingCompositeIDs == 0 and .replayV1Games == 0' \
-    "$report_dir/verify.json" >/dev/null
-  run_acceptance
-  completed=1
-  printf 'No migration was needed. Reports: %s\n' "$report_dir"
-  exit 0
+declare -A backfill_expected=()
+backfill_required=0
+for game_type in "${backfill_games[@]}"; do
+  report="$report_dir/backfill-${game_type}-live.json"
+  run_backfill "$game_type" "$report" --dry-run
+  validate_backfill_report "$report"
+  backfill_expected["$game_type"]="$(jq -r '.processed' "$report")"
+  if [[ "${backfill_expected[$game_type]}" -gt 0 ]]; then
+    backfill_required=1
+  fi
+done
+
+migratable=0
+mutable_rows=0
+if [[ "$backfill_required" -eq 0 ]]; then
+  run_migration "$report_dir/dry-run-live.json" --dry-run
+  jq -e '
+    .conflicts == 0 and
+    .unknownReferences == 0 and
+    .activeLegacyRooms == 0 and
+    (.failedGameIDs | length) == 0
+  ' "$report_dir/dry-run-live.json" >/dev/null
+  migratable="$(jq -r '.migratableGames' "$report_dir/dry-run-live.json")"
+  mutable_rows="$(jq -r '.mutableRows' "$report_dir/dry-run-live.json")"
+  if [[ "$migratable" -eq 0 && "$mutable_rows" -eq 0 ]]; then
+    run_migration "$report_dir/verify.json" --verify-only
+    jq -e '.remainingCompositeIDs == 0 and .replayV1Games == 0' \
+      "$report_dir/verify.json" >/dev/null
+    run_acceptance
+    completed=1
+    printf 'No migration was needed. Reports: %s\n' "$report_dir"
+    exit 0
+  fi
 fi
 
 printf '%s\n' "${services[@]}" >"$report_dir/stopped-services.txt"
@@ -164,15 +208,43 @@ if [[ "${#legacy_containers[@]}" -gt 0 ]]; then
 fi
 maintenance=1
 
+for game_type in "${backfill_games[@]}"; do
+  expected="${backfill_expected[$game_type]}"
+  stopped_report="$report_dir/backfill-${game_type}-stopped.json"
+  run_backfill "$game_type" "$stopped_report" --dry-run
+  validate_backfill_report "$stopped_report"
+  jq -e --argjson expected "$expected" '
+    .processed == $expected
+  ' "$stopped_report" >/dev/null
+  if [[ "$expected" -eq 0 ]]; then
+    continue
+  fi
+  apply_report="$report_dir/backfill-${game_type}-apply.json"
+  run_backfill "$game_type" "$apply_report"
+  jq -e --argjson expected "$expected" '
+    .processed == $expected
+    and .succeeded == $expected
+    and (.failedGameIDs | length) == 0
+    and .remaining.games == 0
+    and .remaining.events == 0
+  ' "$apply_report" >/dev/null
+done
+
 run_migration "$report_dir/dry-run-stopped.json" --dry-run
-jq -e --argjson expected_games "$migratable" --argjson expected_rows "$mutable_rows" '
-  .migratableGames == $expected_games and
-  .mutableRows == $expected_rows and
+jq -e '
   .conflicts == 0 and
   .unknownReferences == 0 and
   .activeLegacyRooms == 0 and
   (.failedGameIDs | length) == 0
 ' "$report_dir/dry-run-stopped.json" >/dev/null
+if [[ "$backfill_required" -eq 0 ]]; then
+  jq -e --argjson expected_games "$migratable" --argjson expected_rows "$mutable_rows" '
+    .migratableGames == $expected_games and
+    .mutableRows == $expected_rows
+  ' "$report_dir/dry-run-stopped.json" >/dev/null
+fi
+migratable="$(jq -r '.migratableGames' "$report_dir/dry-run-stopped.json")"
+mutable_rows="$(jq -r '.mutableRows' "$report_dir/dry-run-stopped.json")"
 
 run_migration "$report_dir/apply.json"
 jq -e --argjson expected "$migratable" '
