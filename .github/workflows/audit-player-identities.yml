@@ -13,13 +13,22 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Verify production backup and reports
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          command_timeout: 5m
-          script: |
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          key_file="$(mktemp)"
+          trap 'rm -f "${key_file}"' EXIT
+          printf '%s\n' "${SSH_PRIVATE_KEY}" >"${key_file}"
+          chmod 600 "${key_file}"
+          ssh \
+            -i "${key_file}" \
+            -o BatchMode=yes \
+            -o ConnectTimeout=30 \
+            -o StrictHostKeyChecking=accept-new \
+            "${SSH_USER}@${SSH_HOST}" 'sh -s' <<'REMOTE' | tee production-audit.txt
             set -eu
             for report_dir in \
               /home/game-platform/backups/player-identity-20261024T075547Z \
@@ -43,6 +52,12 @@ jobs:
                 cat "${report_dir}/acceptance-sql.txt"
               fi
             done
+          REMOTE
+          {
+            printf '## Production identity reports\n\n```text\n'
+            cat production-audit.txt
+            printf '```\n'
+          } >>"${GITHUB_STEP_SUMMARY}"
 
       - name: Verify public leaderboards
         run: |
@@ -60,13 +75,20 @@ jobs:
                   and (.displayName | length > 0)
                 )
             ' >/dev/null
-            printf 'leaderboard_%s=' "${game_type}"
-            printf '%s\n' "${response}" | jq -c '{
-              count: (.data.entries | length),
-              entries: [.data.entries[] | {
-                userID,
-                playerID,
-                displayName
-              }]
-            }'
+            {
+              printf 'leaderboard_%s=' "${game_type}"
+              printf '%s\n' "${response}" | jq -c '{
+                count: (.data.entries | length),
+                entries: [.data.entries[] | {
+                  userID,
+                  playerID,
+                  displayName
+                }]
+              }'
+            } | tee -a leaderboard-audit.txt
           done
+          {
+            printf '\n## Public leaderboard samples\n\n```text\n'
+            cat leaderboard-audit.txt
+            printf '```\n'
+          } >>"${GITHUB_STEP_SUMMARY}"
