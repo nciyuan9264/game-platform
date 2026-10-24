@@ -73,6 +73,7 @@ type State struct {
 	Seq           int64              `json:"seq"`
 	RandomSeed    uint64             `json:"randomSeed"`
 	RandomCounter uint64             `json:"randomCounter"`
+	GameStartTime time.Time          `json:"gameStartTime,omitempty"`
 	TurnDeadline  time.Time          `json:"turnDeadline,omitempty"`
 	TurnTimeout   time.Duration      `json:"turnTimeout,omitempty"`
 }
@@ -81,7 +82,7 @@ type Engine struct{}
 
 func NewEngine() *Engine { return &Engine{} }
 
-const EngineVersion = "davinci-v3"
+const EngineVersion = "davinci-v4"
 
 func Definition() game.Definition {
 	plugin := NewPlugin()
@@ -92,6 +93,7 @@ func Definition() game.Definition {
 		Engine:            plugin,
 		AI:                NewAIPlanner(),
 		Scheduler:         plugin,
+		History:           plugin,
 	}
 }
 
@@ -177,6 +179,9 @@ func (p *Plugin) ApplyCommand(ctx context.Context, state game.State, cmd contrac
 	commandTime := cmd.SentAt.UTC()
 	if commandTime.IsZero() {
 		commandTime = time.Now().UTC()
+	}
+	if cmd.Type == CommandGameReady && typed.GameStartTime.IsZero() {
+		typed.GameStartTime = commandTime
 	}
 	updateTurnDeadline(typed, commandTime)
 	out := game.ApplyResult{Status: typed.Status, Finished: result.Finished}
