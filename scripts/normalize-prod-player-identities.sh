@@ -117,7 +117,8 @@ tables=(
   player_identity_aliases
 )
 backup="$report_dir/game-platform-player-identities.dump"
-pg_dump_args=(--format=custom --no-owner --no-privileges "--file=/backup/${backup##*/}")
+backup_container="/backup/${report_dir##*/}/${backup##*/}"
+pg_dump_args=(--format=custom --no-owner --no-privileges "--file=${backup_container}")
 for table in "${tables[@]}"; do
   pg_dump_args+=("--table=public.${table}")
 done
@@ -126,7 +127,7 @@ done
 test -s "$backup"
 sha256sum "$backup" >"$backup.sha256"
 "${compose[@]}" run --rm --no-deps --entrypoint pg_restore \
-  normalize-player-identities --list "/backup/${backup##*/}" \
+  normalize-player-identities --list "$backup_container" \
   >"$report_dir/backup-contents.txt"
 
 run_migration "$report_dir/dry-run-live.json" --dry-run
