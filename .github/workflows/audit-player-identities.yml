@@ -26,15 +26,22 @@ jobs:
               /home/game-platform/backups/player-identity-20261024T085157Z; do
               checksum_file="${report_dir}/game-platform-player-identities.dump.sha256"
               printf 'report_dir=%s\n' "${report_dir}"
-              printf 'backup_sha256='
-              awk '{print $1}' "${checksum_file}"
-              sha256sum --check "${checksum_file}"
+              if [ -f "${checksum_file}" ]; then
+                printf 'backup_sha256='
+                awk '{print $1}' "${checksum_file}"
+                sha256sum --check "${checksum_file}"
+              else
+                printf 'backup_sha256=missing\n'
+              fi
               for report in "${report_dir}"/*.json; do
+                [ -f "${report}" ] || continue
                 printf '%s=' "${report##*/}"
                 jq -c . "${report}"
               done
-              printf 'acceptance_sql:\n'
-              cat "${report_dir}/acceptance-sql.txt"
+              if [ -f "${report_dir}/acceptance-sql.txt" ]; then
+                printf 'acceptance_sql:\n'
+                cat "${report_dir}/acceptance-sql.txt"
+              fi
             done
 
       - name: Verify public leaderboards
