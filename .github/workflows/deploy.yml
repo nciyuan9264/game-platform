@@ -241,7 +241,12 @@ jobs:
             ./scripts/validate-prod-config.sh
             docker pull "${PLAYER_IDENTITY_MIGRATION_IMAGE}"
             services="$(printf '%s' "${CENTER_SERVICES}" | jq -r '.[]')"
-            docker compose -f docker-compose.prod.yml pull ${services}
+            compose_services="$(
+              printf '%s\n' "${services}" |
+                sed 's/^migrate-schema$/schema-migrate/' |
+                tr '\n' ' '
+            )"
+            docker compose -f docker-compose.prod.yml pull ${compose_services}
             if printf '%s\n' "${services}" | grep -Fxq migrate-schema; then
               docker compose -f docker-compose.prod.yml run --rm --no-deps schema-migrate
             fi
