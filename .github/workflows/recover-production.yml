@@ -1,0 +1,68 @@
+name: Recover Production Services
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - recover-game-platform-*
+
+permissions:
+  contents: read
+
+concurrency:
+  group: game-platform-production-recovery
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Upload production configuration
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: docker-compose.prod.yml,scripts/validate-prod-config.sh
+          target: /home/game-platform
+
+      - name: Start and verify production services
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 10m
+          script: |
+            set -eu
+            cd /home/game-platform
+            test -f .env
+            set -a
+            . ./.env
+            set +a
+            chmod +x scripts/validate-prod-config.sh
+            ./scripts/validate-prod-config.sh
+            services="
+              gateway
+              control-plane
+              platform-rpc
+              roomhost-acquire-a
+              roomhost-acquire-b
+              roomhost-davinci-a
+              roomhost-davinci-b
+              roomhost-splendor-a
+              roomhost-splendor-b
+            "
+            docker compose -f docker-compose.prod.yml up -d --no-deps ${services}
+            for endpoint in \
+              http://127.0.0.1:18093/readyz \
+              http://127.0.0.1:18000/healthz; do
+              for attempt in $(seq 1 30); do
+                curl --fail --silent "${endpoint}" >/dev/null && break
+                test "${attempt}" -lt 30
+                sleep 2
+              done
+            done
+            docker compose -f docker-compose.prod.yml ps ${services}

@@ -163,6 +163,24 @@ run_acceptance() {
     " >"$report_dir/acceptance-sql.txt"
 }
 
+restore_services() {
+  "${compose[@]}" up -d --no-deps "${services[@]}"
+  for endpoint in \
+    http://127.0.0.1:18093/readyz \
+    http://127.0.0.1:18000/healthz; do
+    for attempt in $(seq 1 30); do
+      if curl --fail --silent "$endpoint" >/dev/null; then
+        break
+      fi
+      if [[ "$attempt" -eq 30 ]]; then
+        printf 'service readiness failed: %s\n' "$endpoint" >&2
+        return 1
+      fi
+      sleep 2
+    done
+  done
+}
+
 tables=(
   rooms
   matches
@@ -218,6 +236,7 @@ if [[ "$backfill_required" -eq 0 ]]; then
     jq -e '.remainingCompositeIDs == 0 and .replayV1Games == 0' \
       "$report_dir/verify.json" >/dev/null
     run_acceptance
+    restore_services
     completed=1
     printf 'No migration was needed. Reports: %s\n' "$report_dir"
     exit 0
@@ -289,7 +308,7 @@ jq -e '.remainingCompositeIDs == 0 and .replayV1Games == 0' \
   "$report_dir/verify.json" >/dev/null
 run_acceptance
 
-"${compose[@]}" up -d --no-deps "${services[@]}"
+restore_services
 if [[ "$legacy_stopped" -eq 1 ]]; then
   docker start "${legacy_containers[@]}"
   legacy_stopped=0
