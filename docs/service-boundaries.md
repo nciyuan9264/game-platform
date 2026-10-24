@@ -1,96 +1,120 @@
 # Service Boundaries
 
-## Public HTTP APIs
+## Public Interfaces
 
-Public business HTTP APIs live in Platform API, not Gateway, RoomHost, or
-Control Plane.
+PAM Gateway is the public HTTP owner. It exposes browser-facing Game Platform routes and adapts them to generated `GamePlatformService` RPC calls. Authentication Cookie behavior, HTTP status mapping and request/response compatibility belong there.
 
-Gateway is the realtime ingress. It should expose only:
+Realtime Gateway is the public WebSocket owner. Its external surface is limited to health checks and `/ws`.
 
-- `GET /healthz`
-- `GET /ws`
-
-RoomHost is an internal worker. It should expose no public HTTP surface. It
-receives commands from internal transport, owns room actors, writes logs and
-snapshots, and broadcasts through Gateway delivery subjects.
-
-Platform API owns business HTTP APIs:
-
-- create room
-- start a new Match in an existing Room
-- list rooms
-- list matches/history
-- fetch replay metadata
-- fetch replay log pages
-- fetch snapshot metadata
-- create delayed spectator sessions
-- fetch server-delayed spectator snapshots
-- browser login/profile/avatar adaptation through Auth RPC
-- business admin users and matches
-
-Control Plane owns internal scheduling RPC and operational HTTP APIs:
-
-- create/close/interruption/drain room commands
-- instance state
-- topology
-- runtime events and service logs
-
-Auth Center exposes Kitex RPC only. It owns identity data and token behavior;
-Platform API owns the public browser contract and cookie policy.
-
-## Internal RPC APIs
-
-Auth Center exposes Kitex RPC for centralized user authentication:
-
-- verify access token and return the lightweight `user_id/roles` principal
-- refresh token after loading the current user role
-- logout/revoke token
-- get the complete user profile on demand
-- get JWKS when a service still needs local verification
-
-Game Platform should call Auth Center through `internal/authclient.Client`.
-Platform API uses the generated Kitex client for browser Auth adaptation and
-user directory aggregation. Gateway depends on the neutral verifier interface,
-whose production implementation first verifies the principal and then calls
-`GetProfile` only for WebSocket session fields such as name, email, and avatar.
-Authorization-only paths do not perform that profile lookup. There is no local
-JWT, JWKS, or mock fallback in production.
-
-## Runtime APIs
-
-Room lifecycle and Match commands are internal runtime messages:
+Control Plane operational HTTP endpoints are private. RoomHost has no public HTTP surface.
 
 ```text
-Gateway -> room.cmd.<ownerNode> request/reply -> RoomHost
-Control Plane -> room.control.<ownerNode> request/reply -> RoomHost
-RoomHost -> NATS pub/sub -> Gateway
-RoomHost -> JetStream -> replay command log
+Browser --HTTP------> PAM Gateway ------RPC------> Platform RPC
+Browser --WebSocket-> Realtime Gateway --NATS----> RoomHost
+Platform RPC --------Control RPC-----------------> Control Plane
 ```
 
-Room remains the long-lived routing and lobby boundary. Each game round has a
-separate `matchID`, sequence, seed, snapshot, command log, outbound cursor, and
-spectator session. Delayed commands from an older Match are rejected with
-`stale_match`.
+## Platform RPC
 
-These are not public HTTP APIs and should not be called by clients directly.
-Gateway credentials cannot publish `room.control.*`, and Control Plane
-credentials cannot publish `room.cmd.*`.
+Platform RPC owns Game Platform business operations:
 
-Live spectators do not subscribe to RoomHost or NATS directly. RoomHost writes
-full read-only spectator views to PostgreSQL, whose own clock sets
-`available_at` five minutes after capture. Platform API issues spectator
-sessions only while a room is active and only to non-participants, then serves
-snapshots whose `available_at` has passed.
+- create and list rooms;
+- start another Match in an existing Room;
+- list history and Match details;
+- read materialized replay;
+- read statistics and rankings;
+- aggregate Game Platform data with Auth profiles.
 
-## Game Logs
+Platform RPC uses `internal/authclient` for Auth identity/profile reads and `internal/controlclient` for room lifecycle operations. It does not read Auth tables and does not load game engines for online replay reads.
 
-Game logs are split into two channels:
+## Control Plane
+
+Control Plane owns:
+
+- active engine version resolution;
+- compatible RoomHost selection;
+- room and Match lifecycle control;
+- owner initialization and node drain;
+- instance, topology and runtime-event observation.
+
+Control Plane does not own the public browser contract and does not route realtime player commands.
+
+## Realtime Gateway
+
+Realtime Gateway owns:
+
+- WebSocket authentication;
+- connection, session and presence state;
+- routing commands to the current ready owner;
+- RoomHost message delivery;
+- reconnect backfill.
+
+Gateway must not:
+
+- execute game rules;
+- choose an engine version;
+- create or close rooms;
+- trust client-supplied user or player identities;
+- publish reserved Control Plane commands.
+
+## RoomHost
+
+RoomHost is an internal worker. It owns:
+
+- RoomActor and MatchRuntime state;
+- serial command execution;
+- game engine and AI planner invocation;
+- command log and snapshot persistence;
+- reliable outbound messages and ACKs;
+- history, replay and delayed spectator projections;
+- recovery under a fenced owner epoch.
+
+Each production binary contains one game definition. Shared runtime code depends on `internal/game` interfaces, not concrete game packages.
+
+## Internal Transport
+
+```text
+Realtime Gateway -> room.cmd.<ownerNode> request/reply -> RoomHost
+Control Plane ----> room.control.<ownerNode> request/reply -> RoomHost
+RoomHost ---------> delivery subjects -------------------> Realtime Gateway
+RoomHost ---------> JetStream cmdlog.<matchID> ----------> recovery/replay
+```
+
+Gateway credentials cannot publish `room.control.*`. Control Plane credentials cannot publish `room.cmd.*`.
+
+Room is the long-lived lobby and routing boundary. Each Match has an independent ID, sequence, random seed, snapshot, command log, outbound cursor and spectator timeline. Commands from an older Match are rejected as stale.
+
+## Auth Boundary
+
+Auth Center owns credentials, token behavior and user profiles. Game Platform calls Auth RPC to:
+
+- verify access tokens and derive user ID and roles;
+- load current profiles;
+- resolve display names for history and ranking views.
+
+Game Platform never owns passwords, token issuance or Auth schema migrations. Authorization paths do not trust identity fields supplied in business requests.
+
+## Data Boundary
+
+| Data | Owner |
+| --- | --- |
+| Identity, credentials, profile and tokens | Auth Center |
+| Catalog, room and Match metadata | Game Platform |
+| Runtime snapshots, ACKs and reliable outbound | RoomHost runtime |
+| History, replay and spectator projections | Game Platform |
+| Node heartbeat, session and presence | Game Platform realtime runtime |
+| Owner route and lease | Game Platform runtime |
+| Per-Match command log | Game Platform runtime |
+
+Legacy replay decoders and historical rule compatibility are retained for existing persisted data. They are not public runtime APIs.
+
+## Game Log Boundary
+
+Game logs use two channels:
 
 | Channel | Writer | Reader | Purpose |
 | --- | --- | --- | --- |
-| Operation log | RoomHost and game plugin | spectators, replay service, admin tools | Ordered semantic events, public/private visibility, replay timeline. |
-| State snapshot | RoomHost and game plugin hints | recovery worker, replay seek, reconnect fallback | Fast restore and fast replay seek points. |
+| Semantic operation log | RoomHost and game engine | Platform RPC, replay and admin tools | Ordered public/private events and replay timeline |
+| State snapshot | RoomHost with engine encoding | recovery, replay seek and reconnect fallback | Fast state restoration |
 
-RoomHost must own persistence and delivery. Game plugins may emit semantic
-events through `game.LogSink`, but they should not depend on Postgres, NATS,
-or object storage directly.
+Game engines emit semantic results through runtime interfaces. They do not write PostgreSQL, NATS or object storage directly.

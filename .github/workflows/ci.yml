@@ -76,17 +76,12 @@ jobs:
             platform-rpc
             control-plane
             gateway
-            roomhost
             roomhost-acquire
             roomhost-davinci
             roomhost-splendor
-            platform-api
             migrate-schema
-            migrate-game-history
             backfill-replay
             game-release
-            normalize-player-identities
-            smoke-test
           )
           pids=()
           for service in "${services[@]}"; do
@@ -100,30 +95,8 @@ jobs:
       - name: Validate Compose configurations
         working-directory: game-platform
         env:
-          REDIS_PASSWORD: ci-redis
-          POSTGRES_ADMIN_USER: ci-admin
-          POSTGRES_ADMIN_PASSWORD: ci-admin-password
-          AUTH_DB_ADMIN_PASSWORD: ci-auth-admin
-          GAME_MIGRATOR_PASSWORD: ci-game-migrator
-          GAME_RUNTIME_PASSWORD: ci-game-runtime
-          AUTH_MIGRATOR_PASSWORD: ci-auth-migrator
-          AUTH_RUNTIME_PASSWORD: ci-auth-runtime
           POSTGRES_DSN: postgresql://ci:ci@ci.pg.rds.aliyuncs.com:5432/gamebus_prod?sslmode=require
-          AUTH_MIGRATOR_DSN: postgres://ci@db/auth?sslmode=require
-          AUTH_RUNTIME_DSN: postgres://ci@db/auth?sslmode=require
-          CORS_ALLOWED_ORIGINS: https://board.example.com
           WS_ALLOWED_ORIGINS: https://board.example.com
-          NATS_CONTROL_PASSWORD: ci-control
-          NATS_MAINTENANCE_PASSWORD: ci-maintenance
-          NATS_AUTH_PASSWORD: ci-auth
-          NATS_GATEWAY_1_PASSWORD: ci-gateway-1
-          NATS_GATEWAY_2_PASSWORD: ci-gateway-2
-          NATS_ROOMHOST_1_PASSWORD: ci-roomhost-1
-          NATS_ROOMHOST_2_PASSWORD: ci-roomhost-2
-          NATS_GATEWAY_A_PASSWORD: ci-gateway-a
-          NATS_GATEWAY_B_PASSWORD: ci-gateway-b
-          NATS_ROOMHOST_A_PASSWORD: ci-roomhost-a
-          NATS_ROOMHOST_B_PASSWORD: ci-roomhost-b
           ACQUIRE_ROOMHOST_A_IMAGE: registry.example.com/game-platform-roomhost-acquire:ci-a
           ACQUIRE_ROOMHOST_B_IMAGE: registry.example.com/game-platform-roomhost-acquire:ci-b
           ACQUIRE_ROOMHOST_A_VERSION: ci-a
@@ -137,10 +110,4 @@ jobs:
           SPLENDOR_ROOMHOST_A_VERSION: ci-a
           SPLENDOR_ROOMHOST_B_VERSION: ci-b
         run: |
-          docker compose -f docker-compose.yml config >/dev/null
-          docker compose -f docker-compose.distributed.primary.yml config >/dev/null
-          docker compose -f docker-compose.distributed.secondary.yml config >/dev/null
-          docker compose -f docker-compose.integration.infra.yml config >/dev/null
-          docker compose -f docker-compose.integration.stack-a.yml config >/dev/null
-          docker compose -f docker-compose.integration.stack-b.yml config >/dev/null
           ./scripts/validate-prod-config.sh

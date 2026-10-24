@@ -31,7 +31,6 @@ jobs:
     outputs:
       center: ${{ steps.matrix.outputs.center }}
       games: ${{ steps.matrix.outputs.games }}
-      migration: ${{ steps.matrix.outputs.migration }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -52,7 +51,6 @@ jobs:
           matrix="$(./scripts/changed-release-components.sh "${base}" HEAD)"
           center="$(jq -c '.center' <<<"${matrix}")"
           games="$(jq -c '.games' <<<"${matrix}")"
-          migration="$(jq -r '.productionChange' <<<"${matrix}")"
           case "${COMPONENT_OVERRIDE}" in
             center)
               center='["control-plane","gateway","migrate-schema","platform-rpc"]'
@@ -72,7 +70,6 @@ jobs:
           fi
           echo "center=${center}" >>"${GITHUB_OUTPUT}"
           echo "games=${games}" >>"${GITHUB_OUTPUT}"
-          echo "migration=${migration}" >>"${GITHUB_OUTPUT}"
           jq -cn --argjson center "${center}" --argjson games "${games}" \
             '{center: $center, games: $games}'
 
@@ -156,38 +153,14 @@ jobs:
             .
           docker push "${image}"
 
-  build-identity-migration:
-    needs: detect
-    if: needs.detect.outputs.migration == 'true'
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/login-action@v3
-        with:
-          registry: ${{ secrets.TCR_LOGIN_SERVER }}
-          username: ${{ secrets.TCR_USERNAME }}
-          password: ${{ secrets.TCR_PASSWORD }}
-      - name: Build player identity migration tool
-        env:
-          REGISTRY: ${{ secrets.TCR_LOGIN_SERVER }}
-        run: |
-          image="${REGISTRY}/tengxuntcr/game-platform-identity-migration:${GITHUB_SHA}"
-          docker build \
-            -f deployments/IdentityMigration.Dockerfile \
-            -t "${image}" \
-            .
-          docker push "${image}"
-
   deploy-center:
     needs:
       - detect
       - build-center
-      - build-identity-migration
     if: >-
       always() &&
       needs.detect.outputs.center != '[]' &&
-      needs.build-center.result == 'success' &&
-      (needs.build-identity-migration.result == 'success' || needs.build-identity-migration.result == 'skipped')
+      needs.build-center.result == 'success'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -197,7 +170,7 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: docker-compose.prod.yml,scripts/validate-prod-config.sh,scripts/normalize-prod-player-identities.sh
+          source: docker-compose.prod.yml,scripts/validate-prod-config.sh
           target: /home/game-platform
       - name: Roll out changed center services
         uses: appleboy/ssh-action@v1.2.0
@@ -222,7 +195,6 @@ jobs:
             registry="${TCR_LOGIN_SERVER}/tengxuntcr"
             export GAME_PLATFORM_IMAGE_REGISTRY="${registry}"
             export GAME_PLATFORM_IMAGE_TAG="${IMAGE_TAG}"
-            export PLAYER_IDENTITY_MIGRATION_IMAGE="${TCR_LOGIN_SERVER}/tengxuntcr/game-platform-identity-migration:${IMAGE_TAG}"
             export ACQUIRE_ROOMHOST_A_IMAGE="${ACQUIRE_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-acquire:${IMAGE_TAG}}"
             export ACQUIRE_ROOMHOST_B_IMAGE="${ACQUIRE_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-acquire:${IMAGE_TAG}}"
             export ACQUIRE_ROOMHOST_A_VERSION="${ACQUIRE_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
@@ -239,7 +211,6 @@ jobs:
               --username "${TCR_USERNAME}" --password-stdin
             chmod +x scripts/validate-prod-config.sh
             ./scripts/validate-prod-config.sh
-            docker pull "${PLAYER_IDENTITY_MIGRATION_IMAGE}"
             services="$(printf '%s' "${CENTER_SERVICES}" | jq -r '.[]')"
             compose_services="$(
               printf '%s\n' "${services}" |

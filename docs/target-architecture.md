@@ -1,243 +1,106 @@
 # Game Platform Target Architecture
 
-## 1. Boundary Model
+## 1. Boundaries
 
-Do not treat repository, service, process, and module boundaries as the same
-thing.
-
-| Boundary | Current unit | Rule |
+| Boundary | Unit | Rule |
 | --- | --- | --- |
-| Repository | `auth`, `game-platform`, `pam-idl` | Split by ownership and release lifecycle. |
-| Business service | Auth Center, Game Platform | A service owns its data and external contract. |
-| Deployment process | Platform RPC, Control Plane, Gateway, per-game RoomHost pools | Split by release cadence, scaling, fault, latency, and security needs. |
-| In-process module | DaVinci, Acquire, Splendor | One game engine executes inside each production RoomHost image. |
+| Repository | `auth`, `game-platform`, `pam-gateway`, `pam-idl` | Split by ownership and release lifecycle. |
+| Business service | Auth Center, Game Platform | Each service owns its data and RPC contract. |
+| Deployment process | Platform RPC, Control Plane, Realtime Gateway, per-game RoomHost | Split by fault, scaling, latency and release cadence. |
+| In-process module | Acquire, DaVinci, Splendor | One game engine per production RoomHost image. |
 
-## 2. Runtime Architecture
+`pam-idl` is the contract authoring source. Generated code is committed but never edited manually.
+
+## 2. Runtime Topology
 
 ```mermaid
 flowchart LR
-    Browser -->|HTTP| PlatformAPI[Platform API]
-    Browser -->|WebSocket| Gateway
+    Browser -->|HTTP| PAMGateway[PAM Gateway]
+    Browser -->|WebSocket| RealtimeGateway[Realtime Gateway]
 
-    PlatformAPI -->|Kitex RPC| AuthRPC[Auth Center RPC]
-    PlatformAPI -->|Kitex RPC| Control[Control Plane]
-    Gateway -->|Kitex VerifyToken| AuthRPC
+    PAMGateway -->|GamePlatformService RPC| PlatformRPC[Platform RPC]
+    PlatformRPC -->|Auth RPC| AuthRPC[Auth Center RPC]
+    PlatformRPC -->|Control RPC| Control[Control Plane]
+    RealtimeGateway -->|Auth RPC| AuthRPC
 
     Control -->|room.control.owner| NATS
-    Gateway -->|room.cmd.owner| NATS
-    NATS --> RoomHostPools[Per-game RoomHost A/B pools]
-    RoomHostPools -->|delivery| NATS
-    NATS --> Gateway
+    RealtimeGateway -->|room.cmd.owner| NATS
+    NATS --> RoomHosts[Per-game RoomHost A/B slots]
+    RoomHosts -->|delivery| NATS
+    NATS --> RealtimeGateway
 
-    RoomHostPools --> DaVinci[DaVinci Engine]
-    RoomHostPools --> Acquire[Acquire Engine]
-    RoomHostPools --> Splendor[Splendor Engine]
-
-    AuthRPC --> AuthDB[(auth_center)]
-    PlatformAPI --> PlatformDB[(game_platform)]
+    PlatformRPC --> PlatformDB[(Game Platform RDS)]
     Control --> PlatformDB
-    RoomHostPools --> PlatformDB
-    Gateway --> Redis[(Redis hot state)]
+    RoomHosts --> PlatformDB
+    AuthRPC --> AuthDB[(Auth data)]
+    RealtimeGateway --> Redis[(Redis hot state)]
     Control --> Etcd[(etcd owner lease)]
-    RoomHostPools --> JetStream[(JetStream command log)]
+    RoomHosts --> JetStream[(JetStream command log)]
 ```
+
+PAM Gateway owns the public HTTP protocol. Platform RPC owns Game Platform business behavior. Realtime Gateway is an independent WebSocket ingress and does not proxy business HTTP.
 
 ## 3. Service Responsibilities
 
-### Auth Center RPC
+### PAM Gateway
 
-Auth Center is the shared identity source. It owns:
+- Exposes public `/platform/*` HTTP routes.
+- Owns browser request/response adaptation and authentication Cookie behavior.
+- Calls generated `GamePlatformService` clients.
+- Does not execute room scheduling or game rules.
 
-- registration and credential verification;
-- email verification codes;
-- access/refresh token issue, refresh, revoke, and verification;
-- user profile and avatar storage;
-- JWKS;
-- user directory RPC.
+### Platform RPC
 
-It exposes Kitex RPC only. It does not know rooms, matches, online presence, or
-game-specific roles.
-
-### Platform API
-
-Platform API is the permanent public business API of Game Platform. It owns:
-
-- `/platform/auth/*` browser protocol adaptation and cookie policy;
-- game-facing user management;
-- room lobby APIs;
-- game history, replay, stats, and ranking APIs;
-- business admin APIs for users and matches.
-
-Platform user management is an aggregation:
-
-```text
-Auth identity/profile
-  + Gateway session
-  + room presence
-  + match/history data
-  = platform user view
-```
-
-Platform API never reads Auth tables. It calls Auth Center RPC.
+- Implements room lobby, history, replay, stats and ranking operations.
+- Resolves Auth identities and profiles through Auth RPC.
+- Calls Control Plane RPC for room lifecycle operations.
+- Reads Game Platform projections; it does not load game engines to serve materialized replay.
 
 ### Control Plane
 
-Control Plane is an internal scheduler and operations service. It owns:
+- Resolves active engine versions from `game_catalog`.
+- Selects ready RoomHost nodes advertising the exact game/version.
+- Creates room and Match metadata and initializes owner state.
+- Sends create, close, interruption and drain control commands.
+- Exposes operational health and topology endpoints on a private interface.
 
-- RoomHost selection;
-- room owner lease initialization;
-- close/interruption/drain commands;
-- instance registry views;
-- topology, runtime events, and service logs.
+Control Plane is not part of the realtime command path.
 
-Public business requests reach Control Plane only through its internal Kitex
-RPC. Its HTTP surface is operational observation, not player/business APIs.
+### Realtime Gateway
 
-### Gateway
+- Accepts WebSocket connections.
+- Verifies access tokens through Auth RPC.
+- Maintains session and presence state.
+- Routes commands through the current ready owner route.
+- Delivers RoomHost output and performs reconnect backfill.
 
-Gateway exposes only health and WebSocket:
-
-- verifies identity through Auth Center RPC;
-- creates session/presence records;
-- routes commands to the current RoomHost owner;
-- delivers RoomHost outbound messages;
-- performs reconnect backfill.
-
-Gateway does not execute game rules and does not issue tokens.
+Gateway does not issue tokens, schedule rooms or execute game rules.
 
 ### RoomHost
 
-RoomHost owns room actors:
+- Owns serial RoomActor execution.
+- Hosts one current MatchRuntime per Room.
+- Invokes the compiled game engine and optional AI planner.
+- Persists snapshots, ACKs, reliable outbound messages and history projection.
+- Appends owner fences and commands to JetStream.
+- Builds player-specific and delayed spectator views.
 
-- one room, one owner, serial command execution;
-- one long-lived RoomActor with one replaceable current MatchRuntime;
-- plugin invocation;
-- scheduled commands and AI requests;
-- snapshots and command logs;
-- player-specific views and transient delivery effects;
-- history projection.
+Production provides independent A/B slots for each game. New rooms use the active catalog version; draining slots continue existing rooms but receive no new allocations.
 
-### Game Plugins
+### Game Engines
 
-DaVinci, Acquire, and Splendor are compile-time Go engines. Production builds a
-separate RoomHost image for each engine while keeping execution in-process.
+Engines may:
 
-Plugins may:
-
-- validate and apply commands;
-- encode/decode state;
+- initialize and validate state;
+- apply commands deterministically;
+- encode and decode snapshots;
 - build private player views;
 - request scheduled commands and AI decisions;
-- emit semantic delivery/history results.
+- emit semantic delivery and history results.
 
-Plugins must not import Postgres, Redis, NATS, etcd, or WebSocket packages.
+Engines must not import PostgreSQL, Redis, NATS, etcd, HTTP or WebSocket packages.
 
-## 4. API Ownership
-
-| Route | Owner |
-| --- | --- |
-| `/platform/auth/*` | Platform API |
-| `/platform/rooms*` | Platform API |
-| `POST /platform/rooms/{roomID}/matches` | Platform API |
-| `/platform/history/*` | Platform API |
-| `/platform/rankings` | Platform API |
-| `/platform/spectator/rooms/*` | Platform API |
-| `/platform/spectator/sessions/*` | Platform API |
-| `/platform/admin/users*` | Platform API |
-| `/platform/admin/matches*` | Platform API |
-| `/platform/instances` | Control Plane |
-| `/platform/topology` | Control Plane |
-| `/platform/events` | Control Plane |
-| `/platform/command-log` | Control Plane |
-| `/ws` | Gateway |
-
-The admin UI must keep business administration and operational observation in
-separate navigation groups.
-
-## 5. Data Ownership
-
-| Storage | Owner | Data |
-| --- | --- | --- |
-| PostgreSQL `auth_center` | Auth Center | `users` |
-| PostgreSQL `game_platform` | Game Platform | rooms, matches, players, history, replay, snapshots, outbound reliability, runtime events |
-| Redis DB 0 | Game Platform | node heartbeat, sessions, presence |
-| Redis DB 2 | Auth Center | verification codes and token revocation/session state |
-| PostgreSQL `room_owner_generations` | RoomHost/runtime | durable monotonic owner epoch and recovering/ready projection |
-| etcd | RoomHost/Gateway | leased owner candidate and leased ready route |
-| JetStream | RoomHost/runtime | ordered per-match owner fences and command log |
-
-Sharing a PostgreSQL server locally is acceptable. Sharing a database or table
-between Auth and Game Platform is not.
-
-The complete table, Redis key, etcd key, and JetStream subject dictionary is
-maintained in
-[`game-platform-docs/11-data-storage.md`](../../game-platform-docs/11-data-storage.md).
-
-## 6. Failure Boundaries
-
-- Auth Center unavailable:
-  - new login, token verification, profile, and user administration return 503;
-  - already-running RoomHost actors continue;
-  - authenticated Control Plane HTTP endpoints fail closed with 503.
-- Platform API unavailable:
-  - existing WebSocket matches continue;
-  - new lobby/business HTTP requests fail.
-- Control Plane unavailable:
-  - existing matches continue;
-  - new room creation and lifecycle operations fail.
-- Gateway unavailable:
-  - only sessions on that Gateway disconnect;
-  - clients reconnect through another Gateway.
-- RoomHost unavailable:
-  - etcd epoch changes;
-  - another RoomHost restores snapshot plus command log.
-
-## 7. Contract Generation
-
-`pam-idl` is the only authoring source.
-
-```text
-pam-idl/idl/auth/v1/service.thrift
-  -> kitex_gen/pam/auth/v1 in Auth Center
-  -> kitex_gen/pam/auth/v1 in Game Platform
-  -> pam-generate TypeScript client
-
-pam-idl/idl/game_platform_control/v1/service.thrift
-  -> Control Plane Kitex server
-  -> Platform API Kitex client
-```
-
-Generated code is never edited manually.
-
-## 8. Game Module Strategy
-
-Keep game code in the platform repository while:
-
-- one team owns platform and games;
-- each game has an independent RoomHost image and release cadence;
-- no third-party plugin SDK is required.
-
-Extract a versioned `game-sdk` only when at least one of these is true:
-
-- an independent team owns a game;
-- third parties need to implement games;
-- fault/resource isolation by game is required.
-
-PostgreSQL `game_catalog` is desired state and selects the active version for
-new rooms. Redis RoomHost heartbeat is observed state. Control Plane only
-schedules to a `ready` node advertising the exact active version. A `draining`
-node continues existing commands and compatible recovery but receives no new
-room creation.
-
-Engine version identifies state/behavior compatibility. Image Git SHA
-identifies an artifact. Promotion changes only new-room traffic; old and new
-versions coexist until the old pool reaches zero active rooms.
-
-Replay frames are generated on the RoomHost write path and stored as bounded
-gzip JSON. Platform RPC maps those frames to the existing typed API without
-loading a game engine. Legacy replay decoders exist only in the backfill tool.
-
-## 9. Room And Match Lifecycles
+## 4. Room and Match Lifecycle
 
 Room is the long-lived lobby and routing container:
 
@@ -245,134 +108,95 @@ Room is the long-lived lobby and routing container:
 creating -> open -> closing -> closed
 ```
 
-Match is one isolated game round inside a Room:
+Match is one game round:
 
 ```text
 preparing -> running -> ending -> ended/aborted
 ```
 
-`rooms.current_match_id` points to the latest Match and `next_round_no`
-allocates readable IDs such as `<roomID>-r2`. Ending a Match never closes its
-Room. The owner starts the next round through
-`POST /platform/rooms/{roomID}/matches`; Control Plane reserves the next Match
-transactionally and sends `runtime_match_create` to the existing RoomActor.
+`rooms.current_match_id` points to the current Match. Ending a Match does not close its Room. Starting another round reserves a new `<roomID>-rN` Match and creates its runtime inside the existing RoomActor.
 
-Commands carry both `roomID` and `matchID`. Room epoch fences stale owners,
-while `matchID` fences delayed commands from an earlier round. Snapshots,
-command ACKs, reliable outbound messages, operation events, and spectator
-sessions are all partitioned by Match. Spectator sessions never advance into a
-new Match automatically.
+Commands carry both `roomID` and `matchID`. Owner epoch fences stale owners; `matchID` fences delayed commands from an earlier round. Snapshots, ACKs, reliable outbound messages, events and spectator sessions are partitioned by Match.
 
-## 10. Command Consistency
+## 5. Command Consistency
 
-Owner takeover order is:
+Owner takeover order:
 
 ```text
-reserve a strictly higher epoch in PostgreSQL
-  -> create and renew the etcd owner lease
-  -> append OWNER_FENCE to the per-match JetStream subject with head CAS
-  -> restore snapshot plus physical log order
+reserve a higher epoch in PostgreSQL
+  -> acquire and renew the etcd owner lease
+  -> append OWNER_FENCE to the Match command log
+  -> restore snapshot plus physical command order
   -> advance fenced PostgreSQL projections
-  -> register the RoomActor
-  -> publish the etcd ready route on the same lease
+  -> register RoomActor
+  -> publish the ready route on the same lease
 ```
 
-Gateway routes only through the leased ready key. A candidate owner is not
-routable while it is restoring. Epoch allocation is durable and never derived
-from an expiring etcd key, so a process that crashes after writing a fence
-cannot cause the next owner to reuse the same epoch.
+Gateway routes only through a ready route. A recovering owner is not reachable.
 
-RoomHost match-command commit order is:
+RoomHost command commit order:
 
 ```text
 clone live state
   -> apply command to staged state
   -> append JetStream command log
-  -> commit staged state and seq
-  -> persist snapshot/outbound/ACK projections
+  -> commit staged state and sequence
+  -> persist snapshot, outbound and ACK projections
 ```
 
-If command-log append fails, live state and sequence are unchanged and Gateway
-returns a retryable `COMMAND_RESULT`. Clients retain the same `commandID` for
-retry. Reliable outbound messages are written to PostgreSQL before NATS publish;
-a persistence failure never publishes an unbackfillable message.
-Every command is accepted only when its epoch and owner match the latest
-`OWNER_FENCE`. A stale owner that resumes after a newer fence receives
-`stale_epoch`; an unexpected head conflict unloads the Actor and forces replay.
-ACKs persist an intent hash so a `commandID` cannot be reused for another
-payload.
+If the command-log append fails, live state and sequence remain unchanged. Clients retry with the same `commandID`; persisted ACKs include an intent hash so the ID cannot be reused with another payload.
 
-Restore is fail-closed. Snapshot decode errors, engine-version mismatches,
-command-log gaps, or replay errors prevent the current MatchRuntime from
-registering. Room `closed` and Match `ended/aborted` are independently
-monotonic.
+Restore fails closed on snapshot decode errors, engine-version mismatch, command-log gaps or replay errors. Historical replay compatibility code remains part of the stored-data contract.
 
-Control Plane generates a cryptographically secure random seed for every new
-Match and RoomHost persists a sequence-zero snapshot before acknowledging
-runtime creation. Game
-state persists the seed and counter for deterministic replay, while player and
-spectator views never expose the seed. Hidden object IDs must not encode their
-secret values. Acquire and DaVinci use the v2 engine format for this contract;
-v1 rooms fail closed and must be ended during rollout because already exposed
-hidden information cannot be repaired in place.
+## 6. Data Ownership
 
-## 11. Security Boundaries
+| Storage | Owner | Data |
+| --- | --- | --- |
+| Auth storage | Auth Center | identities, credentials, profiles and token state |
+| Game Platform PostgreSQL | Platform RPC, Control Plane, RoomHost | catalog, rooms, matches, snapshots, outbound, ACKs, history, replay and owner epochs |
+| Redis | Realtime Gateway and node runtime | heartbeat, sessions and presence |
+| etcd | Control Plane and RoomHost runtime | leased owner and ready routes |
+| JetStream | RoomHost runtime | ordered owner fences and per-Match command log |
 
-- Platform business-admin and Control Plane operational HTTP routes require the
-  Auth `admin` role.
-- Browser CORS and WebSocket Origin checks use explicit allowlists.
-- Gateway-originated game commands and Control Plane runtime commands use
-  separate NATS subjects and ACLs. Reserved `runtime_*` command types are
-  rejected on the Gateway channel.
-- Gateway limits inbound WebSocket messages to 64 KiB before JSON decoding.
-- Production defaults do not expose development verification codes, configure
-  a default administrator, or enable load-test routes.
-- RoomHost binds Gateway commands to the Redis session's Gateway, user, and
-  player identity.
-- User-scoped Control and Auth Kitex RPC calls carry the original access token
-  in TTHeader metadata. Each RPC service verifies that token and derives user
-  IDs and roles from Auth instead of trusting actor fields supplied in the RPC
-  request.
-- NATS uses separate Control, Gateway, and RoomHost credentials with subject
-  ACLs. Monitoring ports are bound to localhost in development.
-- Redis uses authentication and AOF persistence in the Compose baseline.
-- Control Plane and Traefik do not mount the raw Docker socket. The operational
-  service-log endpoint remains disabled until a centralized log backend exists.
-- Production secrets come from a secret manager; they are not stored in
-  manifests or images.
+Game Platform never reads Auth tables directly. Sharing a physical database server does not transfer schema ownership.
 
-RPC caller services are not authenticated at the application layer. RPC
-listeners must remain on trusted private networks. Production still requires
-transport encryption for Kitex and encrypted/authenticated PostgreSQL, Redis,
-etcd, and NATS connections.
+## 7. Failure Boundaries
 
-## 12. Schema Migration
+- Auth RPC unavailable: new authentication and profile-dependent calls fail; existing RoomActors continue.
+- PAM Gateway unavailable: public business HTTP fails; active WebSocket matches continue.
+- Platform RPC unavailable: public business RPC fails; realtime commands continue.
+- Control Plane unavailable: new room and lifecycle operations fail; active matches continue.
+- Realtime Gateway unavailable: connected clients disconnect and reconnect through the available endpoint.
+- RoomHost unavailable: another compatible slot acquires a higher epoch and restores from snapshot plus command log.
 
-Runtime services only connect and perform readiness checks. They never execute
-DDL. `cmd/migrate-schema` and Auth `cmd/migrate-schema` run as one-shot jobs
-before application rollout. Fresh PostgreSQL initialization creates separate
-Game/Auth migrator and runtime roles. `docker-compose.prod.yml` requires
-separate migration and runtime DSNs; runtime roles receive DML through default
-privileges and do not receive DDL or cross-database access.
+## 8. Security Boundaries
 
-## 13. Production Availability
+- Public HTTP and WebSocket Origin checks use explicit allowlists.
+- User-scoped RPC calls derive identity and roles from verified Auth tokens.
+- Gateway and Control Plane use separate NATS subjects and credentials.
+- Reserved `runtime_*` commands are rejected on the Gateway command channel.
+- Gateway limits inbound WebSocket payload size before decoding.
+- RoomHost binds user and player identity to the active Gateway session.
+- Internal RPC listeners and data services remain on trusted private networks.
+- Production secrets are supplied at deploy time and are not committed.
 
-Production and test environments use the same Docker Compose service topology:
+## 9. Release Model
 
-- Auth RPC x1;
-- Platform API x2 behind `platform-api-lb`;
-- Gateway x2 behind `gateway-lb`;
-- Acquire, DaVinci, and Splendor RoomHost A/B slots;
-- Control Plane x1;
-- per-game drain, promotion, rollback, and zero-room shutdown;
-- one PostgreSQL, Redis, etcd, and persistent NATS JetStream instance.
+The repository maintains one production Compose topology:
 
-[`docker-compose.yml`](../docker-compose.yml) is the single-host baseline.
-The integration `infra + stack-a + stack-b` Compose files simulate two
-application stacks on one Docker daemon. Traefik uses the file provider and no
-Docker socket. The shared bridge network and container DNS do not form a
-cross-host production network.
+- `schema-migrate`;
+- Control Plane, Platform RPC and Realtime Gateway;
+- Acquire, DaVinci and Splendor A/B RoomHost slots.
 
-Auth RPC, Control Plane, and the stateful infrastructure remain accepted single
-points of failure in this topology. Docker Compose is the only deployment
-model.
+Center images and per-game images are immutable and tagged by Git SHA. Engine version identifies state compatibility; image SHA identifies an artifact. Promotion changes only new-room traffic. An old slot is removed only after its active-room count reaches zero.
+
+Schema Migration runs before changed runtime services. Replay backfill is a separate explicit operation that requires a known game type, engine version and replay schema mapping.
+
+Shared Redis, NATS, etcd and telemetry run from the adjacent infrastructure project. PostgreSQL is hosted in RDS.
+
+## 10. Accepted Constraints
+
+- The current Compose production deployment is single-server.
+- Control Plane, Platform RPC, Realtime Gateway, Redis, NATS and etcd are single instances.
+- Internal Kitex RPC has no application-level service identity; private-network isolation is required.
+- Centralized service-log retrieval is external to this repository.

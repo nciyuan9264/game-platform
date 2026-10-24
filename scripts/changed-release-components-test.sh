@@ -49,8 +49,4 @@ assert_case \
   docker-compose.prod.yml \
   .github/workflows/deploy.yml
 
-assert_case \
-  '{"center":[],"games":[],"productionChange":true,"docsOnly":false}' \
-  deployments/IdentityMigration.Dockerfile
-
 printf 'changed release component tests passed\n'

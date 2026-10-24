@@ -95,7 +95,8 @@ latest snapshot at or before target seq
 Live spectators must not subscribe to the operation stream directly. RoomHost
 builds a full read-only spectator view after each committed command and writes
 it to `spectator_snapshots`. PostgreSQL sets `available_at` from its own clock;
-Platform API only serves snapshots after the fixed five-minute delay.
+PAM Gateway exposes the Platform RPC result only after the fixed five-minute
+delay.
 
 ## Current Implementation Status
 

@@ -105,12 +105,3 @@ zero for every replayable game.
   schema before promoting that game version.
 - `replay_error`: quarantine the affected game ID and inspect the compressed
   payload; online code must not fall back to a plugin.
-
-## First Migration
-
-1. Deploy catalog/replay schema and catalog-driven center services.
-2. Start one single-game A slot per current engine version.
-3. Promote only after each candidate is ready.
-4. Drain the legacy all-games RoomHost.
-5. Stop and remove it only when `ActiveRooms == 0`.
-6. Backfill replay payloads and verify zero missing frames.

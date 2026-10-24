@@ -88,8 +88,6 @@ for path in "${files[@]}"; do
       ;;
     cmd/game-release/*|cmd/backfill-replay/*|scripts/*|docker-compose*.yml|.github/workflows/*|.env.example)
       ;;
-    deployments/IdentityMigration.Dockerfile)
-      ;;
     deployments/Dockerfile|go.mod|go.sum|kitex_gen/*)
       mark_all
       ;;

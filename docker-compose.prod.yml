@@ -35,18 +35,6 @@ services:
       - global-network
     restart: 'no'
 
-  normalize-player-identities:
-    profiles:
-      - tools
-    image: ${PLAYER_IDENTITY_MIGRATION_IMAGE:-${GAME_PLATFORM_IMAGE_REGISTRY:-sgccr.ccs.tencentyun.com/tengxuntcr}/game-platform-identity-migration:${GAME_PLATFORM_IMAGE_TAG:-latest}}
-    environment:
-      POSTGRES_DSN: ${POSTGRES_DSN:?set Game Platform RDS DSN}
-    volumes:
-      - /home/game-platform/backups:/backup
-    networks:
-      - global-network
-    restart: 'no'
-
   control-plane:
     image: ${GAME_PLATFORM_IMAGE_REGISTRY:-sgccr.ccs.tencentyun.com/tengxuntcr}/game-platform-control-plane:${GAME_PLATFORM_IMAGE_TAG:-latest}
     environment:
