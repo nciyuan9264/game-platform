@@ -31,6 +31,16 @@ else
   exit 1
 fi
 compose+=(-f docker-compose.prod.yml --profile tools)
+mapfile -t stale_tool_containers < <(
+  docker ps -q \
+    --filter label=com.docker.compose.project=game-platform \
+    --filter label=com.docker.compose.service=normalize-player-identities
+)
+if [[ "${#stale_tool_containers[@]}" -gt 0 ]]; then
+  printf '%s\n' "${stale_tool_containers[@]}" >"$report_dir/stopped-stale-tool-containers.txt"
+  docker stop "${stale_tool_containers[@]}" || true
+  docker rm -f "${stale_tool_containers[@]}" >/dev/null 2>&1 || true
+fi
 services=(
   gateway
   control-plane
