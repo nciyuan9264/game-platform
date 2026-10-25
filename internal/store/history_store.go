@@ -613,7 +613,9 @@ func (s *PostgresStore) CountLeaderboardEntries(ctx context.Context, gameType st
 }
 
 func usesWinRateLeaderboard(gameType string) bool {
-	return gameType == contracts.GameDaVinci || gameType == contracts.GameYinsh
+	return gameType == contracts.GameDaVinci ||
+		gameType == contracts.GameYinsh ||
+		gameType == contracts.GameOthello
 }
 
 func (s *PostgresStore) ListReplayBackfillGameIDs(

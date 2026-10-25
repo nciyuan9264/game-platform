@@ -15,7 +15,13 @@ import (
 	"github.com/google/uuid"
 )
 
-var supportedGames = []string{"acquire", "davinci", "splendor", "yinsh"}
+var supportedGames = []string{
+	"acquire",
+	"davinci",
+	"splendor",
+	"yinsh",
+	"othello",
+}
 
 type config struct {
 	Mode        string

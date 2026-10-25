@@ -431,6 +431,34 @@ func selectFirstAction(
 				map[string]any{"pointID": "__intent_conflict__"},
 			),
 		}, true
+	case "othello":
+		moves, _ := roomData["legalMoves"].([]any)
+		if len(moves) == 0 {
+			return legalAction{}, false
+		}
+		first, _ := moves[0].(map[string]any)
+		index := numericValue(first["index"])
+		if index < 0 || index >= 64 {
+			return legalAction{}, false
+		}
+		return legalAction{
+			Command: gameCommand(
+				gameType,
+				matchID,
+				commandID,
+				"game_place_disc",
+				"placeDisc",
+				map[string]any{"index": index},
+			),
+			ConflictCommand: gameCommand(
+				gameType,
+				matchID,
+				commandID,
+				"game_place_disc",
+				"placeDisc",
+				map[string]any{"index": 99},
+			),
+		}, true
 	default:
 		return legalAction{}, false
 	}

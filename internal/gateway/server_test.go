@@ -225,6 +225,40 @@ func TestClientCommandPayload(t *testing.T) {
 		}
 	})
 
+	t.Run("othello move and empty payloads", func(t *testing.T) {
+		got, err := clientCommandPayload(
+			contracts.GameOthello,
+			"game_place_disc",
+			map[string]any{
+				"othello": map[string]any{
+					"placeDisc": map[string]any{"index": float64(19)},
+				},
+			},
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		payload, ok := got.(map[string]any)
+		if !ok || payload["index"] != float64(19) {
+			t.Fatalf("clientCommandPayload() = %#v", got)
+		}
+		got, err = clientCommandPayload(
+			contracts.GameOthello,
+			"game_pass",
+			map[string]any{
+				"othello": map[string]any{
+					"pass": map[string]any{},
+				},
+			},
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := got.(map[string]any); !ok {
+			t.Fatalf("pass payload = %#v", got)
+		}
+	})
+
 	t.Run("wrong union group", func(t *testing.T) {
 		if _, err := clientCommandPayload(contracts.GameAcquire, "game_place_tile", map[string]any{
 			"davinci": map[string]any{},

@@ -720,6 +720,10 @@ func clientCommandPayload(gameType, commandType string, payload any) (any, error
 		variant = "removeRow"
 	case "game_remove_ring":
 		variant = "removeRing"
+	case "game_place_disc":
+		variant = "placeDisc"
+	case "game_pass":
+		variant = "pass"
 	case "game_resign":
 		variant = "resign"
 	default:

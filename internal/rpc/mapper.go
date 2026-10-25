@@ -98,10 +98,20 @@ func roomMetrics(room contracts.RoomRecord) *platform.RoomMetrics {
 		return &platform.RoomMetrics{Yinsh: &platform.YinshRoomMetrics{
 			RingsRemoved: current, ProgressCurrent: current, ProgressTotal: total,
 		}}
-	default:
+	case contracts.GameOthello:
+		occupied := current + 4
+		if total == 0 {
+			occupied = 0
+		}
+		return &platform.RoomMetrics{Othello: &platform.OthelloRoomMetrics{
+			OccupiedCount: occupied, ProgressCurrent: current, ProgressTotal: total,
+		}}
+	case contracts.GameSplendor:
 		return &platform.RoomMetrics{Splendor: &platform.SplendorRoomMetrics{
 			MaxScore: current, ProgressCurrent: current, ProgressTotal: total,
 		}}
+	default:
+		return &platform.RoomMetrics{}
 	}
 }
 

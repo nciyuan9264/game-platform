@@ -15,6 +15,7 @@ on:
           - davinci
           - splendor
           - yinsh
+          - othello
       compatibility_ack:
         description: Reason an engine implementation change is version-compatible
         type: string
@@ -57,7 +58,7 @@ jobs:
               center='["control-plane","gateway","migrate-schema","platform-rpc"]'
               games='[]'
               ;;
-            acquire|davinci|splendor|yinsh)
+            acquire|davinci|splendor|yinsh|othello)
               center='[]'
               games="$(jq -cn --arg game "${COMPONENT_OVERRIDE}" '[$game]')"
               ;;
@@ -212,6 +213,10 @@ jobs:
             export YINSH_ROOMHOST_B_IMAGE="${YINSH_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-yinsh:${IMAGE_TAG}}"
             export YINSH_ROOMHOST_A_VERSION="${YINSH_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
             export YINSH_ROOMHOST_B_VERSION="${YINSH_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
+            export OTHELLO_ROOMHOST_A_IMAGE="${OTHELLO_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-othello:${IMAGE_TAG}}"
+            export OTHELLO_ROOMHOST_B_IMAGE="${OTHELLO_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-othello:${IMAGE_TAG}}"
+            export OTHELLO_ROOMHOST_A_VERSION="${OTHELLO_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
+            export OTHELLO_ROOMHOST_B_VERSION="${OTHELLO_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
             printf '%s' "${TCR_PASSWORD}" | docker login "${TCR_LOGIN_SERVER}" \
               --username "${TCR_USERNAME}" --password-stdin
             chmod +x scripts/validate-prod-config.sh
@@ -308,6 +313,10 @@ jobs:
             export YINSH_ROOMHOST_B_IMAGE="${YINSH_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-yinsh:${IMAGE_TAG}}"
             export YINSH_ROOMHOST_A_VERSION="${YINSH_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
             export YINSH_ROOMHOST_B_VERSION="${YINSH_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
+            export OTHELLO_ROOMHOST_A_IMAGE="${OTHELLO_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-othello:${IMAGE_TAG}}"
+            export OTHELLO_ROOMHOST_B_IMAGE="${OTHELLO_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-othello:${IMAGE_TAG}}"
+            export OTHELLO_ROOMHOST_A_VERSION="${OTHELLO_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
+            export OTHELLO_ROOMHOST_B_VERSION="${OTHELLO_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
             printf '%s' "${TCR_PASSWORD}" | docker login "${TCR_LOGIN_SERVER}" \
               --username "${TCR_USERNAME}" --password-stdin
             chmod +x scripts/deploy-game-slot.sh scripts/validate-prod-config.sh

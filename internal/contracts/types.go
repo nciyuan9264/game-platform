@@ -10,6 +10,7 @@ const (
 	GameAcquire  = "acquire"
 	GameSplendor = "splendor"
 	GameYinsh    = "yinsh"
+	GameOthello  = "othello"
 
 	MaxOwnedRooms         = 5
 	RoomStatusCreating    = "creating"

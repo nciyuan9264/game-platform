@@ -83,6 +83,7 @@ func TestScanHistoryPlayerMapsNullableValues(t *testing.T) {
 func TestWinRateLeaderboardGames(t *testing.T) {
 	if !usesWinRateLeaderboard(contracts.GameDaVinci) ||
 		!usesWinRateLeaderboard(contracts.GameYinsh) ||
+		!usesWinRateLeaderboard(contracts.GameOthello) ||
 		usesWinRateLeaderboard(contracts.GameAcquire) ||
 		usesWinRateLeaderboard(contracts.GameSplendor) {
 		t.Fatal("win-rate leaderboard routing does not match game semantics")

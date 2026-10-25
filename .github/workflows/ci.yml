@@ -23,7 +23,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: nciyuan9264/pam-idl
-          ref: 0075ab8cc1622680088bbe2a47db8b8cadcc06c3
+          ref: a8ea69b74eec4c418d6fc198e451765ec525d078
           path: pam-idl
 
       - name: Setup Go
@@ -80,6 +80,7 @@ jobs:
             roomhost-davinci
             roomhost-splendor
             roomhost-yinsh
+            roomhost-othello
             migrate-schema
             backfill-replay
             game-release
@@ -114,5 +115,9 @@ jobs:
           YINSH_ROOMHOST_B_IMAGE: registry.example.com/game-platform-roomhost-yinsh:ci-b
           YINSH_ROOMHOST_A_VERSION: ci-a
           YINSH_ROOMHOST_B_VERSION: ci-b
+          OTHELLO_ROOMHOST_A_IMAGE: registry.example.com/game-platform-roomhost-othello:ci-a
+          OTHELLO_ROOMHOST_B_IMAGE: registry.example.com/game-platform-roomhost-othello:ci-b
+          OTHELLO_ROOMHOST_A_VERSION: ci-a
+          OTHELLO_ROOMHOST_B_VERSION: ci-b
         run: |
           ./scripts/validate-prod-config.sh

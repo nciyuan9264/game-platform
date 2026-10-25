@@ -2,17 +2,38 @@
 set -euo pipefail
 
 if [[ $# -ne 2 ]]; then
-  printf 'usage: %s <acquire|davinci|splendor|yinsh> <immutable-image>\n' "$0" >&2
+  printf 'usage: %s <acquire|davinci|splendor|yinsh|othello> <immutable-image>\n' "$0" >&2
   exit 2
 fi
 
 game="$1"
 target_image="$2"
 case "$game" in
-  acquire) image_prefix='ACQUIRE_ROOMHOST' ;;
-  davinci) image_prefix='DAVINCI_ROOMHOST' ;;
-  splendor) image_prefix='SPLENDOR_ROOMHOST' ;;
-  yinsh) image_prefix='YINSH_ROOMHOST' ;;
+  acquire)
+    image_prefix='ACQUIRE_ROOMHOST'
+    default_max_players=6
+    replay_schema_version=2
+    ;;
+  davinci)
+    image_prefix='DAVINCI_ROOMHOST'
+    default_max_players=2
+    replay_schema_version=1
+    ;;
+  splendor)
+    image_prefix='SPLENDOR_ROOMHOST'
+    default_max_players=4
+    replay_schema_version=2
+    ;;
+  yinsh)
+    image_prefix='YINSH_ROOMHOST'
+    default_max_players=2
+    replay_schema_version=1
+    ;;
+  othello)
+    image_prefix='OTHELLO_ROOMHOST'
+    default_max_players=2
+    replay_schema_version=1
+    ;;
   *)
     printf 'unsupported game: %s\n' "$game" >&2
     exit 2
@@ -59,7 +80,9 @@ compose() {
 }
 
 release_status() {
-  game_release status --game "$game" --json
+  if ! game_release status --game "$game" --json 2>/dev/null; then
+    game_release status --json
+  fi
 }
 
 game_release() {
@@ -145,11 +168,12 @@ persist_image_reference() {
 
 status_json="$(release_status)"
 active_version="$(
-  jq -er --arg game "$game" '
+  jq -r --arg game "$game" '
     .catalog[] |
     select(.gameType == $game) |
     .activeEngineVersion
-  ' <<<"$status_json"
+  ' <<<"$status_json" |
+    head -n 1
 )"
 
 candidate=''
@@ -196,10 +220,14 @@ if service_running "$candidate"; then
 fi
 
 promotion_complete=0
+registration_complete=0
 rollback_on_error() {
   local exit_code=$?
   trap - ERR
-  if [[ "$promotion_complete" -eq 1 ]]; then
+  if [[ "$registration_complete" -eq 1 ]]; then
+    printf '%s was registered; leaving its only ready candidate running\n' \
+      "$game" >&2
+  elif [[ "$promotion_complete" -eq 1 ]]; then
     for old_slot in a b; do
       old_service="roomhost-${game}-${old_slot}"
       if [[ "$old_service" != "$candidate" ]] && service_running "$old_service"; then
@@ -235,7 +263,15 @@ compose up -d --no-deps "$candidate"
 candidate_version="$(wait_for_candidate "$candidate")"
 printf '%s is ready with engine %s\n' "$candidate" "$candidate_version"
 
-if [[ "$candidate_version" != "$active_version" ]]; then
+if [[ -z "$active_version" ]]; then
+  game_release register \
+    --game "$game" \
+    --version "$candidate_version" \
+    --default-max-players "$default_max_players" \
+    --replay-schema-version "$replay_schema_version" \
+    --artifact "$target_image"
+  registration_complete=1
+elif [[ "$candidate_version" != "$active_version" ]]; then
   game_release promote \
     --game "$game" \
     --version "$candidate_version" \

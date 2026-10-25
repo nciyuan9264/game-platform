@@ -31,7 +31,7 @@ DaVinci 支持 history、stats 和 leaderboard，不支持 replay；回放接口
 ```bash
 go run ./cmd/regression \
   --mode probe \
-  --games acquire,davinci,splendor,yinsh \
+  --games acquire,davinci,splendor,yinsh,othello \
   --report-dir .artifacts/regression/manual/probe
 ```
 

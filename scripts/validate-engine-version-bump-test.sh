@@ -70,4 +70,19 @@ git commit -qm new-game
 new_game="$(git rev-parse HEAD)"
 "$SCRIPT" "$new_game_base" "$new_game" >/dev/null
 
+new_othello_base="$new_game"
+mkdir -p internal/othello/testdata
+cat >internal/othello/plugin.go <<'EOF'
+package othello
+const (
+	EngineVersion = "othello-v1"
+	ReplaySchemaVersion = 1
+)
+EOF
+printf '{"schemaVersion":1}\n' >internal/othello/testdata/replay_frame_golden.json
+git add .
+git commit -qm new-othello
+new_othello="$(git rev-parse HEAD)"
+"$SCRIPT" "$new_othello_base" "$new_othello" >/dev/null
+
 printf 'engine version validation tests passed\n'

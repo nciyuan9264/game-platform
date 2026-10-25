@@ -7,7 +7,7 @@
 | Repository | `auth`, `game-platform`, `pam-gateway`, `pam-idl` | Split by ownership and release lifecycle. |
 | Business service | Auth Center, Game Platform | Each service owns its data and RPC contract. |
 | Deployment process | Platform RPC, Control Plane, Realtime Gateway, per-game RoomHost | Split by fault, scaling, latency and release cadence. |
-| In-process module | Acquire, DaVinci, Splendor | One game engine per production RoomHost image. |
+| In-process module | Acquire, DaVinci, Splendor, YINSH, Othello | One game engine per production RoomHost image. |
 
 `pam-idl` is the contract authoring source. Generated code is committed but never edited manually.
 
@@ -186,7 +186,7 @@ The repository maintains one production Compose topology:
 
 - `schema-migrate`;
 - Control Plane, Platform RPC and Realtime Gateway;
-- Acquire, DaVinci and Splendor A/B RoomHost slots.
+- Acquire, DaVinci, Splendor, YINSH and Othello A/B RoomHost slots.
 
 Center images and per-game images are immutable and tagged by Git SHA. Engine version identifies state compatibility; image SHA identifies an artifact. Promotion changes only new-room traffic. An old slot is removed only after its active-room count reaches zero.
 
