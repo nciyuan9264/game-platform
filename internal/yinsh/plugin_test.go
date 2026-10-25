@@ -50,6 +50,26 @@ func TestPlayerViewIncludesProfilesBoardActionsAndTiming(t *testing.T) {
 	}
 }
 
+func TestConnectionLifecyclePreservesTurnDeadline(t *testing.T) {
+	plugin := &Plugin{}
+	state := startPreparedMatch(t, 1)
+	sentAt := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
+	updateTurnDeadline(state, sentAt)
+	deadline := state.TurnDeadline
+
+	for _, command := range []contracts.RoomCommand{
+		{Type: "disconnect", PlayerID: state.CurrentPlayer, SentAt: sentAt.Add(10 * time.Second)},
+		{Type: "connect", PlayerID: state.CurrentPlayer, SentAt: sentAt.Add(20 * time.Second)},
+	} {
+		if _, err := plugin.ApplyCommand(context.Background(), state, command); err != nil {
+			t.Fatalf("%s: %v", command.Type, err)
+		}
+		if !state.TurnDeadline.Equal(deadline) {
+			t.Fatalf("%s changed deadline from %s to %s", command.Type, deadline, state.TurnDeadline)
+		}
+	}
+}
+
 func TestAIRequestDelayAndFallback(t *testing.T) {
 	state := startPreparedMatch(t, 1)
 	state.Roster["owner"].AI = true

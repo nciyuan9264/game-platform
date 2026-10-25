@@ -14,7 +14,7 @@ import (
 
 const (
 	GameType            = "yinsh"
-	EngineVersion       = "yinsh-v1"
+	EngineVersion       = "yinsh-v2"
 	ReplaySchemaVersion = 1
 	defaultMaxPlayers   = 2
 	maxNoHumanChecks    = 3
@@ -270,7 +270,9 @@ func (p *Plugin) ApplyCommand(
 	if err != nil {
 		return game.ApplyResult{}, err
 	}
-	updateTurnDeadline(typed, command.SentAt)
+	if command.Type != "connect" && command.Type != "disconnect" {
+		updateTurnDeadline(typed, command.SentAt)
+	}
 	result := game.ApplyResult{
 		Status:   typed.Status,
 		Finished: typed.Status == StatusEnd,

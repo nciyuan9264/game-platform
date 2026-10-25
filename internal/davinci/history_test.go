@@ -198,7 +198,7 @@ func TestDavinciHistoryCommandClassification(t *testing.T) {
 			t.Fatalf("%s should not be recordable", commandType)
 		}
 	}
-	if definition := Definition(); definition.Version != "davinci-v5" || definition.History == nil {
+	if definition := Definition(); definition.Version != EngineVersion || definition.History == nil {
 		t.Fatalf("definition = %+v", definition)
 	}
 }

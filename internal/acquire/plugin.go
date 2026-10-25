@@ -20,7 +20,7 @@ import (
 
 const (
 	GameType         = "acquire"
-	EngineVersion    = "acquire-v3"
+	EngineVersion    = "acquire-v4"
 	maxNoHumanChecks = 3
 )
 
@@ -240,6 +240,7 @@ func (p *Plugin) ApplyCommand(ctx context.Context, state game.State, cmd contrac
 	result := game.ApplyResult{}
 	previousStatus := room.State.RoomStatus
 	previousPlayer := room.State.CurrentPlayer
+	previousTimedPlayer := acquireai.CurrentTimeoutPlayer(room)
 
 	if connection := room.Connections[cmd.PlayerID]; connection != nil && connection.AI {
 		room.AIRunning = false
@@ -337,7 +338,13 @@ func (p *Plugin) ApplyCommand(ctx context.Context, state game.State, cmd contrac
 	}
 	result.Status = platformStatus(room.State.RoomStatus)
 	result.Finished = room.State.RoomStatus == domain.RoomStatusEnd
-	result.AIRequests = append(result.AIRequests, nextAIRequest(room, commandTime)...)
+	connectionLifecycle := cmd.Type == "connect" || cmd.Type == "disconnect"
+	if !connectionLifecycle ||
+		previousStatus != room.State.RoomStatus ||
+		previousTimedPlayer != acquireai.CurrentTimeoutPlayer(room) {
+		updateAutomation(room, commandTime)
+	}
+	result.AIRequests = append(result.AIRequests, nextAIRequest(room)...)
 	return result, nil
 }
 
@@ -862,8 +869,7 @@ func gameReady(room *domain.Room, commandTime time.Time) error {
 	return nil
 }
 
-func nextAIRequest(room *domain.Room, commandTime time.Time) []game.AIRequest {
-	updateAutomation(room, commandTime)
+func nextAIRequest(room *domain.Room) []game.AIRequest {
 	playerID := nextAIPlayer(room)
 	player := room.Connections[playerID]
 	if player == nil || !player.AI || room.AIRunning || room.State.RoomStatus == domain.RoomStatusEnd {

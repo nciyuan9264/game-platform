@@ -8,6 +8,7 @@ import (
 	"log"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nciyuan9264/game-platform/internal/acquire/domain/domain"
 	rules "github.com/nciyuan9264/game-platform/internal/acquire/rules"
@@ -40,6 +41,22 @@ func TestPluginRunsMatchAndBuildsPrivateView(t *testing.T) {
 	}
 	apply("alice-1", "game_ready", nil)
 	apply("alice-1", "game_ready", nil) // reconnect/mount retry is idempotent
+	room, err := asRoom(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadline := room.TurnDeadline
+	for _, command := range []contracts.RoomCommand{
+		{PlayerID: "alice-1", Type: "disconnect", SentAt: deadline.Add(10 * time.Second)},
+		{PlayerID: "alice-1", Type: "connect", SentAt: deadline.Add(20 * time.Second)},
+	} {
+		if _, err := plugin.ApplyCommand(ctx, state, command); err != nil {
+			t.Fatalf("%s: %v", command.Type, err)
+		}
+		if !room.TurnDeadline.Equal(deadline) {
+			t.Fatalf("%s changed deadline from %s to %s", command.Type, deadline, room.TurnDeadline)
+		}
+	}
 
 	view, err := plugin.BuildPlayerView(ctx, state, game.ViewRequest{RoomID: "acquire-room", PlayerID: "alice-1", Seq: 4})
 	if err != nil {

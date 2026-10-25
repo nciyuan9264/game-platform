@@ -21,7 +21,7 @@ import (
 
 const (
 	GameType          = "splendor"
-	EngineVersion     = "splendor-v6"
+	EngineVersion     = "splendor-v7"
 	defaultMaxPlayers = 4
 	maxNoHumanChecks  = 3
 )
@@ -233,7 +233,9 @@ func (p *Plugin) ApplyCommand(
 		return game.ApplyResult{}, err
 	}
 	rules.RecomputeDerivedState(domain.NewRoom(typed))
-	updateTurnDeadline(typed, command.SentAt)
+	if command.Type != "connect" && command.Type != "disconnect" {
+		updateTurnDeadline(typed, command.SentAt)
+	}
 	result := game.ApplyResult{
 		Status:   string(typed.RoomStatus),
 		Finished: typed.RoomStatus == domain.RoomStatusEnd,

@@ -464,6 +464,37 @@ func TestDavinciInitializationDeadlineAndTimeout(t *testing.T) {
 	}
 }
 
+func TestDavinciConnectionLifecyclePreservesTurnDeadline(t *testing.T) {
+	plugin := NewPlugin()
+	sentAt := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
+	state := &State{
+		RoomID:        "reconnect-deadline",
+		OwnerID:       "alice",
+		Status:        StatusGetCard,
+		CurrentPlayer: "alice",
+		PlayerSeq:     []string{"alice", "bob"},
+		Players: map[string]*Player{
+			"alice": {PlayerID: "alice"},
+			"bob":   {PlayerID: "bob"},
+		},
+		TurnDeadline: sentAt.Add(20 * time.Second),
+		TurnTimeout:  20 * time.Second,
+	}
+	deadline := state.TurnDeadline
+
+	for _, command := range []contracts.RoomCommand{
+		{Type: CommandDisconnect, PlayerID: "alice", SentAt: sentAt.Add(5 * time.Second)},
+		{Type: CommandConnect, PlayerID: "alice", SentAt: sentAt.Add(10 * time.Second)},
+	} {
+		if _, err := plugin.ApplyCommand(context.Background(), state, command); err != nil {
+			t.Fatalf("%s: %v", command.Type, err)
+		}
+		if !state.TurnDeadline.Equal(deadline) {
+			t.Fatalf("%s changed deadline from %s to %s", command.Type, deadline, state.TurnDeadline)
+		}
+	}
+}
+
 func TestDavinciInitializationViewDoesNotLeakOpponentJoker(t *testing.T) {
 	state := &State{
 		RoomID:    "private-initialization",

@@ -88,7 +88,7 @@ type Engine struct{}
 
 func NewEngine() *Engine { return &Engine{} }
 
-const EngineVersion = "davinci-v5"
+const EngineVersion = "davinci-v6"
 
 func Definition() game.Definition {
 	plugin := NewPlugin()
@@ -197,7 +197,9 @@ func (p *Plugin) ApplyCommand(ctx context.Context, state game.State, cmd contrac
 	if cmd.Type == CommandGameReady && typed.GameStartTime.IsZero() {
 		typed.GameStartTime = commandTime
 	}
-	updateTurnDeadline(typed, commandTime)
+	if cmd.Type != CommandConnect && cmd.Type != CommandDisconnect {
+		updateTurnDeadline(typed, commandTime)
+	}
 	out := game.ApplyResult{Status: typed.Status, Finished: result.Finished}
 	if removedPlayerID != "" {
 		out.Effects = append(out.Effects, game.DeliveryEffect{

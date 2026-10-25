@@ -208,6 +208,18 @@ func TestSplendorMetadataAndRecoverableTurnDeadline(t *testing.T) {
 	if !state.TurnDeadline.Equal(sentAt.Add(time.Minute)) || state.TurnTimeout != time.Minute {
 		t.Fatalf("turn timing = %s/%s", state.TurnDeadline, state.TurnTimeout)
 	}
+	deadline := state.TurnDeadline
+	for _, command := range []contracts.RoomCommand{
+		{PlayerID: "owner", Type: "disconnect", SentAt: sentAt.Add(10 * time.Second)},
+		{PlayerID: "owner", Type: "connect", SentAt: sentAt.Add(20 * time.Second)},
+	} {
+		if _, err := plugin.ApplyCommand(ctx, state, command); err != nil {
+			t.Fatalf("%s: %v", command.Type, err)
+		}
+		if !state.TurnDeadline.Equal(deadline) {
+			t.Fatalf("%s changed deadline from %s to %s", command.Type, deadline, state.TurnDeadline)
+		}
+	}
 	pending, err := plugin.PendingCommands(ctx, state)
 	if err != nil {
 		t.Fatal(err)
