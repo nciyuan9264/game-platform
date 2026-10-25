@@ -10,7 +10,7 @@ paths=(
   internal/control
   internal/rpc
 )
-pattern='github\.com/nciyuan9264/game-platform/internal/(acquire|davinci|splendor|plugins)'
+pattern='github\.com/nciyuan9264/game-platform/internal/(acquire|davinci|splendor|yinsh|plugins)'
 
 if rg -n \
   --glob='*.go' \

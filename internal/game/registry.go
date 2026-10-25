@@ -25,6 +25,7 @@ type RoomConfig struct {
 	OwnerPlayerID string
 	MaxPlayers    int
 	RandomSeed    uint64
+	RoundNo       int
 	Visibility    string
 }
 

@@ -235,7 +235,8 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 		) VALUES
 			('davinci', 'davinci-v2', 2, 1, true, true, 1, NOW()),
 			('acquire', 'acquire-v2', 6, 2, true, false, 1, NOW()),
-			('splendor', 'splendor-v2', 4, 2, true, false, 1, NOW())
+			('splendor', 'splendor-v2', 4, 2, true, false, 1, NOW()),
+			('yinsh', 'yinsh-v1', 2, 1, true, false, 1, NOW())
 		ON CONFLICT (game_type) DO NOTHING`,
 		`UPDATE game_catalog
 		SET replay_schema_version = 2,

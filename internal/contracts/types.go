@@ -9,6 +9,7 @@ const (
 	GameDaVinci  = "davinci"
 	GameAcquire  = "acquire"
 	GameSplendor = "splendor"
+	GameYinsh    = "yinsh"
 
 	MaxOwnedRooms         = 5
 	RoomStatusCreating    = "creating"

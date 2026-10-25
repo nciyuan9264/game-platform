@@ -167,6 +167,24 @@ services:
       PUBLIC_ADDR: roomhost-splendor-b:9000
       SERVICE_VERSION: ${SPLENDOR_ROOMHOST_B_VERSION:?set Splendor RoomHost B artifact version}
 
+  roomhost-yinsh-a:
+    <<: *roomhost-service
+    image: ${YINSH_ROOMHOST_A_IMAGE:?set YINSH RoomHost A image}
+    environment:
+      <<: *runtime-env
+      NODE_ID: roomhost-yinsh-a
+      PUBLIC_ADDR: roomhost-yinsh-a:9000
+      SERVICE_VERSION: ${YINSH_ROOMHOST_A_VERSION:?set YINSH RoomHost A artifact version}
+
+  roomhost-yinsh-b:
+    <<: *roomhost-service
+    image: ${YINSH_ROOMHOST_B_IMAGE:?set YINSH RoomHost B image}
+    environment:
+      <<: *runtime-env
+      NODE_ID: roomhost-yinsh-b
+      PUBLIC_ADDR: roomhost-yinsh-b:9000
+      SERVICE_VERSION: ${YINSH_ROOMHOST_B_VERSION:?set YINSH RoomHost B artifact version}
+
 networks:
   global-network:
     external: true

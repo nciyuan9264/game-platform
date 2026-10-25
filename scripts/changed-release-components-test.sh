@@ -28,11 +28,11 @@ assert_case \
   internal/acquire/rules/step1_test.go
 
 assert_case \
-  '{"center":[],"games":["acquire","davinci","splendor"],"productionChange":true,"docsOnly":false}' \
+  '{"center":[],"games":["acquire","davinci","splendor","yinsh"],"productionChange":true,"docsOnly":false}' \
   internal/roomhost/host.go
 
 assert_case \
-  '{"center":["platform-rpc"],"games":["acquire","davinci","splendor"],"productionChange":true,"docsOnly":false}' \
+  '{"center":["platform-rpc"],"games":["acquire","davinci","splendor","yinsh"],"productionChange":true,"docsOnly":false}' \
   internal/history/replay_codec.go
 
 assert_case \
@@ -41,12 +41,17 @@ assert_case \
   docs/game-plugin-guide.md
 
 assert_case \
-  '{"center":["control-plane","gateway","migrate-schema","platform-rpc"],"games":["acquire","davinci","splendor"],"productionChange":true,"docsOnly":false}' \
+  '{"center":["control-plane","gateway","migrate-schema","platform-rpc"],"games":["acquire","davinci","splendor","yinsh"],"productionChange":true,"docsOnly":false}' \
   internal/contracts/types.go
 
 assert_case \
-  '{"center":["control-plane","gateway","migrate-schema","platform-rpc"],"games":["acquire","davinci","splendor"],"productionChange":true,"docsOnly":false}' \
+  '{"center":["control-plane","gateway","migrate-schema","platform-rpc"],"games":["acquire","davinci","splendor","yinsh"],"productionChange":true,"docsOnly":false}' \
   docker-compose.prod.yml \
   .github/workflows/deploy.yml
+
+assert_case \
+  '{"center":[],"games":["yinsh"],"productionChange":true,"docsOnly":false}' \
+  internal/yinsh/rules.go \
+  internal/yinsh/rules_test.go
 
 printf 'changed release component tests passed\n'

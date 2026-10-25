@@ -9,6 +9,7 @@ import (
 	"github.com/nciyuan9264/game-platform/internal/davinci"
 	"github.com/nciyuan9264/game-platform/internal/game"
 	"github.com/nciyuan9264/game-platform/internal/splendor"
+	"github.com/nciyuan9264/game-platform/internal/yinsh"
 )
 
 func TestSingleGameRegistryContainsOnlyRequestedDefinition(t *testing.T) {
@@ -35,6 +36,7 @@ func TestSelfTestCoversProductionDefinitions(t *testing.T) {
 		acquire.Definition(),
 		davinci.Definition(),
 		splendor.Definition(),
+		yinsh.Definition(),
 	}
 	for _, definition := range definitions {
 		t.Run(definition.GameType, func(t *testing.T) {

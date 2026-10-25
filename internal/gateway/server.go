@@ -712,6 +712,16 @@ func clientCommandPayload(gameType, commandType string, payload any) (any, error
 		variant = "buyCard"
 	case "game_preserve_card":
 		variant = "preserveCard"
+	case "game_place_ring":
+		variant = "placeRing"
+	case "game_move_ring":
+		variant = "moveRing"
+	case "game_remove_row":
+		variant = "removeRow"
+	case "game_remove_ring":
+		variant = "removeRing"
+	case "game_resign":
+		variant = "resign"
 	default:
 		return nil, fmt.Errorf("unsupported command type %q", commandType)
 	}

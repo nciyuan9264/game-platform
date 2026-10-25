@@ -524,6 +524,7 @@ func (h *Host) newRoomActor(ctx context.Context, rec contracts.RoomRecord) (*Roo
 		OwnerPlayerID: rec.OwnerPlayerID,
 		MaxPlayers:    rec.MaxPlayers,
 		RandomSeed:    match.RandomSeed,
+		RoundNo:       match.RoundNo,
 		Visibility:    rec.Visibility,
 	})
 	if err != nil {
@@ -1113,6 +1114,7 @@ func (r *RoomActor) StartMatch(ctx context.Context, matchID string) error {
 		OwnerPlayerID: r.record.OwnerPlayerID,
 		MaxPlayers:    r.record.MaxPlayers,
 		RandomSeed:    match.RandomSeed,
+		RoundNo:       match.RoundNo,
 		Visibility:    r.record.Visibility,
 	})
 	if err != nil {
@@ -1921,6 +1923,7 @@ func (r *RoomActor) reconcileHistoryLocked(ctx context.Context) error {
 		OwnerPlayerID: r.record.OwnerPlayerID,
 		MaxPlayers:    r.record.MaxPlayers,
 		RandomSeed:    randomSeed,
+		RoundNo:       r.match.RoundNo,
 		Visibility:    r.record.Visibility,
 	})
 	if err != nil {

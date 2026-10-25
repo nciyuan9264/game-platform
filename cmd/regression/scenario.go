@@ -406,6 +406,31 @@ func selectFirstAction(
 				map[string]any{"take": map[string]any{colors[0]: 2}},
 			),
 		}, true
+	case "yinsh":
+		rings, _ := roomData["rings"].(map[string]any)
+		markers, _ := roomData["markers"].(map[string]any)
+		pointID := ""
+		for _, candidate := range []string{
+			"F6", "E4", "D3", "C5", "F9", "G3", "H9", "I8", "I6", "D7",
+		} {
+			if rings[candidate] == nil && markers[candidate] == nil {
+				pointID = candidate
+				break
+			}
+		}
+		if pointID == "" {
+			return legalAction{}, false
+		}
+		return legalAction{
+			Command: gameCommand(
+				gameType, matchID, commandID, "game_place_ring", "placeRing",
+				map[string]any{"pointID": pointID},
+			),
+			ConflictCommand: gameCommand(
+				gameType, matchID, commandID, "game_place_ring", "placeRing",
+				map[string]any{"pointID": "__intent_conflict__"},
+			),
+		}, true
 	default:
 		return legalAction{}, false
 	}

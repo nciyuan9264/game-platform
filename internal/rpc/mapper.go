@@ -94,6 +94,10 @@ func roomMetrics(room contracts.RoomRecord) *platform.RoomMetrics {
 		return &platform.RoomMetrics{Davinci: &platform.DavinciRoomMetrics{
 			BoardCardCount: remaining, ProgressCurrent: current, ProgressTotal: total,
 		}}
+	case contracts.GameYinsh:
+		return &platform.RoomMetrics{Yinsh: &platform.YinshRoomMetrics{
+			RingsRemoved: current, ProgressCurrent: current, ProgressTotal: total,
+		}}
 	default:
 		return &platform.RoomMetrics{Splendor: &platform.SplendorRoomMetrics{
 			MaxScore: current, ProgressCurrent: current, ProgressTotal: total,

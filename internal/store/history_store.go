@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/lib/pq"
+	"github.com/nciyuan9264/game-platform/internal/contracts"
 	"github.com/nciyuan9264/game-platform/internal/history"
 )
 
@@ -494,7 +495,7 @@ func (s *PostgresStore) HistoryLeaderboardSorted(ctx context.Context, gameType, 
 	if offset < 0 {
 		offset = 0
 	}
-	if gameType == "davinci" {
+	if usesWinRateLeaderboard(gameType) {
 		order := "win_rate DESC, total_games DESC, gp.user_id ASC"
 		if sortBy == "totalGames" {
 			order = "total_games DESC, win_rate DESC, gp.user_id ASC"
@@ -599,7 +600,7 @@ func (s *PostgresStore) HistoryLeaderboardSorted(ctx context.Context, gameType, 
 func (s *PostgresStore) CountLeaderboardEntries(ctx context.Context, gameType string) (int, error) {
 	var total int
 	extra := ""
-	if gameType != "davinci" {
+	if !usesWinRateLeaderboard(gameType) {
 		extra = " AND gp.final_rank IS NOT NULL"
 	}
 	err := s.db.QueryRowContext(ctx, `
@@ -609,6 +610,10 @@ func (s *PostgresStore) CountLeaderboardEntries(ctx context.Context, gameType st
 		WHERE g.game_type = $1 AND g.ended_at IS NOT NULL
 			AND gp.user_id IS NOT NULL`+extra, gameType).Scan(&total)
 	return total, err
+}
+
+func usesWinRateLeaderboard(gameType string) bool {
+	return gameType == contracts.GameDaVinci || gameType == contracts.GameYinsh
 }
 
 func (s *PostgresStore) ListReplayBackfillGameIDs(

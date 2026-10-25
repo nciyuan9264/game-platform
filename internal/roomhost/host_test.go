@@ -23,6 +23,7 @@ import (
 	"github.com/nciyuan9264/game-platform/internal/history"
 	splendorgame "github.com/nciyuan9264/game-platform/internal/splendor"
 	"github.com/nciyuan9264/game-platform/internal/transport"
+	yinshgame "github.com/nciyuan9264/game-platform/internal/yinsh"
 )
 
 type roomhostTestEngine struct {
@@ -1024,6 +1025,9 @@ func TestStartMatchReplacesRuntimeInsideExistingRoomActor(t *testing.T) {
 	if len(actor.processed) != 0 {
 		t.Fatalf("old command idempotency cache leaked into new match: %+v", actor.processed)
 	}
+	if engine.cfg.RoundNo != 2 {
+		t.Fatalf("new match round = %d, want 2", engine.cfg.RoundNo)
+	}
 	lastSnapshot := st.savedSnapshots[len(st.savedSnapshots)-1]
 	if lastSnapshot.MatchID != "room-1-r2" || lastSnapshot.Seq != 0 {
 		t.Fatalf("new match initial snapshot = %+v", lastSnapshot)
@@ -1038,6 +1042,7 @@ func TestStartMatchRestoresRosterAcrossGames(t *testing.T) {
 		acquiregame.Definition(),
 		davincigame.Definition(),
 		splendorgame.Definition(),
+		yinshgame.Definition(),
 	}
 	scenarios := []struct {
 		name            string

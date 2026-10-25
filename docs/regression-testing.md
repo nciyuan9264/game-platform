@@ -31,7 +31,7 @@ DaVinci 支持 history、stats 和 leaderboard，不支持 replay；回放接口
 ```bash
 go run ./cmd/regression \
   --mode probe \
-  --games acquire,davinci,splendor \
+  --games acquire,davinci,splendor,yinsh \
   --report-dir .artifacts/regression/manual/probe
 ```
 
@@ -86,7 +86,7 @@ PostgreSQL：
 - seq=0 初始快照、spectator snapshot、可靠下行存在。
 - runtime events 包含 room created、WebSocket connected、command applied、snapshot saved。
 - operation event 和 history event 没有重复。
-- Acquire、DaVinci、Splendor 开局后都创建 open history。
+- Acquire、DaVinci、Splendor、YINSH 开局后都创建 open history。
 - 关闭后 room 为 closed，match 为 ended/aborted，玩家离线，早退 history 被清理。
 
 异步条件最多轮询 40 秒，覆盖两次 15 秒 projection retry，不使用固定长时间 sleep。

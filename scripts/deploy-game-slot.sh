@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if [[ $# -ne 2 ]]; then
-  printf 'usage: %s <acquire|davinci|splendor> <immutable-image>\n' "$0" >&2
+  printf 'usage: %s <acquire|davinci|splendor|yinsh> <immutable-image>\n' "$0" >&2
   exit 2
 fi
 
@@ -12,6 +12,7 @@ case "$game" in
   acquire) image_prefix='ACQUIRE_ROOMHOST' ;;
   davinci) image_prefix='DAVINCI_ROOMHOST' ;;
   splendor) image_prefix='SPLENDOR_ROOMHOST' ;;
+  yinsh) image_prefix='YINSH_ROOMHOST' ;;
   *)
     printf 'unsupported game: %s\n' "$game" >&2
     exit 2

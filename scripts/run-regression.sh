@@ -6,7 +6,7 @@ FRONTEND_ROOT="${GAME_FRONTEND_ROOT:-$ROOT/../game-frontend}"
 MODE="${1:-quality}"
 RUN_ID="${REGRESSION_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"
 REPORT_ROOT="${REGRESSION_REPORT_ROOT:-$ROOT/.artifacts/regression/$RUN_ID}"
-GAMES="${REGRESSION_GAMES:-acquire,davinci,splendor}"
+GAMES="${REGRESSION_GAMES:-acquire,davinci,splendor,yinsh}"
 
 run_step() {
   local name="$1"

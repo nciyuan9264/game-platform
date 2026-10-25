@@ -42,6 +42,7 @@ func SelfTest(ctx context.Context, definition game.Definition) error {
 		OwnerPlayerID: "self-test-owner",
 		MaxPlayers:    definition.DefaultMaxPlayers,
 		RandomSeed:    1,
+		RoundNo:       1,
 		Visibility:    contracts.VisibilityPrivate,
 	})
 	if err != nil {

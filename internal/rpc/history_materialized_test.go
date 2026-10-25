@@ -94,6 +94,44 @@ func TestBuildReplaySnapshotFailsClosedForMissingAndUnknownSchema(t *testing.T) 
 	assertPlatformErrorCode(t, err, "replay_schema_unsupported")
 }
 
+func TestBuildReplaySnapshotSupportsYinsh(t *testing.T) {
+	payload, err := history.EncodeReplayFrame(1, map[string]any{
+		"roomData": map[string]any{
+			"rings": map[string]any{}, "markers": map[string]any{}, "currentPlayer": "alice",
+			"gameStatus": "placement", "placedRings": map[string]int{"white": 0, "black": 0},
+			"markerPool": 51, "legalMoves": map[string]any{}, "candidateRows": []any{},
+			"players": map[string]any{}, "playerOrder": []string{"alice", "bob"}, "roundNo": 1,
+		},
+		"playersData": map[string]any{},
+		"result": map[string]any{
+			"reason": "", "ringsRemoved": map[string]int{"white": 0, "black": 0},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := (&Handler{}).buildReplaySnapshot(
+		context.Background(),
+		history.Game{
+			GameType:             contracts.GameYinsh,
+			ReplaySchemaVersion:  1,
+			InitialReplayPayload: payload,
+		},
+		nil,
+		nil,
+		-1,
+		0,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.Yinsh == nil ||
+		snapshot.Yinsh.Seq != -1 ||
+		snapshot.Yinsh.RoomData.MarkerPool != 51 {
+		t.Fatalf("snapshot = %+v", snapshot)
+	}
+}
+
 func assertPlatformErrorCode(t *testing.T, err error, code string) {
 	t.Helper()
 	var platformErr interface{ GetCode() string }

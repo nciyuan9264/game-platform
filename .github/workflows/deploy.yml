@@ -14,6 +14,7 @@ on:
           - acquire
           - davinci
           - splendor
+          - yinsh
       compatibility_ack:
         description: Reason an engine implementation change is version-compatible
         type: string
@@ -56,7 +57,7 @@ jobs:
               center='["control-plane","gateway","migrate-schema","platform-rpc"]'
               games='[]'
               ;;
-            acquire|davinci|splendor)
+            acquire|davinci|splendor|yinsh)
               center='[]'
               games="$(jq -cn --arg game "${COMPONENT_OVERRIDE}" '[$game]')"
               ;;
@@ -207,6 +208,10 @@ jobs:
             export SPLENDOR_ROOMHOST_B_IMAGE="${SPLENDOR_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-splendor:${IMAGE_TAG}}"
             export SPLENDOR_ROOMHOST_A_VERSION="${SPLENDOR_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
             export SPLENDOR_ROOMHOST_B_VERSION="${SPLENDOR_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
+            export YINSH_ROOMHOST_A_IMAGE="${YINSH_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-yinsh:${IMAGE_TAG}}"
+            export YINSH_ROOMHOST_B_IMAGE="${YINSH_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-yinsh:${IMAGE_TAG}}"
+            export YINSH_ROOMHOST_A_VERSION="${YINSH_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
+            export YINSH_ROOMHOST_B_VERSION="${YINSH_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
             printf '%s' "${TCR_PASSWORD}" | docker login "${TCR_LOGIN_SERVER}" \
               --username "${TCR_USERNAME}" --password-stdin
             chmod +x scripts/validate-prod-config.sh
@@ -299,6 +304,10 @@ jobs:
             export SPLENDOR_ROOMHOST_B_IMAGE="${SPLENDOR_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-splendor:${IMAGE_TAG}}"
             export SPLENDOR_ROOMHOST_A_VERSION="${SPLENDOR_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
             export SPLENDOR_ROOMHOST_B_VERSION="${SPLENDOR_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
+            export YINSH_ROOMHOST_A_IMAGE="${YINSH_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-yinsh:${IMAGE_TAG}}"
+            export YINSH_ROOMHOST_B_IMAGE="${YINSH_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-yinsh:${IMAGE_TAG}}"
+            export YINSH_ROOMHOST_A_VERSION="${YINSH_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
+            export YINSH_ROOMHOST_B_VERSION="${YINSH_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
             printf '%s' "${TCR_PASSWORD}" | docker login "${TCR_LOGIN_SERVER}" \
               --username "${TCR_USERNAME}" --password-stdin
             chmod +x scripts/deploy-game-slot.sh scripts/validate-prod-config.sh

@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "frameFields": [
+    "playersData",
+    "result",
+    "roomData"
+  ],
+  "roomDataFields": [
+    "activity",
+    "candidateRows",
+    "currentPlayer",
+    "gameStatus",
+    "lastAction",
+    "legalMoves",
+    "markerPool",
+    "markers",
+    "moverPlayer",
+    "placedRings",
+    "playerOrder",
+    "players",
+    "resolverPlayer",
+    "rings",
+    "roundNo",
+    "turnDeadline",
+    "turnTimeoutMs"
+  ]
+}

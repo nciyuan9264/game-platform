@@ -210,6 +210,21 @@ func TestClientCommandPayload(t *testing.T) {
 		}
 	})
 
+	t.Run("yinsh move payload", func(t *testing.T) {
+		got, err := clientCommandPayload(contracts.GameYinsh, "game_move_ring", map[string]any{
+			"yinsh": map[string]any{
+				"moveRing": map[string]any{"from": "E4", "to": "E8"},
+			},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		payload, ok := got.(map[string]any)
+		if !ok || payload["from"] != "E4" || payload["to"] != "E8" {
+			t.Fatalf("clientCommandPayload() = %#v", got)
+		}
+	})
+
 	t.Run("wrong union group", func(t *testing.T) {
 		if _, err := clientCommandPayload(contracts.GameAcquire, "game_place_tile", map[string]any{
 			"davinci": map[string]any{},

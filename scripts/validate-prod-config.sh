@@ -68,7 +68,7 @@ require 'PROFILE_REFRESH_INTERVAL:[[:space:]]*[0-9]+(ms|s|m)' 'gateway profile r
 require '^[[:space:]]{2}gateway:[[:space:]]*$' 'one realtime gateway instance is required'
 require 'game-platform-gateway' 'realtime gateway global-network alias is required'
 
-for game in acquire davinci splendor; do
+for game in acquire davinci splendor yinsh; do
   for slot in a b; do
     service="roomhost-${game}-${slot}"
     require "^[[:space:]]{2}${service}:[[:space:]]*$" "${service} slot is required"
@@ -82,7 +82,9 @@ require_source '\$\{DAVINCI_ROOMHOST_A_IMAGE:\?' 'DaVinci A must use a complete 
 require_source '\$\{DAVINCI_ROOMHOST_B_IMAGE:\?' 'DaVinci B must use a complete independent image reference'
 require_source '\$\{SPLENDOR_ROOMHOST_A_IMAGE:\?' 'Splendor A must use a complete independent image reference'
 require_source '\$\{SPLENDOR_ROOMHOST_B_IMAGE:\?' 'Splendor B must use a complete independent image reference'
-for prefix in ACQUIRE DAVINCI SPLENDOR; do
+require_source '\$\{YINSH_ROOMHOST_A_IMAGE:\?' 'YINSH A must use a complete independent image reference'
+require_source '\$\{YINSH_ROOMHOST_B_IMAGE:\?' 'YINSH B must use a complete independent image reference'
+for prefix in ACQUIRE DAVINCI SPLENDOR YINSH; do
   for slot in A B; do
     require_source \
       "\\\$\\{${prefix}_ROOMHOST_${slot}_VERSION:\\?" \
