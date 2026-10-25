@@ -103,6 +103,11 @@ func TestPassAndEarlyFinish(t *testing.T) {
 	if err := passTurn(state, "black", false); err != nil {
 		t.Fatal(err)
 	}
+	if state.LastAction == nil ||
+		state.LastAction.Flips == nil ||
+		len(state.LastAction.Flips) != 0 {
+		t.Fatalf("pass action flips = %+v", state.LastAction)
+	}
 	if state.CurrentPlayer != "white" || state.Status != StatusPlaying {
 		t.Fatalf("after pass = %s/%s", state.CurrentPlayer, state.Status)
 	}

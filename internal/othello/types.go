@@ -128,7 +128,7 @@ func cloneState(state *State) *State {
 
 func cloneAction(action Action) Action {
 	result := action
-	result.Flips = append([]int(nil), action.Flips...)
+	result.Flips = append([]int{}, action.Flips...)
 	if action.Index != nil {
 		index := *action.Index
 		result.Index = &index
