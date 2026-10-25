@@ -55,4 +55,19 @@ git commit -qm schema
 schema="$(git rev-parse HEAD)"
 "$SCRIPT" "$versioned" "$schema" --compatibility-ack 'replay schema only' >/dev/null
 
+new_game_base="$schema"
+mkdir -p internal/yinsh/testdata
+cat >internal/yinsh/plugin.go <<'EOF'
+package yinsh
+const (
+	EngineVersion = "yinsh-v1"
+	ReplaySchemaVersion = 1
+)
+EOF
+printf '{"schemaVersion":1}\n' >internal/yinsh/testdata/replay_frame_golden.json
+git add .
+git commit -qm new-game
+new_game="$(git rev-parse HEAD)"
+"$SCRIPT" "$new_game_base" "$new_game" >/dev/null
+
 printf 'engine version validation tests passed\n'

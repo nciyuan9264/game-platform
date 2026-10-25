@@ -113,7 +113,11 @@ constant_at() {
   local ref="$1"
   local file="$2"
   local name="$3"
-  git show "${ref}:${file}" 2>/dev/null |
+  local content
+  if ! content="$(git show "${ref}:${file}" 2>/dev/null)"; then
+    return 0
+  fi
+  printf '%s\n' "$content" |
     sed -nE "s/^[[:space:]]*(const[[:space:]]+)?${name}[[:space:]]*=[[:space:]]*\"([^\"]+)\".*/\\2/p" |
     head -n 1
 }
@@ -122,7 +126,11 @@ integer_constant_at() {
   local ref="$1"
   local file="$2"
   local name="$3"
-  git show "${ref}:${file}" 2>/dev/null |
+  local content
+  if ! content="$(git show "${ref}:${file}" 2>/dev/null)"; then
+    return 0
+  fi
+  printf '%s\n' "$content" |
     sed -nE "s/^[[:space:]]*(const[[:space:]]+)?${name}[[:space:]]*=[[:space:]]*([0-9]+).*/\\2/p" |
     head -n 1
 }
