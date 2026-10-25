@@ -3,6 +3,7 @@ package plugins
 import (
 	"github.com/nciyuan9264/game-platform/internal/acquire"
 	"github.com/nciyuan9264/game-platform/internal/davinci"
+	"github.com/nciyuan9264/game-platform/internal/fugitive"
 	"github.com/nciyuan9264/game-platform/internal/game"
 	"github.com/nciyuan9264/game-platform/internal/othello"
 	"github.com/nciyuan9264/game-platform/internal/splendor"
@@ -16,5 +17,6 @@ func Registry() *game.Registry {
 		splendor.Definition(),
 		yinsh.Definition(),
 		othello.Definition(),
+		fugitive.Definition(),
 	)
 }

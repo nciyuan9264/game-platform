@@ -7,6 +7,7 @@ import (
 	"github.com/nciyuan9264/game-platform/internal/acquire"
 	"github.com/nciyuan9264/game-platform/internal/contracts"
 	"github.com/nciyuan9264/game-platform/internal/davinci"
+	"github.com/nciyuan9264/game-platform/internal/fugitive"
 	"github.com/nciyuan9264/game-platform/internal/game"
 	"github.com/nciyuan9264/game-platform/internal/othello"
 	"github.com/nciyuan9264/game-platform/internal/splendor"
@@ -39,6 +40,7 @@ func TestSelfTestCoversProductionDefinitions(t *testing.T) {
 		splendor.Definition(),
 		yinsh.Definition(),
 		othello.Definition(),
+		fugitive.Definition(),
 	}
 	for _, definition := range definitions {
 		t.Run(definition.GameType, func(t *testing.T) {

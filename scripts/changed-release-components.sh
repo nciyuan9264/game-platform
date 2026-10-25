@@ -18,6 +18,7 @@ mark_all_games() {
   games[splendor]=1
   games[yinsh]=1
   games[othello]=1
+  games[fugitive]=1
 }
 
 mark_all_centers() {
@@ -65,6 +66,9 @@ for path in "${files[@]}"; do
       ;;
     internal/othello/*|cmd/roomhost-othello/*)
       games[othello]=1
+      ;;
+    internal/fugitive/*|cmd/roomhost-fugitive/*)
+      games[fugitive]=1
       ;;
     internal/game/*|internal/roomhost/*|internal/roomhostapp/*|internal/gamelog/*)
       mark_all_games

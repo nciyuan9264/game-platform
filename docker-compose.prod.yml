@@ -203,6 +203,24 @@ services:
       PUBLIC_ADDR: roomhost-othello-b:9000
       SERVICE_VERSION: ${OTHELLO_ROOMHOST_B_VERSION:?set Othello RoomHost B artifact version}
 
+  roomhost-fugitive-a:
+    <<: *roomhost-service
+    image: ${FUGITIVE_ROOMHOST_A_IMAGE:?set Fugitive RoomHost A image}
+    environment:
+      <<: *runtime-env
+      NODE_ID: roomhost-fugitive-a
+      PUBLIC_ADDR: roomhost-fugitive-a:9000
+      SERVICE_VERSION: ${FUGITIVE_ROOMHOST_A_VERSION:?set Fugitive RoomHost A artifact version}
+
+  roomhost-fugitive-b:
+    <<: *roomhost-service
+    image: ${FUGITIVE_ROOMHOST_B_IMAGE:?set Fugitive RoomHost B image}
+    environment:
+      <<: *runtime-env
+      NODE_ID: roomhost-fugitive-b
+      PUBLIC_ADDR: roomhost-fugitive-b:9000
+      SERVICE_VERSION: ${FUGITIVE_ROOMHOST_B_VERSION:?set Fugitive RoomHost B artifact version}
+
 networks:
   global-network:
     external: true

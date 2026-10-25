@@ -23,6 +23,8 @@ type RoomRecord struct {
 	CurrentMatchId     *string `thrift:"current_match_id,14,optional" frugal:"14,optional,string" json:"current_match_id,omitempty"`
 	NextRoundNo        int32   `thrift:"next_round_no,15,required" frugal:"15,required,i32" json:"next_round_no"`
 	Visibility         *string `thrift:"visibility,16,optional" frugal:"16,optional,string" json:"visibility,omitempty"`
+	DisplayName        *string `thrift:"display_name,17,optional" frugal:"17,optional,string" json:"display_name,omitempty"`
+	TurnTimeoutSeconds *int32  `thrift:"turn_timeout_seconds,18,optional" frugal:"18,optional,i32" json:"turn_timeout_seconds,omitempty"`
 }
 
 func NewRoomRecord() *RoomRecord {
@@ -110,6 +112,24 @@ func (p *RoomRecord) GetVisibility() (v string) {
 	}
 	return *p.Visibility
 }
+
+var RoomRecord_DisplayName_DEFAULT string
+
+func (p *RoomRecord) GetDisplayName() (v string) {
+	if !p.IsSetDisplayName() {
+		return RoomRecord_DisplayName_DEFAULT
+	}
+	return *p.DisplayName
+}
+
+var RoomRecord_TurnTimeoutSeconds_DEFAULT int32
+
+func (p *RoomRecord) GetTurnTimeoutSeconds() (v int32) {
+	if !p.IsSetTurnTimeoutSeconds() {
+		return RoomRecord_TurnTimeoutSeconds_DEFAULT
+	}
+	return *p.TurnTimeoutSeconds
+}
 func (p *RoomRecord) SetRoomId(val string) {
 	p.RoomId = val
 }
@@ -158,6 +178,12 @@ func (p *RoomRecord) SetNextRoundNo(val int32) {
 func (p *RoomRecord) SetVisibility(val *string) {
 	p.Visibility = val
 }
+func (p *RoomRecord) SetDisplayName(val *string) {
+	p.DisplayName = val
+}
+func (p *RoomRecord) SetTurnTimeoutSeconds(val *int32) {
+	p.TurnTimeoutSeconds = val
+}
 
 func (p *RoomRecord) IsSetLeaseExpiresAtUnix() bool {
 	return p.LeaseExpiresAtUnix != nil
@@ -169,6 +195,14 @@ func (p *RoomRecord) IsSetCurrentMatchId() bool {
 
 func (p *RoomRecord) IsSetVisibility() bool {
 	return p.Visibility != nil
+}
+
+func (p *RoomRecord) IsSetDisplayName() bool {
+	return p.DisplayName != nil
+}
+
+func (p *RoomRecord) IsSetTurnTimeoutSeconds() bool {
+	return p.TurnTimeoutSeconds != nil
 }
 
 func (p *RoomRecord) String() string {
@@ -195,15 +229,19 @@ var fieldIDToName_RoomRecord = map[int16]string{
 	14: "current_match_id",
 	15: "next_round_no",
 	16: "visibility",
+	17: "display_name",
+	18: "turn_timeout_seconds",
 }
 
 type CreateRoomReq struct {
-	GameType      string  `thrift:"game_type,1,required" frugal:"1,required,string" json:"game_type"`
-	OwnerUserId   string  `thrift:"owner_user_id,2,required" frugal:"2,required,string" json:"owner_user_id"`
-	OwnerPlayerId string  `thrift:"owner_player_id,3,required" frugal:"3,required,string" json:"owner_player_id"`
-	MaxPlayers    *int32  `thrift:"max_players,4,optional" frugal:"4,optional,i32" json:"max_players,omitempty"`
-	RequestId     *string `thrift:"request_id,5,optional" frugal:"5,optional,string" json:"request_id,omitempty"`
-	Visibility    *string `thrift:"visibility,6,optional" frugal:"6,optional,string" json:"visibility,omitempty"`
+	GameType           string  `thrift:"game_type,1,required" frugal:"1,required,string" json:"game_type"`
+	OwnerUserId        string  `thrift:"owner_user_id,2,required" frugal:"2,required,string" json:"owner_user_id"`
+	OwnerPlayerId      string  `thrift:"owner_player_id,3,required" frugal:"3,required,string" json:"owner_player_id"`
+	MaxPlayers         *int32  `thrift:"max_players,4,optional" frugal:"4,optional,i32" json:"max_players,omitempty"`
+	RequestId          *string `thrift:"request_id,5,optional" frugal:"5,optional,string" json:"request_id,omitempty"`
+	Visibility         *string `thrift:"visibility,6,optional" frugal:"6,optional,string" json:"visibility,omitempty"`
+	DisplayName        *string `thrift:"display_name,7,optional" frugal:"7,optional,string" json:"display_name,omitempty"`
+	TurnTimeoutSeconds *int32  `thrift:"turn_timeout_seconds,8,optional" frugal:"8,optional,i32" json:"turn_timeout_seconds,omitempty"`
 }
 
 func NewCreateRoomReq() *CreateRoomReq {
@@ -251,6 +289,24 @@ func (p *CreateRoomReq) GetVisibility() (v string) {
 	}
 	return *p.Visibility
 }
+
+var CreateRoomReq_DisplayName_DEFAULT string
+
+func (p *CreateRoomReq) GetDisplayName() (v string) {
+	if !p.IsSetDisplayName() {
+		return CreateRoomReq_DisplayName_DEFAULT
+	}
+	return *p.DisplayName
+}
+
+var CreateRoomReq_TurnTimeoutSeconds_DEFAULT int32
+
+func (p *CreateRoomReq) GetTurnTimeoutSeconds() (v int32) {
+	if !p.IsSetTurnTimeoutSeconds() {
+		return CreateRoomReq_TurnTimeoutSeconds_DEFAULT
+	}
+	return *p.TurnTimeoutSeconds
+}
 func (p *CreateRoomReq) SetGameType(val string) {
 	p.GameType = val
 }
@@ -269,6 +325,12 @@ func (p *CreateRoomReq) SetRequestId(val *string) {
 func (p *CreateRoomReq) SetVisibility(val *string) {
 	p.Visibility = val
 }
+func (p *CreateRoomReq) SetDisplayName(val *string) {
+	p.DisplayName = val
+}
+func (p *CreateRoomReq) SetTurnTimeoutSeconds(val *int32) {
+	p.TurnTimeoutSeconds = val
+}
 
 func (p *CreateRoomReq) IsSetMaxPlayers() bool {
 	return p.MaxPlayers != nil
@@ -280,6 +342,14 @@ func (p *CreateRoomReq) IsSetRequestId() bool {
 
 func (p *CreateRoomReq) IsSetVisibility() bool {
 	return p.Visibility != nil
+}
+
+func (p *CreateRoomReq) IsSetDisplayName() bool {
+	return p.DisplayName != nil
+}
+
+func (p *CreateRoomReq) IsSetTurnTimeoutSeconds() bool {
+	return p.TurnTimeoutSeconds != nil
 }
 
 func (p *CreateRoomReq) String() string {
@@ -296,6 +366,8 @@ var fieldIDToName_CreateRoomReq = map[int16]string{
 	4: "max_players",
 	5: "request_id",
 	6: "visibility",
+	7: "display_name",
+	8: "turn_timeout_seconds",
 }
 
 type CreateRoomResp struct {

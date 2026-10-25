@@ -11,6 +11,7 @@ const (
 	GameSplendor = "splendor"
 	GameYinsh    = "yinsh"
 	GameOthello  = "othello"
+	GameFugitive = "fugitive"
 
 	MaxOwnedRooms         = 5
 	RoomStatusCreating    = "creating"
@@ -121,6 +122,8 @@ type RoomRecord struct {
 	RoomID                 string    `json:"roomID"`
 	GameType               string    `json:"gameType"`
 	Visibility             string    `json:"visibility"`
+	DisplayName            string    `json:"displayName,omitempty"`
+	TurnTimeoutSeconds     int       `json:"turnTimeoutSeconds,omitempty"`
 	OwnerUserID            string    `json:"ownerUserID"`
 	OwnerPlayerID          string    `json:"ownerPlayerID"`
 	OwnerNode              string    `json:"ownerNode"`
@@ -214,33 +217,36 @@ type MatchPlayerRecord struct {
 	IsAI        bool      `json:"isAI"`
 	SeatIndex   int       `json:"seatIndex"`
 	Ready       bool      `json:"ready"`
+	GameRole    string    `json:"gameRole,omitempty"`
 	JoinedAt    time.Time `json:"joinedAt,omitempty"`
 	LastSeen    time.Time `json:"lastSeen,omitempty"`
 }
 
 type MatchRecord struct {
-	MatchID          string              `json:"matchID"`
-	RuntimeRoomID    string              `json:"runtimeRoomID"`
-	GameType         string              `json:"gameType"`
-	Status           string              `json:"status"`
-	OwnerUserID      string              `json:"ownerUserID"`
-	OwnerPlayerID    string              `json:"ownerPlayerID"`
-	RuntimeOwnerNode string              `json:"runtimeOwnerNode"`
-	Epoch            int64               `json:"epoch"`
-	MaxPlayers       int                 `json:"maxPlayers"`
-	PlayerCount      int                 `json:"playerCount"`
-	EngineVersion    string              `json:"engineVersion"`
-	RoundNo          int                 `json:"roundNo"`
-	LastAppliedSeq   int64               `json:"lastAppliedSeq"`
-	RandomSeed       uint64              `json:"-"`
-	StartedAt        time.Time           `json:"startedAt"`
-	UpdatedAt        time.Time           `json:"updatedAt"`
-	EndedAt          time.Time           `json:"endedAt,omitempty"`
-	DurationSeconds  int64               `json:"durationSeconds"`
-	WinnerUserID     string              `json:"winnerUserID,omitempty"`
-	WinnerPlayerID   string              `json:"winnerPlayerID,omitempty"`
-	EndReason        string              `json:"endReason,omitempty"`
-	Players          []MatchPlayerRecord `json:"players,omitempty"`
+	MatchID            string              `json:"matchID"`
+	RuntimeRoomID      string              `json:"runtimeRoomID"`
+	GameType           string              `json:"gameType"`
+	DisplayName        string              `json:"displayName,omitempty"`
+	TurnTimeoutSeconds int                 `json:"turnTimeoutSeconds,omitempty"`
+	Status             string              `json:"status"`
+	OwnerUserID        string              `json:"ownerUserID"`
+	OwnerPlayerID      string              `json:"ownerPlayerID"`
+	RuntimeOwnerNode   string              `json:"runtimeOwnerNode"`
+	Epoch              int64               `json:"epoch"`
+	MaxPlayers         int                 `json:"maxPlayers"`
+	PlayerCount        int                 `json:"playerCount"`
+	EngineVersion      string              `json:"engineVersion"`
+	RoundNo            int                 `json:"roundNo"`
+	LastAppliedSeq     int64               `json:"lastAppliedSeq"`
+	RandomSeed         uint64              `json:"-"`
+	StartedAt          time.Time           `json:"startedAt"`
+	UpdatedAt          time.Time           `json:"updatedAt"`
+	EndedAt            time.Time           `json:"endedAt,omitempty"`
+	DurationSeconds    int64               `json:"durationSeconds"`
+	WinnerUserID       string              `json:"winnerUserID,omitempty"`
+	WinnerPlayerID     string              `json:"winnerPlayerID,omitempty"`
+	EndReason          string              `json:"endReason,omitempty"`
+	Players            []MatchPlayerRecord `json:"players,omitempty"`
 }
 
 type NATSSubjectInfo struct {

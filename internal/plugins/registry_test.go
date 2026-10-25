@@ -14,6 +14,7 @@ func TestRegistryContainsAllGamePlugins(t *testing.T) {
 		contracts.GameSplendor,
 		contracts.GameYinsh,
 		contracts.GameOthello,
+		contracts.GameFugitive,
 	} {
 		definition, ok := registry.Get(gameType)
 		if !ok || definition.Engine == nil || definition.Version == "" ||

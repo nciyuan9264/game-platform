@@ -518,14 +518,16 @@ func (h *Host) newRoomActor(ctx context.Context, rec contracts.RoomRecord) (*Roo
 		return nil, fmt.Errorf("%w: match %s requires %s, host provides %s", ErrEngineVersionMismatch, match.MatchID, match.EngineVersion, def.Version)
 	}
 	state, err := def.Engine.InitRoom(ctx, game.RoomConfig{
-		RoomID:        rec.RoomID,
-		GameType:      rec.GameType,
-		OwnerUserID:   rec.OwnerUserID,
-		OwnerPlayerID: rec.OwnerPlayerID,
-		MaxPlayers:    rec.MaxPlayers,
-		RandomSeed:    match.RandomSeed,
-		RoundNo:       match.RoundNo,
-		Visibility:    rec.Visibility,
+		RoomID:             rec.RoomID,
+		GameType:           rec.GameType,
+		OwnerUserID:        rec.OwnerUserID,
+		OwnerPlayerID:      rec.OwnerPlayerID,
+		MaxPlayers:         rec.MaxPlayers,
+		RandomSeed:         match.RandomSeed,
+		RoundNo:            match.RoundNo,
+		Visibility:         rec.Visibility,
+		DisplayName:        rec.DisplayName,
+		TurnTimeoutSeconds: rec.TurnTimeoutSeconds,
 	})
 	if err != nil {
 		return nil, err
@@ -1108,14 +1110,16 @@ func (r *RoomActor) StartMatch(ctx context.Context, matchID string) error {
 		return fmt.Errorf("append initial match owner fence: %w", err)
 	}
 	state, err := r.definition.Engine.InitRoom(ctx, game.RoomConfig{
-		RoomID:        r.record.RoomID,
-		GameType:      r.record.GameType,
-		OwnerUserID:   r.record.OwnerUserID,
-		OwnerPlayerID: r.record.OwnerPlayerID,
-		MaxPlayers:    r.record.MaxPlayers,
-		RandomSeed:    match.RandomSeed,
-		RoundNo:       match.RoundNo,
-		Visibility:    r.record.Visibility,
+		RoomID:             r.record.RoomID,
+		GameType:           r.record.GameType,
+		OwnerUserID:        r.record.OwnerUserID,
+		OwnerPlayerID:      r.record.OwnerPlayerID,
+		MaxPlayers:         r.record.MaxPlayers,
+		RandomSeed:         match.RandomSeed,
+		RoundNo:            match.RoundNo,
+		Visibility:         r.record.Visibility,
+		DisplayName:        r.record.DisplayName,
+		TurnTimeoutSeconds: r.record.TurnTimeoutSeconds,
 	})
 	if err != nil {
 		return err
@@ -1515,21 +1519,55 @@ func (r *RoomActor) syncRoomMetadataLocked(ctx context.Context) error {
 		r.metadataDirty = true
 		return err
 	}
-	if metadata.Visibility == "" || metadata.Visibility == r.record.Visibility {
+	if metadata.Visibility == "" {
+		metadata.Visibility = r.record.Visibility
+	}
+	if metadata.DisplayName == "" {
+		metadata.DisplayName = r.record.DisplayName
+	}
+	if metadata.Visibility == r.record.Visibility &&
+		metadata.DisplayName == r.record.DisplayName &&
+		metadata.TurnTimeoutSeconds == r.record.TurnTimeoutSeconds {
 		r.metadataDirty = false
 		return nil
 	}
-	if err := r.host.store.SetRoomVisibilityIfOwner(
-		ctx,
-		r.record.RoomID,
-		metadata.Visibility,
-		r.host.nodeID,
-		r.record.Epoch,
-	); err != nil {
+	var persistErr error
+	if writer, ok := r.host.store.(interface {
+		SetRoomMetadataIfOwner(
+			context.Context,
+			string,
+			string,
+			string,
+			string,
+			int,
+			int64,
+		) error
+	}); ok {
+		persistErr = writer.SetRoomMetadataIfOwner(
+			ctx,
+			r.record.RoomID,
+			metadata.Visibility,
+			metadata.DisplayName,
+			r.host.nodeID,
+			metadata.TurnTimeoutSeconds,
+			r.record.Epoch,
+		)
+	} else {
+		persistErr = r.host.store.SetRoomVisibilityIfOwner(
+			ctx,
+			r.record.RoomID,
+			metadata.Visibility,
+			r.host.nodeID,
+			r.record.Epoch,
+		)
+	}
+	if persistErr != nil {
 		r.metadataDirty = true
-		return err
+		return persistErr
 	}
 	r.record.Visibility = metadata.Visibility
+	r.record.DisplayName = metadata.DisplayName
+	r.record.TurnTimeoutSeconds = metadata.TurnTimeoutSeconds
 	r.metadataDirty = false
 	r.outboundDirty = true
 	return nil
@@ -1917,14 +1955,16 @@ func (r *RoomActor) reconcileHistoryLocked(ctx context.Context) error {
 		}
 	}
 	state, err := r.definition.Engine.InitRoom(ctx, game.RoomConfig{
-		RoomID:        r.record.RoomID,
-		GameType:      r.record.GameType,
-		OwnerUserID:   r.record.OwnerUserID,
-		OwnerPlayerID: r.record.OwnerPlayerID,
-		MaxPlayers:    r.record.MaxPlayers,
-		RandomSeed:    randomSeed,
-		RoundNo:       r.match.RoundNo,
-		Visibility:    r.record.Visibility,
+		RoomID:             r.record.RoomID,
+		GameType:           r.record.GameType,
+		OwnerUserID:        r.record.OwnerUserID,
+		OwnerPlayerID:      r.record.OwnerPlayerID,
+		MaxPlayers:         r.record.MaxPlayers,
+		RandomSeed:         randomSeed,
+		RoundNo:            r.match.RoundNo,
+		Visibility:         r.record.Visibility,
+		DisplayName:        r.record.DisplayName,
+		TurnTimeoutSeconds: r.record.TurnTimeoutSeconds,
 	})
 	if err != nil {
 		return err
@@ -2060,6 +2100,7 @@ func (r *RoomActor) ensureHistoryLocked(
 	}
 	gameID, err = r.host.store.StartHistoryGame(ctx, history.Game{
 		RoomID:               r.record.RoomID,
+		RoomDisplayName:      projection.RoomDisplayName,
 		GameType:             r.record.GameType,
 		EngineVersion:        r.definition.Version,
 		ReplaySchemaVersion:  projection.ReplaySchemaVersion,
@@ -2214,6 +2255,7 @@ func (r *RoomActor) historyPlayersLocked(
 			FinalRank:      finalRank,
 			IsWinner:       isWinner,
 			SourcePlayerID: player.PlayerID,
+			GameRole:       player.GameRole,
 		})
 	}
 	return out, nil
@@ -2680,6 +2722,7 @@ func (r *RoomActor) syncRosterLocked(ctx context.Context, presences []contracts.
 			IsAI:        player.IsAI,
 			SeatIndex:   player.SeatIndex,
 			Ready:       player.Ready,
+			GameRole:    player.GameRole,
 			JoinedAt:    now,
 			LastSeen:    now,
 		})

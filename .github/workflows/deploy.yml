@@ -16,6 +16,7 @@ on:
           - splendor
           - yinsh
           - othello
+          - fugitive
       compatibility_ack:
         description: Reason an engine implementation change is version-compatible
         type: string
@@ -58,7 +59,7 @@ jobs:
               center='["control-plane","gateway","migrate-schema","platform-rpc"]'
               games='[]'
               ;;
-            acquire|davinci|splendor|yinsh|othello)
+            acquire|davinci|splendor|yinsh|othello|fugitive)
               center='[]'
               games="$(jq -cn --arg game "${COMPONENT_OVERRIDE}" '[$game]')"
               ;;
@@ -217,6 +218,10 @@ jobs:
             export OTHELLO_ROOMHOST_B_IMAGE="${OTHELLO_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-othello:${IMAGE_TAG}}"
             export OTHELLO_ROOMHOST_A_VERSION="${OTHELLO_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
             export OTHELLO_ROOMHOST_B_VERSION="${OTHELLO_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
+            export FUGITIVE_ROOMHOST_A_IMAGE="${FUGITIVE_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-fugitive:${IMAGE_TAG}}"
+            export FUGITIVE_ROOMHOST_B_IMAGE="${FUGITIVE_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-fugitive:${IMAGE_TAG}}"
+            export FUGITIVE_ROOMHOST_A_VERSION="${FUGITIVE_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
+            export FUGITIVE_ROOMHOST_B_VERSION="${FUGITIVE_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
             printf '%s' "${TCR_PASSWORD}" | docker login "${TCR_LOGIN_SERVER}" \
               --username "${TCR_USERNAME}" --password-stdin
             chmod +x scripts/validate-prod-config.sh
@@ -317,6 +322,10 @@ jobs:
             export OTHELLO_ROOMHOST_B_IMAGE="${OTHELLO_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-othello:${IMAGE_TAG}}"
             export OTHELLO_ROOMHOST_A_VERSION="${OTHELLO_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
             export OTHELLO_ROOMHOST_B_VERSION="${OTHELLO_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
+            export FUGITIVE_ROOMHOST_A_IMAGE="${FUGITIVE_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-fugitive:${IMAGE_TAG}}"
+            export FUGITIVE_ROOMHOST_B_IMAGE="${FUGITIVE_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-fugitive:${IMAGE_TAG}}"
+            export FUGITIVE_ROOMHOST_A_VERSION="${FUGITIVE_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
+            export FUGITIVE_ROOMHOST_B_VERSION="${FUGITIVE_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
             printf '%s' "${TCR_PASSWORD}" | docker login "${TCR_LOGIN_SERVER}" \
               --username "${TCR_USERNAME}" --password-stdin
             chmod +x scripts/deploy-game-slot.sh scripts/validate-prod-config.sh

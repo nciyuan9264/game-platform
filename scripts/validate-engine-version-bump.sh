@@ -24,6 +24,7 @@ declare -A version_files=(
   [splendor]='internal/splendor/plugin.go'
   [yinsh]='internal/yinsh/plugin.go'
   [othello]='internal/othello/plugin.go'
+  [fugitive]='internal/fugitive/plugin.go'
 )
 declare -A changed_games=()
 declare -A engine_changes=()
@@ -123,6 +124,10 @@ while IFS= read -r path; do
       fi
       engine_changes[othello]=1
       ;;
+    internal/fugitive/*)
+      changed_games[fugitive]=1
+      engine_changes[fugitive]=1
+      ;;
   esac
 done < <(git diff --name-only "$base" "$head")
 
@@ -154,7 +159,7 @@ integer_constant_at() {
 
 failures=()
 validated=()
-for game_name in acquire davinci splendor yinsh othello; do
+for game_name in acquire davinci splendor yinsh othello fugitive; do
   [[ -n "${changed_games[$game_name]:-}" ]] || continue
   file="${version_files[$game_name]}"
   old_version="$(constant_at "$base" "$file" EngineVersion)"

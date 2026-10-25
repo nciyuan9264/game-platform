@@ -32,15 +32,63 @@ func (h *Handler) CreateRoom(ctx context.Context, req *platform.CreateRoomReq) (
 	if h.rooms == nil {
 		return nil, platformError("control_unavailable", errors.New("control plane is unavailable"))
 	}
-	room, createErr := h.rooms.CreateRoomWithVisibility(
-		ctx,
-		gameType,
-		user.UserID,
-		user.UserID,
-		req.GetRequestId(),
-		int(req.GetMaxPlayers()),
-		visibility,
-	)
+	displayName := strings.TrimSpace(req.GetDisplayName())
+	if len([]rune(displayName)) > 18 {
+		return nil, platformError(
+			"invalid_request",
+			errors.New("displayName must not exceed 18 characters"),
+		)
+	}
+	turnTimeoutSeconds := int(req.GetTurnTimeoutSeconds())
+	if !req.IsSetTurnTimeoutSeconds() &&
+		gameType == contracts.GameFugitive {
+		turnTimeoutSeconds = 60
+	}
+	if turnTimeoutSeconds != 0 &&
+		turnTimeoutSeconds != 60 &&
+		turnTimeoutSeconds != 90 {
+		return nil, platformError(
+			"invalid_request",
+			errors.New("turnTimeoutSeconds must be 0, 60, or 90"),
+		)
+	}
+	var room contracts.RoomRecord
+	var createErr error
+	if creator, ok := h.rooms.(interface {
+		CreateRoomWithSettings(
+			context.Context,
+			string,
+			string,
+			string,
+			string,
+			int,
+			string,
+			string,
+			int,
+		) (contracts.RoomRecord, error)
+	}); ok {
+		room, createErr = creator.CreateRoomWithSettings(
+			ctx,
+			gameType,
+			user.UserID,
+			user.UserID,
+			req.GetRequestId(),
+			int(req.GetMaxPlayers()),
+			visibility,
+			displayName,
+			turnTimeoutSeconds,
+		)
+	} else {
+		room, createErr = h.rooms.CreateRoomWithVisibility(
+			ctx,
+			gameType,
+			user.UserID,
+			user.UserID,
+			req.GetRequestId(),
+			int(req.GetMaxPlayers()),
+			visibility,
+		)
+	}
 	if createErr != nil {
 		return nil, mapRoomError(createErr)
 	}

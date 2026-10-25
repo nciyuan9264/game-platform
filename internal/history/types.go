@@ -13,6 +13,7 @@ const (
 type Game struct {
 	ID                   int64           `json:"id"`
 	RoomID               string          `json:"roomID"`
+	RoomDisplayName      string          `json:"roomDisplayName,omitempty"`
 	GameType             string          `json:"gameType"`
 	EngineVersion        string          `json:"engineVersion"`
 	ReplaySchemaVersion  int             `json:"replaySchemaVersion"`
@@ -46,6 +47,7 @@ type Player struct {
 	IsWinner       bool      `json:"isWinner"`
 	CreatedAt      time.Time `json:"createdAt"`
 	SourcePlayerID string    `json:"-"`
+	GameRole       string    `json:"gameRole,omitempty"`
 }
 
 type Event struct {
@@ -73,10 +75,12 @@ type FinalizeInput struct {
 }
 
 type Stats struct {
-	TotalGames int     `json:"totalGames"`
-	Wins       int     `json:"wins"`
-	WinRate    float64 `json:"winRate"`
-	AvgScore   float64 `json:"avgScore"`
+	TotalGames  int            `json:"totalGames"`
+	Wins        int            `json:"wins"`
+	WinRate     float64        `json:"winRate"`
+	AvgScore    float64        `json:"avgScore"`
+	GamesByRole map[string]int `json:"gamesByRole,omitempty"`
+	WinsByRole  map[string]int `json:"winsByRole,omitempty"`
 }
 
 type LeaderboardEntry struct {

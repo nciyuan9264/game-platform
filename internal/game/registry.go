@@ -19,14 +19,16 @@ var (
 type State any
 
 type RoomConfig struct {
-	RoomID        string
-	GameType      string
-	OwnerUserID   string
-	OwnerPlayerID string
-	MaxPlayers    int
-	RandomSeed    uint64
-	RoundNo       int
-	Visibility    string
+	RoomID             string
+	GameType           string
+	OwnerUserID        string
+	OwnerPlayerID      string
+	MaxPlayers         int
+	RandomSeed         uint64
+	RoundNo            int
+	Visibility         string
+	DisplayName        string
+	TurnTimeoutSeconds int
 }
 
 type PlayerProfile struct {
@@ -151,7 +153,9 @@ type AutomationStateResetter interface {
 }
 
 type RoomMetadata struct {
-	Visibility string
+	Visibility         string
+	DisplayName        string
+	TurnTimeoutSeconds int
 }
 
 type RoomMetadataProvider interface {
@@ -166,6 +170,7 @@ type RosterPlayer struct {
 	IsAI        bool
 	SeatIndex   int
 	Ready       bool
+	GameRole    string
 }
 
 type RosterProvider interface {
@@ -206,6 +211,7 @@ type HistoryPlayer struct {
 	FinalStocks int
 	FinalRank   *int
 	IsWinner    bool
+	GameRole    string
 }
 
 type HistoryProjection struct {
@@ -221,6 +227,7 @@ type HistoryProjection struct {
 	FinalResult         any
 	WinnerUserID        string
 	WinnerPlayerID      string
+	RoomDisplayName     string
 	Players             []HistoryPlayer
 }
 

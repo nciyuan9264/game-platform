@@ -236,14 +236,24 @@ func (h *Handler) GetStats(ctx context.Context, req *platform.GetStatsReq) (*pla
 	if err != nil {
 		return nil, platformError("history_error", err)
 	}
+	gamesByRole := make(map[string]int32, len(stats.GamesByRole))
+	for role, total := range stats.GamesByRole {
+		gamesByRole[role] = int32(total)
+	}
+	winsByRole := make(map[string]int32, len(stats.WinsByRole))
+	for role, total := range stats.WinsByRole {
+		winsByRole[role] = int32(total)
+	}
 	return &platform.StatsResp{
 		StatusCode: http.StatusOK,
 		Message:    "ok",
 		Data: &platform.HistoryStats{
-			TotalGames: int32(stats.TotalGames),
-			Wins:       int32(stats.Wins),
-			WinRate:    stats.WinRate,
-			AvgScore:   stats.AvgScore,
+			TotalGames:  int32(stats.TotalGames),
+			Wins:        int32(stats.Wins),
+			WinRate:     stats.WinRate,
+			AvgScore:    stats.AvgScore,
+			GamesByRole: gamesByRole,
+			WinsByRole:  winsByRole,
 		},
 	}, nil
 }
@@ -263,16 +273,37 @@ func (h *Handler) GetLeaderboard(ctx context.Context, req *platform.GetLeaderboa
 	if sortBy != "metric" && sortBy != "totalGames" {
 		return nil, platformError("invalid_sort", errors.New("sort must be metric or totalGames"))
 	}
+	gameRole := req.GetGameRole()
+	if gameRole != "" {
+		if gameType != contracts.GameFugitive ||
+			(gameRole != "fugitive" && gameRole != "marshal") {
+			return nil, platformError(
+				"invalid_request",
+				errors.New("gameRole must be fugitive or marshal"),
+			)
+		}
+	}
 	limit, offset, err := pageParams(req.Limit, req.Offset, defaultLeaderboardLimit)
 	if err != nil {
 		return nil, err
 	}
-	entries, err := h.store.HistoryLeaderboardSorted(ctx, gameType, sortBy, limit, offset)
+	entries, err := h.store.HistoryLeaderboardSortedByRole(
+		ctx,
+		gameType,
+		sortBy,
+		gameRole,
+		limit,
+		offset,
+	)
 	if err != nil {
 		return nil, platformError("history_error", err)
 	}
 	h.resolveLeaderboard(ctx, entries)
-	total, err := h.store.CountLeaderboardEntries(ctx, gameType)
+	total, err := h.store.CountLeaderboardEntriesByRole(
+		ctx,
+		gameType,
+		gameRole,
+	)
 	if err != nil {
 		return nil, platformError("history_error", err)
 	}
@@ -291,6 +322,11 @@ func (h *Handler) GetLeaderboard(ctx context.Context, req *platform.GetLeaderboa
 			}
 		} else if gameType == contracts.GameOthello {
 			metric.Othello = &platform.OthelloLeaderboardMetric{
+				Wins:    int32(valueOrZero(entry.Wins)),
+				WinRate: floatValueOrZero(entry.WinRate),
+			}
+		} else if gameType == contracts.GameFugitive {
+			metric.Fugitive = &platform.FugitiveLeaderboardMetric{
 				Wins:    int32(valueOrZero(entry.Wins)),
 				WinRate: floatValueOrZero(entry.WinRate),
 			}
@@ -321,7 +357,8 @@ func (h *Handler) replayGameType(ctx context.Context, value string) (string, err
 	if err != nil {
 		return "", err
 	}
-	if gameType == contracts.GameDaVinci {
+	if gameType == contracts.GameDaVinci ||
+		gameType == contracts.GameFugitive {
 		return "", platformError("replay_not_supported", errors.New("davinci replay is not supported"))
 	}
 	if gameType != contracts.GameAcquire &&

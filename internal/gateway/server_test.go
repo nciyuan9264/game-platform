@@ -259,6 +259,30 @@ func TestClientCommandPayload(t *testing.T) {
 		}
 	})
 
+	t.Run("fugitive move payload", func(t *testing.T) {
+		got, err := clientCommandPayload(
+			contracts.GameFugitive,
+			"game_play_hideout",
+			map[string]any{
+				"fugitive": map[string]any{
+					"playHideout": map[string]any{
+						"hideout": float64(20),
+						"sprints": []any{float64(12)},
+					},
+				},
+			},
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		payload, ok := got.(map[string]any)
+		if !ok ||
+			payload["hideout"] != float64(20) ||
+			len(payload["sprints"].([]any)) != 1 {
+			t.Fatalf("clientCommandPayload() = %#v", got)
+		}
+	})
+
 	t.Run("wrong union group", func(t *testing.T) {
 		if _, err := clientCommandPayload(contracts.GameAcquire, "game_place_tile", map[string]any{
 			"davinci": map[string]any{},

@@ -21,6 +21,7 @@ var supportedGames = []string{
 	"splendor",
 	"yinsh",
 	"othello",
+	"fugitive",
 }
 
 type config struct {

@@ -459,6 +459,44 @@ func selectFirstAction(
 				map[string]any{"index": 99},
 			),
 		}, true
+	case "fugitive":
+		hand, _ := view["hand"].([]any)
+		hideout := -1
+		for _, raw := range hand {
+			value, _ := raw.(map[string]any)
+			number := numericValue(value["number"])
+			if number > 0 && number <= 3 &&
+				(hideout < 0 || number < hideout) {
+				hideout = number
+			}
+		}
+		if hideout < 1 {
+			return legalAction{}, false
+		}
+		return legalAction{
+			Command: gameCommand(
+				gameType,
+				matchID,
+				commandID,
+				"game_play_hideout",
+				"playHideout",
+				map[string]any{
+					"hideout": hideout,
+					"sprints": []any{},
+				},
+			),
+			ConflictCommand: gameCommand(
+				gameType,
+				matchID,
+				commandID,
+				"game_play_hideout",
+				"playHideout",
+				map[string]any{
+					"hideout": 41,
+					"sprints": []any{},
+				},
+			),
+		}, true
 	default:
 		return legalAction{}, false
 	}

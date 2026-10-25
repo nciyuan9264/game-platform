@@ -430,8 +430,38 @@ func (s *Store) HistoryLeaderboardSorted(ctx context.Context, gameType, sortBy s
 	return s.Postgres.HistoryLeaderboardSorted(ctx, gameType, sortBy, limit, offset)
 }
 
+func (s *Store) HistoryLeaderboardSortedByRole(
+	ctx context.Context,
+	gameType,
+	sortBy,
+	gameRole string,
+	limit,
+	offset int,
+) ([]history.LeaderboardEntry, error) {
+	return s.Postgres.HistoryLeaderboardSortedByRole(
+		ctx,
+		gameType,
+		sortBy,
+		gameRole,
+		limit,
+		offset,
+	)
+}
+
 func (s *Store) CountLeaderboardEntries(ctx context.Context, gameType string) (int, error) {
 	return s.Postgres.CountLeaderboardEntries(ctx, gameType)
+}
+
+func (s *Store) CountLeaderboardEntriesByRole(
+	ctx context.Context,
+	gameType,
+	gameRole string,
+) (int, error) {
+	return s.Postgres.CountLeaderboardEntriesByRole(
+		ctx,
+		gameType,
+		gameRole,
+	)
 }
 
 func (s *Store) ListReplayBackfillGameIDs(

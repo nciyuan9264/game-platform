@@ -70,6 +70,30 @@ func (c *Client) CreateRoomWithVisibility(
 	maxPlayers int,
 	visibility string,
 ) (contracts.RoomRecord, error) {
+	return c.CreateRoomWithSettings(
+		ctx,
+		gameType,
+		ownerUserID,
+		ownerPlayerID,
+		requestID,
+		maxPlayers,
+		visibility,
+		"",
+		0,
+	)
+}
+
+func (c *Client) CreateRoomWithSettings(
+	ctx context.Context,
+	gameType,
+	ownerUserID,
+	ownerPlayerID,
+	requestID string,
+	maxPlayers int,
+	visibility,
+	displayName string,
+	turnTimeoutSeconds int,
+) (contracts.RoomRecord, error) {
 	req := &platformcontrol.CreateRoomReq{
 		GameType:      gameType,
 		OwnerUserId:   ownerUserID,
@@ -85,6 +109,11 @@ func (c *Client) CreateRoomWithVisibility(
 	if visibility != "" {
 		req.Visibility = &visibility
 	}
+	if displayName != "" {
+		req.DisplayName = &displayName
+	}
+	value := int32(turnTimeoutSeconds)
+	req.TurnTimeoutSeconds = &value
 	resp, err := c.rpc.CreateRoom(ctx, req)
 	if err != nil {
 		return contracts.RoomRecord{}, err
@@ -142,21 +171,23 @@ func fromRPCRoom(room *platformcontrol.RoomRecord) contracts.RoomRecord {
 		return contracts.RoomRecord{}
 	}
 	out := contracts.RoomRecord{
-		RoomID:         room.GetRoomId(),
-		GameType:       room.GetGameType(),
-		OwnerUserID:    room.GetOwnerUserId(),
-		OwnerPlayerID:  room.GetOwnerPlayerId(),
-		OwnerNode:      room.GetOwnerNode(),
-		Epoch:          room.GetEpoch(),
-		Status:         room.GetStatus(),
-		MaxPlayers:     int(room.GetMaxPlayers()),
-		PlayerCount:    int(room.GetPlayerCount()),
-		EngineVersion:  room.GetEngineVersion(),
-		CurrentMatchID: room.GetCurrentMatchId(),
-		NextRoundNo:    int(room.GetNextRoundNo()),
-		Visibility:     room.GetVisibility(),
-		CreatedAt:      time.Unix(room.GetCreatedAtUnix(), 0).UTC(),
-		UpdatedAt:      time.Unix(room.GetUpdatedAtUnix(), 0).UTC(),
+		RoomID:             room.GetRoomId(),
+		GameType:           room.GetGameType(),
+		OwnerUserID:        room.GetOwnerUserId(),
+		OwnerPlayerID:      room.GetOwnerPlayerId(),
+		OwnerNode:          room.GetOwnerNode(),
+		Epoch:              room.GetEpoch(),
+		Status:             room.GetStatus(),
+		MaxPlayers:         int(room.GetMaxPlayers()),
+		PlayerCount:        int(room.GetPlayerCount()),
+		EngineVersion:      room.GetEngineVersion(),
+		CurrentMatchID:     room.GetCurrentMatchId(),
+		NextRoundNo:        int(room.GetNextRoundNo()),
+		Visibility:         room.GetVisibility(),
+		DisplayName:        room.GetDisplayName(),
+		TurnTimeoutSeconds: int(room.GetTurnTimeoutSeconds()),
+		CreatedAt:          time.Unix(room.GetCreatedAtUnix(), 0).UTC(),
+		UpdatedAt:          time.Unix(room.GetUpdatedAtUnix(), 0).UTC(),
 	}
 	if room.IsSetLeaseExpiresAtUnix() {
 		out.LeaseExpiresAt = time.Unix(room.GetLeaseExpiresAtUnix(), 0).UTC()

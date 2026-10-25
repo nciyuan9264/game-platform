@@ -174,13 +174,15 @@ func (s *Server) requireAdmin(next http.Handler) http.Handler {
 }
 
 type createRoomRequest struct {
-	GameType      string `json:"gameType"`
-	OwnerUserID   string `json:"ownerUserID"`
-	OwnerPlayerID string `json:"ownerPlayerID"`
-	MaxPlayers    int    `json:"maxPlayers"`
-	Visibility    string `json:"visibility"`
-	PlayerCount   int    `json:"playerCount,omitempty"`
-	RequestID     string `json:"requestID"`
+	GameType           string `json:"gameType"`
+	OwnerUserID        string `json:"ownerUserID"`
+	OwnerPlayerID      string `json:"ownerPlayerID"`
+	MaxPlayers         int    `json:"maxPlayers"`
+	Visibility         string `json:"visibility"`
+	DisplayName        string `json:"displayName,omitempty"`
+	TurnTimeoutSeconds int    `json:"turnTimeoutSeconds,omitempty"`
+	PlayerCount        int    `json:"playerCount,omitempty"`
+	RequestID          string `json:"requestID"`
 }
 
 func (s *Server) createRoomRecord(ctx context.Context, req createRoomRequest) (contracts.RoomRecord, error) {
@@ -207,23 +209,27 @@ func (s *Server) createRoomRecord(ctx context.Context, req createRoomRequest) (c
 		return contracts.RoomRecord{}, err
 	}
 	rec := contracts.RoomRecord{
-		RoomID:        roomID,
-		GameType:      req.GameType,
-		Visibility:    req.Visibility,
-		OwnerUserID:   req.OwnerUserID,
-		OwnerPlayerID: req.OwnerPlayerID,
-		Epoch:         1,
-		Status:        contracts.RoomStatusCreating,
-		MaxPlayers:    req.MaxPlayers,
-		PlayerCount:   req.PlayerCount,
-		EngineVersion: def.ActiveEngineVersion,
-		NextRoundNo:   1,
-		CreatedAt:     now,
-		UpdatedAt:     now,
+		RoomID:             roomID,
+		GameType:           req.GameType,
+		Visibility:         req.Visibility,
+		DisplayName:        req.DisplayName,
+		TurnTimeoutSeconds: req.TurnTimeoutSeconds,
+		OwnerUserID:        req.OwnerUserID,
+		OwnerPlayerID:      req.OwnerPlayerID,
+		Epoch:              1,
+		Status:             contracts.RoomStatusCreating,
+		MaxPlayers:         req.MaxPlayers,
+		PlayerCount:        req.PlayerCount,
+		EngineVersion:      def.ActiveEngineVersion,
+		NextRoundNo:        1,
+		CreatedAt:          now,
+		UpdatedAt:          now,
 	}
 	requestHash := fmt.Sprintf("%x", sha256.Sum256([]byte(fmt.Sprintf(
-		"%s\x00%s\x00%s\x00%d\x00%s",
-		rec.GameType, rec.OwnerUserID, rec.OwnerPlayerID, rec.MaxPlayers, rec.Visibility,
+		"%s\x00%s\x00%s\x00%d\x00%s\x00%s\x00%d",
+		rec.GameType, rec.OwnerUserID, rec.OwnerPlayerID,
+		rec.MaxPlayers, rec.Visibility, rec.DisplayName,
+		rec.TurnTimeoutSeconds,
 	))))
 	rec, existing, err := s.store.ReserveRoomCreation(ctx, rec, req.RequestID, requestHash, contracts.MaxOwnedRooms)
 	if err != nil {

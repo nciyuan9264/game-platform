@@ -44,6 +44,9 @@ func (h *Handler) roomInfo(ctx context.Context, room contracts.RoomRecord) (*pla
 					Ai:          player.IsAI,
 					Ready:       player.Ready,
 				}
+				if player.GameRole != "" {
+					mapped.GameRole = stringPointer(player.GameRole)
+				}
 				if !player.IsAI && player.UserID != "" {
 					mapped.UserID = stringPointer(player.UserID)
 				}
@@ -55,7 +58,7 @@ func (h *Handler) roomInfo(ctx context.Context, room contracts.RoomRecord) (*pla
 		}
 	}
 	status := publicRoomStatus(room.Status, matchStatus)
-	return &platform.RoomInfo{
+	result := &platform.RoomInfo{
 		RoomID:             room.RoomID,
 		GameType:           platform.GameType(room.GameType),
 		Status:             status,
@@ -71,7 +74,13 @@ func (h *Handler) roomInfo(ctx context.Context, room contracts.RoomRecord) (*pla
 		UpdatedAt:          platform.ISODateTime(formatTime(room.UpdatedAt)),
 		Players:            players,
 		Metrics:            roomMetrics(room),
-	}, nil
+	}
+	if room.DisplayName != "" {
+		result.DisplayName = stringPointer(room.DisplayName)
+	}
+	timeout := int32(room.TurnTimeoutSeconds)
+	result.TurnTimeoutSeconds = &timeout
+	return result, nil
 }
 
 func roomMetrics(room contracts.RoomRecord) *platform.RoomMetrics {
@@ -105,6 +114,13 @@ func roomMetrics(room contracts.RoomRecord) *platform.RoomMetrics {
 		}
 		return &platform.RoomMetrics{Othello: &platform.OthelloRoomMetrics{
 			OccupiedCount: occupied, ProgressCurrent: current, ProgressTotal: total,
+		}}
+	case contracts.GameFugitive:
+		return &platform.RoomMetrics{Fugitive: &platform.FugitiveRoomMetrics{
+			HighestRevealed:    current,
+			HiddenHideoutCount: 0,
+			ProgressCurrent:    current,
+			ProgressTotal:      total,
 		}}
 	case contracts.GameSplendor:
 		return &platform.RoomMetrics{Splendor: &platform.SplendorRoomMetrics{
@@ -163,6 +179,9 @@ func mapHistoryGame(value history.Game) *platform.HistoryGame {
 	if value.EndReason != "" {
 		mapped.EndReason = stringPointer(value.EndReason)
 	}
+	if value.RoomDisplayName != "" {
+		mapped.RoomDisplayName = stringPointer(value.RoomDisplayName)
+	}
 	if value.Players != nil {
 		mapped.Players = mapHistoryPlayers(value.Players)
 	}
@@ -185,6 +204,9 @@ func mapHistoryPlayers(values []history.Player) []*platform.HistoryGamePlayer {
 		}
 		if value.DisplayName != "" {
 			mapped.DisplayName = stringPointer(value.DisplayName)
+		}
+		if value.GameRole != "" {
+			mapped.GameRole = stringPointer(value.GameRole)
 		}
 		mapped.FinalScore = int32Pointer(value.FinalScore)
 		mapped.FinalMoney = int32Pointer(value.FinalMoney)

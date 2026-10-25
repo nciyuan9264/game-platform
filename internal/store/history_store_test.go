@@ -19,21 +19,22 @@ func TestScanHistoryGameHandlesNullableLegacyStrings(t *testing.T) {
 	scanner := historyScannerFunc(func(dest ...any) error {
 		*dest[0].(*int64) = 1
 		*dest[1].(*string) = "room-1"
-		*dest[2].(*string) = "acquire"
-		*dest[3].(*string) = "acquire-v2"
-		*dest[4].(*int) = 1
-		*dest[5].(*time.Time) = now
-		*dest[6].(*sql.NullTime) = sql.NullTime{Time: now, Valid: true}
-		*dest[7].(*int) = 60
-		*dest[8].(*sql.NullInt64) = sql.NullInt64{}
-		*dest[9].(*sql.NullString) = sql.NullString{}
+		*dest[2].(*string) = "Board room"
+		*dest[3].(*string) = "acquire"
+		*dest[4].(*string) = "acquire-v2"
+		*dest[5].(*int) = 1
+		*dest[6].(*time.Time) = now
+		*dest[7].(*sql.NullTime) = sql.NullTime{Time: now, Valid: true}
+		*dest[8].(*int) = 60
+		*dest[9].(*sql.NullInt64) = sql.NullInt64{}
 		*dest[10].(*sql.NullString) = sql.NullString{}
-		*dest[11].(*int) = 6
-		*dest[12].(*[]byte) = nil
+		*dest[11].(*sql.NullString) = sql.NullString{}
+		*dest[12].(*int) = 6
 		*dest[13].(*[]byte) = nil
 		*dest[14].(*[]byte) = nil
-		*dest[15].(*time.Time) = now
+		*dest[15].(*[]byte) = nil
 		*dest[16].(*time.Time) = now
+		*dest[17].(*time.Time) = now
 		return nil
 	})
 
@@ -54,14 +55,15 @@ func TestScanHistoryPlayerMapsNullableValues(t *testing.T) {
 		*dest[2].(*sql.NullInt64) = sql.NullInt64{Int64: 11, Valid: true}
 		*dest[3].(*string) = "player-11"
 		*dest[4].(*string) = "Alice-Cooper-11"
-		*dest[5].(*int) = 1
-		*dest[6].(*bool) = false
-		*dest[7].(*sql.NullInt64) = sql.NullInt64{Int64: 42, Valid: true}
-		*dest[8].(*sql.NullInt64) = sql.NullInt64{}
-		*dest[9].(*int) = 4
-		*dest[10].(*sql.NullInt64) = sql.NullInt64{Int64: 2, Valid: true}
-		*dest[11].(*bool) = true
-		*dest[12].(*time.Time) = now
+		*dest[5].(*string) = "fugitive"
+		*dest[6].(*int) = 1
+		*dest[7].(*bool) = false
+		*dest[8].(*sql.NullInt64) = sql.NullInt64{Int64: 42, Valid: true}
+		*dest[9].(*sql.NullInt64) = sql.NullInt64{}
+		*dest[10].(*int) = 4
+		*dest[11].(*sql.NullInt64) = sql.NullInt64{Int64: 2, Valid: true}
+		*dest[12].(*bool) = true
+		*dest[13].(*time.Time) = now
 		return nil
 	})
 
@@ -84,6 +86,7 @@ func TestWinRateLeaderboardGames(t *testing.T) {
 	if !usesWinRateLeaderboard(contracts.GameDaVinci) ||
 		!usesWinRateLeaderboard(contracts.GameYinsh) ||
 		!usesWinRateLeaderboard(contracts.GameOthello) ||
+		!usesWinRateLeaderboard(contracts.GameFugitive) ||
 		usesWinRateLeaderboard(contracts.GameAcquire) ||
 		usesWinRateLeaderboard(contracts.GameSplendor) {
 		t.Fatal("win-rate leaderboard routing does not match game semantics")

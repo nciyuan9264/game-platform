@@ -39,12 +39,14 @@ func (h *RPCHandler) CreateRoom(ctx context.Context, req *platformcontrol.Create
 	ownerIdentity := identity
 	ownerIdentity.UserID = ownerUserID
 	room, err := h.server.createRoomRecord(ctx, createRoomRequest{
-		GameType:      req.GetGameType(),
-		OwnerUserID:   ownerUserID,
-		OwnerPlayerID: ownerIdentity.UserID,
-		MaxPlayers:    int(req.GetMaxPlayers()),
-		Visibility:    req.GetVisibility(),
-		RequestID:     req.GetRequestId(),
+		GameType:           req.GetGameType(),
+		OwnerUserID:        ownerUserID,
+		OwnerPlayerID:      ownerIdentity.UserID,
+		MaxPlayers:         int(req.GetMaxPlayers()),
+		Visibility:         req.GetVisibility(),
+		DisplayName:        req.GetDisplayName(),
+		TurnTimeoutSeconds: int(req.GetTurnTimeoutSeconds()),
+		RequestID:          req.GetRequestId(),
 	})
 	if err != nil {
 		code := "create_room_failed"
@@ -264,6 +266,11 @@ func toRPCRoom(room contracts.RoomRecord) *platformcontrol.RoomRecord {
 		CreatedAtUnix: room.CreatedAt.Unix(),
 		UpdatedAtUnix: room.UpdatedAt.Unix(),
 	}
+	if room.DisplayName != "" {
+		out.DisplayName = &room.DisplayName
+	}
+	timeout := int32(room.TurnTimeoutSeconds)
+	out.TurnTimeoutSeconds = &timeout
 	if !room.LeaseExpiresAt.IsZero() {
 		value := room.LeaseExpiresAt.Unix()
 		out.LeaseExpiresAtUnix = &value
