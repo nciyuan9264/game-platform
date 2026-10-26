@@ -59,6 +59,7 @@ jobs:
         env:
           EVENT_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
+          ./scripts/deploy-game-slot-test.sh
           ./scripts/changed-release-components-test.sh
           ./scripts/validate-engine-version-bump-test.sh
           ./scripts/validate-center-imports.sh
