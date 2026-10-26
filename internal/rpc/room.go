@@ -117,7 +117,7 @@ func (h *Handler) CreateRoom(ctx context.Context, req *platform.CreateRoomReq) (
 	if err != nil {
 		return nil, err
 	}
-	h.resolveRoomDisplayNames(ctx, []*platform.RoomInfo{info})
+	h.resolveRoomProfiles(ctx, []*platform.RoomInfo{info})
 	return &platform.RoomResp{StatusCode: http.StatusOK, Message: "ok", Data: info}, nil
 }
 
@@ -151,7 +151,7 @@ func (h *Handler) ListRooms(ctx context.Context, req *platform.ListRoomsReq) (*p
 		}
 		result = append(result, info)
 	}
-	h.resolveRoomDisplayNames(ctx, result)
+	h.resolveRoomProfiles(ctx, result)
 	return &platform.RoomListResp{
 		StatusCode: http.StatusOK,
 		Message:    "ok",
@@ -184,7 +184,7 @@ func (h *Handler) GetRoom(ctx context.Context, req *platform.GetRoomReq) (*platf
 	if err != nil {
 		return nil, err
 	}
-	h.resolveRoomDisplayNames(ctx, []*platform.RoomInfo{info})
+	h.resolveRoomProfiles(ctx, []*platform.RoomInfo{info})
 	return &platform.RoomResp{StatusCode: http.StatusOK, Message: "ok", Data: info}, nil
 }
 
@@ -215,7 +215,7 @@ func (h *Handler) CloseRoom(ctx context.Context, req *platform.CloseRoomReq) (*p
 	if err != nil {
 		return nil, err
 	}
-	h.resolveRoomDisplayNames(ctx, []*platform.RoomInfo{info})
+	h.resolveRoomProfiles(ctx, []*platform.RoomInfo{info})
 	return &platform.RoomResp{StatusCode: http.StatusOK, Message: "ok", Data: info}, nil
 }
 
@@ -252,7 +252,7 @@ func (h *Handler) StartNextMatch(ctx context.Context, req *platform.StartNextMat
 	if err != nil {
 		return nil, err
 	}
-	h.resolveRoomDisplayNames(ctx, []*platform.RoomInfo{info})
+	h.resolveRoomProfiles(ctx, []*platform.RoomInfo{info})
 	return &platform.StartNextMatchResp{
 		StatusCode: http.StatusOK,
 		Message:    "ok",

@@ -5,10 +5,12 @@ import (
 	"errors"
 	"strconv"
 	"testing"
+
+	"github.com/nciyuan9264/game-platform/internal/authclient"
 )
 
 type fakePublicProfiles struct {
-	profiles  map[string]string
+	profiles  map[string]authclient.PublicProfile
 	batches   [][]string
 	failBatch int
 }
@@ -16,12 +18,12 @@ type fakePublicProfiles struct {
 func (f *fakePublicProfiles) BatchGetPublicProfiles(
 	_ context.Context,
 	userIDs []string,
-) (map[string]string, error) {
+) (map[string]authclient.PublicProfile, error) {
 	f.batches = append(f.batches, append([]string(nil), userIDs...))
 	if f.failBatch > 0 && len(f.batches) == f.failBatch {
 		return nil, errors.New("auth unavailable")
 	}
-	result := make(map[string]string)
+	result := make(map[string]authclient.PublicProfile)
 	for _, userID := range userIDs {
 		if displayName, ok := f.profiles[userID]; ok {
 			result[userID] = displayName
@@ -31,27 +33,32 @@ func (f *fakePublicProfiles) BatchGetPublicProfiles(
 }
 
 func TestResolverUsesCurrentProfilesAndExplicitFallbacks(t *testing.T) {
-	directory := &fakePublicProfiles{profiles: map[string]string{
-		"7": "Alice-Cooper-7",
+	directory := &fakePublicProfiles{profiles: map[string]authclient.PublicProfile{
+		"7": {DisplayName: "Alice-Cooper-7", Avatar: "https://cdn.example.com/alice.png"},
 	}}
 	resolver := NewResolver(directory)
 
-	displayNames := resolver.Resolve(context.Background(), []Player{
-		{UserID: "7", PlayerID: "7", DisplayName: "Old Alice"},
+	profiles := resolver.ResolveProfiles(context.Background(), []Player{
+		{UserID: "7", PlayerID: "7", DisplayName: "Old Alice", Avatar: "old-avatar"},
 		{UserID: "9", PlayerID: "9", DisplayName: "Old Bob"},
 		{UserID: "11", PlayerID: "11"},
-		{PlayerID: "ai_001", DisplayName: "HAL", IsAI: true},
+		{PlayerID: "ai_001", DisplayName: "HAL", Avatar: "hal-avatar", IsAI: true},
 		{PlayerID: "ai_002", IsAI: true},
 	})
 
-	if displayNames["7"] != "Alice-Cooper-7" {
-		t.Fatalf("current display name = %q", displayNames["7"])
+	if profiles["7"].DisplayName != "Alice-Cooper-7" ||
+		profiles["7"].Avatar != "https://cdn.example.com/alice.png" {
+		t.Fatalf("current profile = %+v", profiles["7"])
 	}
-	if displayNames["9"] != DeletedUserDisplayName || displayNames["11"] != DeletedUserDisplayName {
-		t.Fatalf("deleted user display names = %q, %q", displayNames["9"], displayNames["11"])
+	if profiles["9"].DisplayName != DeletedUserDisplayName ||
+		profiles["9"].Avatar != "" ||
+		profiles["11"].DisplayName != DeletedUserDisplayName {
+		t.Fatalf("deleted user profiles = %+v, %+v", profiles["9"], profiles["11"])
 	}
-	if displayNames["ai_001"] != "HAL" || displayNames["ai_002"] != "AI" {
-		t.Fatalf("AI display names = %q, %q", displayNames["ai_001"], displayNames["ai_002"])
+	if profiles["ai_001"].DisplayName != "HAL" ||
+		profiles["ai_001"].Avatar != "hal-avatar" ||
+		profiles["ai_002"].DisplayName != "AI" {
+		t.Fatalf("AI profiles = %+v, %+v", profiles["ai_001"], profiles["ai_002"])
 	}
 	if len(directory.batches) != 1 || len(directory.batches[0]) != 3 {
 		t.Fatalf("Auth batches = %v", directory.batches)
@@ -63,7 +70,7 @@ func TestResolverFallsBackToPersistedNamesWhenAuthFails(t *testing.T) {
 	resolver := NewResolver(directory)
 
 	displayNames := resolver.Resolve(context.Background(), []Player{
-		{UserID: "7", PlayerID: "7", DisplayName: "Persisted Alice"},
+		{UserID: "7", PlayerID: "7", DisplayName: "Persisted Alice", Avatar: "persisted-avatar"},
 		{UserID: "9", PlayerID: "9"},
 	})
 
@@ -73,11 +80,11 @@ func TestResolverFallsBackToPersistedNamesWhenAuthFails(t *testing.T) {
 }
 
 func TestResolverDeduplicatesAndChunksAuthRequests(t *testing.T) {
-	directory := &fakePublicProfiles{profiles: map[string]string{}}
+	directory := &fakePublicProfiles{profiles: map[string]authclient.PublicProfile{}}
 	players := make([]Player, 0, maxBatchSize+2)
 	for i := 1; i <= maxBatchSize+1; i++ {
 		userID := strconv.Itoa(i)
-		directory.profiles[userID] = "Player " + userID
+		directory.profiles[userID] = authclient.PublicProfile{DisplayName: "Player " + userID}
 		players = append(players, Player{UserID: userID, PlayerID: userID})
 	}
 	players = append(players, Player{UserID: "1", PlayerID: "guest-key"})

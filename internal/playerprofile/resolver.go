@@ -17,7 +17,13 @@ type Player struct {
 	UserID      string
 	PlayerID    string
 	DisplayName string
+	Avatar      string
 	IsAI        bool
+}
+
+type ResolvedProfile struct {
+	DisplayName string
+	Avatar      string
 }
 
 type Resolver struct {
@@ -29,7 +35,16 @@ func NewResolver(profiles authclient.PublicProfileDirectory) *Resolver {
 }
 
 func (r *Resolver) Resolve(ctx context.Context, players []Player) map[string]string {
-	displayNames := make(map[string]string, len(players))
+	profiles := r.ResolveProfiles(ctx, players)
+	displayNames := make(map[string]string, len(profiles))
+	for playerID, profile := range profiles {
+		displayNames[playerID] = profile.DisplayName
+	}
+	return displayNames
+}
+
+func (r *Resolver) ResolveProfiles(ctx context.Context, players []Player) map[string]ResolvedProfile {
+	resolved := make(map[string]ResolvedProfile, len(players))
 	playerIDsByUserID := make(map[string][]string)
 	userIDs := make([]string, 0, len(players))
 	seenUserIDs := make(map[string]struct{}, len(players))
@@ -38,7 +53,10 @@ func (r *Resolver) Resolve(ctx context.Context, players []Player) map[string]str
 		if player.PlayerID == "" {
 			continue
 		}
-		displayNames[player.PlayerID] = fallbackDisplayName(player)
+		resolved[player.PlayerID] = ResolvedProfile{
+			DisplayName: fallbackDisplayName(player),
+			Avatar:      strings.TrimSpace(player.Avatar),
+		}
 		if player.IsAI {
 			continue
 		}
@@ -55,7 +73,7 @@ func (r *Resolver) Resolve(ctx context.Context, players []Player) map[string]str
 	}
 
 	if r == nil || r.profiles == nil {
-		return displayNames
+		return resolved
 	}
 	for start := 0; start < len(userIDs); start += maxBatchSize {
 		end := min(start+maxBatchSize, len(userIDs))
@@ -65,16 +83,20 @@ func (r *Resolver) Resolve(ctx context.Context, players []Player) map[string]str
 			continue
 		}
 		for _, userID := range batch {
-			displayName := strings.TrimSpace(profiles[userID])
+			profile := profiles[userID]
+			displayName := strings.TrimSpace(profile.DisplayName)
 			if displayName == "" {
 				displayName = DeletedUserDisplayName
 			}
 			for _, playerID := range playerIDsByUserID[userID] {
-				displayNames[playerID] = displayName
+				resolved[playerID] = ResolvedProfile{
+					DisplayName: displayName,
+					Avatar:      strings.TrimSpace(profile.Avatar),
+				}
 			}
 		}
 	}
-	return displayNames
+	return resolved
 }
 
 func fallbackDisplayName(player Player) string {

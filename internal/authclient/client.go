@@ -77,6 +77,11 @@ type UploadAvatarRequest struct {
 	ContentType string
 }
 
+type PublicProfile struct {
+	DisplayName string
+	Avatar      string
+}
+
 type TokenVerifier interface {
 	VerifyToken(ctx context.Context, req VerifyTokenRequest) (VerifyTokenResponse, error)
 }
@@ -101,7 +106,7 @@ type UserDirectory interface {
 }
 
 type PublicProfileDirectory interface {
-	BatchGetPublicProfiles(ctx context.Context, userIDs []string) (map[string]string, error)
+	BatchGetPublicProfiles(ctx context.Context, userIDs []string) (map[string]PublicProfile, error)
 }
 
 type JWKSService interface {

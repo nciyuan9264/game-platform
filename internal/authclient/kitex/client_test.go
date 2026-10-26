@@ -232,13 +232,14 @@ func TestListUsersMapsProfilesAndCursor(t *testing.T) {
 	}
 }
 
-func TestBatchGetPublicProfilesMapsOnlyDisplayNames(t *testing.T) {
+func TestBatchGetPublicProfilesMapsPublicIdentity(t *testing.T) {
+	avatar := "https://cdn.example.com/alice.png"
 	rpc := &fakeRPC{public: &auth.BatchGetPublicProfilesResp{
 		StatusCode: 200,
 		Message:    "ok",
 		Data: &auth.BatchGetPublicProfilesData{
 			Profiles: []*auth.PublicUserProfile{
-				{UserId: "7", DisplayName: "Alice-Cooper-7"},
+				{UserId: "7", DisplayName: "Alice-Cooper-7", Avatar: &avatar},
 				nil,
 				{UserId: "", DisplayName: "invalid"},
 				{UserId: "9", DisplayName: "Bob"},
@@ -254,7 +255,11 @@ func TestBatchGetPublicProfilesMapsOnlyDisplayNames(t *testing.T) {
 	if len(rpc.publicReq.GetUserIds()) != 3 || rpc.publicReq.GetUserIds()[2] != "404" {
 		t.Fatalf("request = %+v", rpc.publicReq)
 	}
-	if len(profiles) != 2 || profiles["7"] != "Alice-Cooper-7" || profiles["9"] != "Bob" {
+	if len(profiles) != 2 ||
+		profiles["7"].DisplayName != "Alice-Cooper-7" ||
+		profiles["7"].Avatar != avatar ||
+		profiles["9"].DisplayName != "Bob" ||
+		profiles["9"].Avatar != "" {
 		t.Fatalf("profiles = %v", profiles)
 	}
 }

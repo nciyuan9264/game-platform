@@ -9,7 +9,7 @@ import (
 	"github.com/nciyuan9264/game-platform/internal/playerprofile"
 )
 
-func (h *Handler) resolveRoomDisplayNames(ctx context.Context, rooms []*platform.RoomInfo) {
+func (h *Handler) resolveRoomProfiles(ctx context.Context, rooms []*platform.RoomInfo) {
 	players := make([]playerprofile.Player, 0)
 	for _, room := range rooms {
 		if room == nil {
@@ -19,15 +19,22 @@ func (h *Handler) resolveRoomDisplayNames(ctx context.Context, rooms []*platform
 			if player == nil {
 				continue
 			}
+			if player.GetPlayerID() == room.GetOwnerPlayerID() &&
+				player.GetUserID() == "" &&
+				room.GetOwnerUserID() != "" &&
+				!player.GetAi() {
+				player.UserID = stringPointer(room.GetOwnerUserID())
+			}
 			players = append(players, playerprofile.Player{
 				UserID:      player.GetUserID(),
 				PlayerID:    player.GetPlayerID(),
 				DisplayName: player.GetDisplayName(),
+				Avatar:      player.GetAvatar(),
 				IsAI:        player.GetAi(),
 			})
 		}
 	}
-	displayNames := h.profiles.Resolve(ctx, players)
+	profiles := h.profiles.ResolveProfiles(ctx, players)
 	for _, room := range rooms {
 		if room == nil {
 			continue
@@ -36,7 +43,13 @@ func (h *Handler) resolveRoomDisplayNames(ctx context.Context, rooms []*platform
 			if player == nil {
 				continue
 			}
-			player.DisplayName = displayNames[player.GetPlayerID()]
+			profile := profiles[player.GetPlayerID()]
+			player.DisplayName = profile.DisplayName
+			if profile.Avatar == "" {
+				player.Avatar = nil
+			} else {
+				player.Avatar = stringPointer(profile.Avatar)
+			}
 		}
 	}
 }

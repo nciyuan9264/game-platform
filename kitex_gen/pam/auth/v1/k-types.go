@@ -5047,6 +5047,20 @@ func (p *PublicUserProfile) FastRead(buf []byte) (int, error) {
 					goto SkipFieldError
 				}
 			}
+		case 3:
+			if fieldTypeId == thrift.STRING {
+				l, err = p.FastReadField3(buf[offset:])
+				offset += l
+				if err != nil {
+					goto ReadFieldError
+				}
+			} else {
+				l, err = thrift.Binary.Skip(buf[offset:], fieldTypeId)
+				offset += l
+				if err != nil {
+					goto SkipFieldError
+				}
+			}
 		default:
 			l, err = thrift.Binary.Skip(buf[offset:], fieldTypeId)
 			offset += l
@@ -5104,6 +5118,20 @@ func (p *PublicUserProfile) FastReadField2(buf []byte) (int, error) {
 	return offset, nil
 }
 
+func (p *PublicUserProfile) FastReadField3(buf []byte) (int, error) {
+	offset := 0
+
+	var _field *string
+	if v, l, err := thrift.Binary.ReadString(buf[offset:]); err != nil {
+		return offset, err
+	} else {
+		offset += l
+		_field = &v
+	}
+	p.Avatar = _field
+	return offset, nil
+}
+
 func (p *PublicUserProfile) FastWrite(buf []byte) int {
 	return p.FastWriteNocopy(buf, nil)
 }
@@ -5113,6 +5141,7 @@ func (p *PublicUserProfile) FastWriteNocopy(buf []byte, w thrift.NocopyWriter) i
 	if p != nil {
 		offset += p.fastWriteField1(buf[offset:], w)
 		offset += p.fastWriteField2(buf[offset:], w)
+		offset += p.fastWriteField3(buf[offset:], w)
 	}
 	offset += thrift.Binary.WriteFieldStop(buf[offset:])
 	return offset
@@ -5123,6 +5152,7 @@ func (p *PublicUserProfile) BLength() int {
 	if p != nil {
 		l += p.field1Length()
 		l += p.field2Length()
+		l += p.field3Length()
 	}
 	l += thrift.Binary.FieldStopLength()
 	return l
@@ -5142,6 +5172,15 @@ func (p *PublicUserProfile) fastWriteField2(buf []byte, w thrift.NocopyWriter) i
 	return offset
 }
 
+func (p *PublicUserProfile) fastWriteField3(buf []byte, w thrift.NocopyWriter) int {
+	offset := 0
+	if p.IsSetAvatar() {
+		offset += thrift.Binary.WriteFieldBegin(buf[offset:], thrift.STRING, 3)
+		offset += thrift.Binary.WriteStringNocopy(buf[offset:], w, *p.Avatar)
+	}
+	return offset
+}
+
 func (p *PublicUserProfile) field1Length() int {
 	l := 0
 	l += thrift.Binary.FieldBeginLength()
@@ -5153,6 +5192,15 @@ func (p *PublicUserProfile) field2Length() int {
 	l := 0
 	l += thrift.Binary.FieldBeginLength()
 	l += thrift.Binary.StringLengthNocopy(p.DisplayName)
+	return l
+}
+
+func (p *PublicUserProfile) field3Length() int {
+	l := 0
+	if p.IsSetAvatar() {
+		l += thrift.Binary.FieldBeginLength()
+		l += thrift.Binary.StringLengthNocopy(*p.Avatar)
+	}
 	return l
 }
 

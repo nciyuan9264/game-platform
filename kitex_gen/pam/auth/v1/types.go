@@ -1438,8 +1438,9 @@ var fieldIDToName_GetUserReq = map[int16]string{
 }
 
 type PublicUserProfile struct {
-	UserId      string `thrift:"user_id,1,required" frugal:"1,required,string" json:"user_id"`
-	DisplayName string `thrift:"display_name,2,required" frugal:"2,required,string" json:"display_name"`
+	UserId      string  `thrift:"user_id,1,required" frugal:"1,required,string" json:"user_id"`
+	DisplayName string  `thrift:"display_name,2,required" frugal:"2,required,string" json:"display_name"`
+	Avatar      *string `thrift:"avatar,3,optional" frugal:"3,optional,string" json:"avatar,omitempty"`
 }
 
 func NewPublicUserProfile() *PublicUserProfile {
@@ -1456,11 +1457,27 @@ func (p *PublicUserProfile) GetUserId() (v string) {
 func (p *PublicUserProfile) GetDisplayName() (v string) {
 	return p.DisplayName
 }
+
+var PublicUserProfile_Avatar_DEFAULT string
+
+func (p *PublicUserProfile) GetAvatar() (v string) {
+	if !p.IsSetAvatar() {
+		return PublicUserProfile_Avatar_DEFAULT
+	}
+	return *p.Avatar
+}
 func (p *PublicUserProfile) SetUserId(val string) {
 	p.UserId = val
 }
 func (p *PublicUserProfile) SetDisplayName(val string) {
 	p.DisplayName = val
+}
+func (p *PublicUserProfile) SetAvatar(val *string) {
+	p.Avatar = val
+}
+
+func (p *PublicUserProfile) IsSetAvatar() bool {
+	return p.Avatar != nil
 }
 
 func (p *PublicUserProfile) String() string {
@@ -1473,6 +1490,7 @@ func (p *PublicUserProfile) String() string {
 var fieldIDToName_PublicUserProfile = map[int16]string{
 	1: "user_id",
 	2: "display_name",
+	3: "avatar",
 }
 
 type BatchGetPublicProfilesReq struct {
