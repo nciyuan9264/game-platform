@@ -95,6 +95,59 @@ func TestBuildMatchSyncIncludesRequiredRoomMetadata(t *testing.T) {
 	}
 }
 
+func TestRoomVisibilitySettings(t *testing.T) {
+	plugin := NewPlugin()
+	raw, err := plugin.InitRoom(context.Background(), game.RoomConfig{
+		RoomID:        "davinci-private-room",
+		OwnerPlayerID: "alice-1",
+		MaxPlayers:    2,
+		RandomSeed:    1,
+		Visibility:    contracts.VisibilityPrivate,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	metadata, err := plugin.RoomMetadata(context.Background(), raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if metadata.Visibility != contracts.VisibilityPrivate {
+		t.Fatalf("initial visibility = %q, want private", metadata.Visibility)
+	}
+
+	if _, err := plugin.ApplyCommand(context.Background(), raw, contracts.RoomCommand{
+		Type:     CommandRoomSettings,
+		PlayerID: "bob-2",
+		Payload:  map[string]any{"visibility": contracts.VisibilityPublic},
+	}); err == nil {
+		t.Fatal("non-owner updated room visibility")
+	}
+	if _, err := plugin.ApplyCommand(context.Background(), raw, contracts.RoomCommand{
+		Type:     CommandRoomSettings,
+		PlayerID: "alice-1",
+		Payload:  map[string]any{"visibility": contracts.VisibilityPublic},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	metadata, err = plugin.RoomMetadata(context.Background(), raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if metadata.Visibility != contracts.VisibilityPublic {
+		t.Fatalf("updated visibility = %q, want public", metadata.Visibility)
+	}
+
+	state := raw.(*State)
+	state.Status = StatusGetCard
+	if _, err := plugin.ApplyCommand(context.Background(), state, contracts.RoomCommand{
+		Type:     CommandRoomSettings,
+		PlayerID: "alice-1",
+		Payload:  map[string]any{"visibility": contracts.VisibilityPrivate},
+	}); err == nil {
+		t.Fatal("owner updated room visibility after preparation")
+	}
+}
+
 func TestOwnerOnlyCommandsAreEnforcedByEngine(t *testing.T) {
 	engine := NewEngine()
 	state := engine.InitRoom("room-1", "alice-1", 3)

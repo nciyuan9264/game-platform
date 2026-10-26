@@ -156,6 +156,27 @@ func TestClientCommandPayload(t *testing.T) {
 		}
 	})
 
+	t.Run("davinci room settings payload", func(t *testing.T) {
+		got, err := clientCommandPayload(
+			contracts.GameDaVinci,
+			"room_update_settings",
+			map[string]any{
+				"common": map[string]any{
+					"roomSettings": map[string]any{
+						"visibility": contracts.VisibilityPrivate,
+					},
+				},
+			},
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		payload, ok := got.(map[string]any)
+		if !ok || payload["visibility"] != contracts.VisibilityPrivate {
+			t.Fatalf("clientCommandPayload() = %#v", got)
+		}
+	})
+
 	t.Run("empty payload", func(t *testing.T) {
 		got, err := clientCommandPayload(contracts.GameDaVinci, "game_ready", map[string]any{
 			"common": map[string]any{"empty": map[string]any{}},

@@ -15,28 +15,29 @@ import (
 )
 
 const (
-	CommandConnect     = "connect"
-	CommandDisconnect  = "disconnect"
-	CommandMatchReady  = "match_ready"
-	CommandMatchBegin  = "match_begin"
-	CommandAddAI       = "match_add_ai"
-	CommandRemove      = "match_remove_player"
-	CommandGameReady   = "game_ready"
-	CommandGetCard     = "game_get_card"
-	CommandGuessCard   = "game_guess_card"
-	CommandSetCard     = "game_set_card"
-	CommandInitialize  = "game_initialize_hand"
-	CommandRestart     = "game_restart_game"
-	CommandTurnTimeout = "turn_timeout"
-	CommandInitTimeout = "initialization_timeout"
-	CommandAIDecide    = "ai_decide"
-	StatusWaiting      = "waiting"
-	StatusInitialize   = "initialize"
-	StatusGetCard      = "getCard"
-	StatusGuessCard    = "guessCard"
-	StatusSetCard      = "setCard"
-	StatusEnd          = "end"
-	NumMinus1          = -1
+	CommandConnect      = "connect"
+	CommandDisconnect   = "disconnect"
+	CommandMatchReady   = "match_ready"
+	CommandMatchBegin   = "match_begin"
+	CommandAddAI        = "match_add_ai"
+	CommandRemove       = "match_remove_player"
+	CommandRoomSettings = "room_update_settings"
+	CommandGameReady    = "game_ready"
+	CommandGetCard      = "game_get_card"
+	CommandGuessCard    = "game_guess_card"
+	CommandSetCard      = "game_set_card"
+	CommandInitialize   = "game_initialize_hand"
+	CommandRestart      = "game_restart_game"
+	CommandTurnTimeout  = "turn_timeout"
+	CommandInitTimeout  = "initialization_timeout"
+	CommandAIDecide     = "ai_decide"
+	StatusWaiting       = "waiting"
+	StatusInitialize    = "initialize"
+	StatusGetCard       = "getCard"
+	StatusGuessCard     = "guessCard"
+	StatusSetCard       = "setCard"
+	StatusEnd           = "end"
+	NumMinus1           = -1
 )
 
 const initializationTimeout = 15 * time.Second
@@ -69,6 +70,7 @@ type State struct {
 	RoomID        string             `json:"roomID"`
 	OwnerID       string             `json:"ownerID"`
 	Status        string             `json:"status"`
+	Visibility    string             `json:"visibility,omitempty"`
 	MaxPlayers    int                `json:"maxPlayers"`
 	CurrentPlayer string             `json:"currentPlayer"`
 	PlayerSeq     []string           `json:"playerSeq"`
@@ -88,7 +90,7 @@ type Engine struct{}
 
 func NewEngine() *Engine { return &Engine{} }
 
-const EngineVersion = "davinci-v6"
+const EngineVersion = "davinci-v7"
 
 func Definition() game.Definition {
 	plugin := NewPlugin()
@@ -150,11 +152,29 @@ func (p *Plugin) Roster(ctx context.Context, state game.State) ([]game.RosterPla
 	return players, nil
 }
 
+func (p *Plugin) RoomMetadata(_ context.Context, state game.State) (game.RoomMetadata, error) {
+	typed, err := asState(state)
+	if err != nil {
+		return game.RoomMetadata{}, err
+	}
+	return game.RoomMetadata{Visibility: typed.Visibility}, nil
+}
+
 func (p *Plugin) InitRoom(ctx context.Context, cfg game.RoomConfig) (game.State, error) {
 	if cfg.RandomSeed == 0 {
 		return nil, errors.New("random seed is required")
 	}
-	return p.engine.InitRoomWithSeed(cfg.RoomID, cfg.OwnerPlayerID, cfg.MaxPlayers, cfg.RandomSeed), nil
+	state := p.engine.InitRoomWithSeed(
+		cfg.RoomID,
+		cfg.OwnerPlayerID,
+		cfg.MaxPlayers,
+		cfg.RandomSeed,
+	)
+	state.Visibility = cfg.Visibility
+	if state.Visibility == "" {
+		state.Visibility = contracts.VisibilityPublic
+	}
+	return state, nil
 }
 
 func (p *Plugin) EncodeState(ctx context.Context, state game.State) ([]byte, error) {
@@ -403,6 +423,8 @@ func (e *Engine) ApplyCommand(ctx context.Context, state *State, cmd contracts.R
 			return Result{}, errors.New("playerID is required")
 		}
 		return Result{}, e.removePlayer(state, cmd.PlayerID, targetPlayerID)
+	case CommandRoomSettings:
+		return Result{}, e.updateVisibility(state, cmd.PlayerID, cmd.Payload)
 	case CommandMatchBegin:
 		return e.begin(state, cmd.PlayerID)
 	case CommandGameReady:
@@ -430,6 +452,19 @@ func (e *Engine) ApplyCommand(ctx context.Context, state *State, cmd contracts.R
 	default:
 		return Result{}, fmt.Errorf("unknown command %s", cmd.Type)
 	}
+}
+
+func (e *Engine) updateVisibility(state *State, actorID string, payload any) error {
+	if actorID != state.OwnerID || state.Status != contracts.RoomStatusMatch {
+		return errors.New("only the owner can update room settings during preparation")
+	}
+	visibility, ok := payloadString(payload, "visibility")
+	if !ok || (visibility != contracts.VisibilityPublic &&
+		visibility != contracts.VisibilityPrivate) {
+		return errors.New("invalid visibility")
+	}
+	state.Visibility = visibility
+	return nil
 }
 
 func (e *Engine) connect(state *State, playerID string, ai bool) error {
