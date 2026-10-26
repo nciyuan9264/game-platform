@@ -54,28 +54,28 @@ for path in "${files[@]}"; do
   production_change=1
 
   case "$path" in
-    internal/acquire/*|cmd/roomhost-acquire/*)
+    internal/plugins/acquire/*|cmd/roomhost-acquire/*)
       games[acquire]=1
       ;;
-    internal/davinci/*|cmd/roomhost-davinci/*)
+    internal/plugins/davinci/*|cmd/roomhost-davinci/*)
       games[davinci]=1
       ;;
-    internal/splendor/*|cmd/roomhost-splendor/*)
+    internal/plugins/splendor/*|cmd/roomhost-splendor/*)
       games[splendor]=1
       ;;
-    internal/yinsh/*|cmd/roomhost-yinsh/*)
+    internal/plugins/yinsh/*|cmd/roomhost-yinsh/*)
       games[yinsh]=1
       ;;
-    internal/othello/*|cmd/roomhost-othello/*)
+    internal/plugins/othello/*|cmd/roomhost-othello/*)
       games[othello]=1
       ;;
-    internal/fugitive/*|cmd/roomhost-fugitive/*)
+    internal/plugins/fugitive/*|cmd/roomhost-fugitive/*)
       games[fugitive]=1
       ;;
-    internal/warchest/*|cmd/roomhost-warchest/*)
+    internal/plugins/warchest/*|cmd/roomhost-warchest/*)
       games[warchest]=1
       ;;
-    internal/quoridor/*|cmd/roomhost-quoridor/*)
+    internal/plugins/quoridor/*|cmd/roomhost-quoridor/*)
       games[quoridor]=1
       ;;
     internal/game/*|internal/roomhost/*|internal/roomhostapp/*|internal/gamelog/*)

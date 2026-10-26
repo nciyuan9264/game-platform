@@ -3,7 +3,7 @@ package main
 import (
 	"log"
 
-	"github.com/nciyuan9264/game-platform/internal/fugitive"
+	"github.com/nciyuan9264/game-platform/internal/plugins/fugitive"
 	"github.com/nciyuan9264/game-platform/internal/roomhostapp"
 )
 

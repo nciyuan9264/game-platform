@@ -1,15 +1,15 @@
 package plugins
 
 import (
-	"github.com/nciyuan9264/game-platform/internal/acquire"
-	"github.com/nciyuan9264/game-platform/internal/davinci"
-	"github.com/nciyuan9264/game-platform/internal/fugitive"
 	"github.com/nciyuan9264/game-platform/internal/game"
-	"github.com/nciyuan9264/game-platform/internal/othello"
-	"github.com/nciyuan9264/game-platform/internal/quoridor"
-	"github.com/nciyuan9264/game-platform/internal/splendor"
-	"github.com/nciyuan9264/game-platform/internal/warchest"
-	"github.com/nciyuan9264/game-platform/internal/yinsh"
+	"github.com/nciyuan9264/game-platform/internal/plugins/acquire"
+	"github.com/nciyuan9264/game-platform/internal/plugins/davinci"
+	"github.com/nciyuan9264/game-platform/internal/plugins/fugitive"
+	"github.com/nciyuan9264/game-platform/internal/plugins/othello"
+	"github.com/nciyuan9264/game-platform/internal/plugins/quoridor"
+	"github.com/nciyuan9264/game-platform/internal/plugins/splendor"
+	"github.com/nciyuan9264/game-platform/internal/plugins/warchest"
+	"github.com/nciyuan9264/game-platform/internal/plugins/yinsh"
 )
 
 func Registry() *game.Registry {

@@ -19,14 +19,14 @@ if [[ $# -gt 0 ]]; then
 fi
 
 declare -A version_files=(
-  [acquire]='internal/acquire/plugin.go'
-  [davinci]='internal/davinci/engine.go'
-  [splendor]='internal/splendor/plugin.go'
-  [yinsh]='internal/yinsh/plugin.go'
-  [othello]='internal/othello/plugin.go'
-  [fugitive]='internal/fugitive/plugin.go'
-  [warchest]='internal/warchest/plugin.go'
-  [quoridor]='internal/quoridor/plugin.go'
+  [acquire]='internal/plugins/acquire/plugin.go'
+  [davinci]='internal/plugins/davinci/engine.go'
+  [splendor]='internal/plugins/splendor/plugin.go'
+  [yinsh]='internal/plugins/yinsh/plugin.go'
+  [othello]='internal/plugins/othello/plugin.go'
+  [fugitive]='internal/plugins/fugitive/plugin.go'
+  [warchest]='internal/plugins/warchest/plugin.go'
+  [quoridor]='internal/plugins/quoridor/plugin.go'
 )
 declare -A changed_games=()
 declare -A engine_changes=()
@@ -55,58 +55,58 @@ compatibility_only_definition_change() {
 while IFS= read -r path; do
   [[ -z "$path" ]] && continue
   case "$path" in
-    internal/acquire/testdata/replay_frame_golden.json)
+    internal/plugins/acquire/testdata/replay_frame_golden.json)
       changed_games[acquire]=1
       continue
       ;;
-    internal/splendor/testdata/replay_frame_golden.json)
+    internal/plugins/splendor/testdata/replay_frame_golden.json)
       changed_games[splendor]=1
       continue
       ;;
-    internal/yinsh/testdata/replay_frame_golden.json)
+    internal/plugins/yinsh/testdata/replay_frame_golden.json)
       changed_games[yinsh]=1
       continue
       ;;
-    internal/othello/testdata/replay_frame_golden.json)
+    internal/plugins/othello/testdata/replay_frame_golden.json)
       changed_games[othello]=1
       continue
       ;;
-    internal/warchest/testdata/replay_frame_golden.json)
+    internal/plugins/warchest/testdata/replay_frame_golden.json)
       changed_games[warchest]=1
       continue
       ;;
-    internal/quoridor/testdata/replay_frame_golden.json)
+    internal/plugins/quoridor/testdata/replay_frame_golden.json)
       changed_games[quoridor]=1
       continue
       ;;
-    internal/acquire/history.go)
+    internal/plugins/acquire/history.go)
       changed_games[acquire]=1
       continue
       ;;
-    internal/splendor/history.go)
+    internal/plugins/splendor/history.go)
       changed_games[splendor]=1
       continue
       ;;
-    internal/yinsh/history.go)
+    internal/plugins/yinsh/history.go)
       changed_games[yinsh]=1
       continue
       ;;
-    internal/othello/history.go)
+    internal/plugins/othello/history.go)
       changed_games[othello]=1
       continue
       ;;
-    internal/warchest/history.go)
+    internal/plugins/warchest/history.go)
       changed_games[warchest]=1
       continue
       ;;
-    internal/quoridor/history.go)
+    internal/plugins/quoridor/history.go)
       changed_games[quoridor]=1
       continue
       ;;
     *_test.go|*/testdata/*)
       continue
       ;;
-    internal/acquire/*)
+    internal/plugins/acquire/*)
       changed_games[acquire]=1
       if [[ "$path" == "${version_files[acquire]}" ]] &&
         compatibility_only_definition_change "$path"; then
@@ -114,11 +114,11 @@ while IFS= read -r path; do
       fi
       engine_changes[acquire]=1
       ;;
-    internal/davinci/*)
+    internal/plugins/davinci/*)
       changed_games[davinci]=1
       engine_changes[davinci]=1
       ;;
-    internal/splendor/*)
+    internal/plugins/splendor/*)
       changed_games[splendor]=1
       if [[ "$path" == "${version_files[splendor]}" ]] &&
         compatibility_only_definition_change "$path"; then
@@ -126,7 +126,7 @@ while IFS= read -r path; do
       fi
       engine_changes[splendor]=1
       ;;
-    internal/yinsh/*)
+    internal/plugins/yinsh/*)
       changed_games[yinsh]=1
       if [[ "$path" == "${version_files[yinsh]}" ]] &&
         compatibility_only_definition_change "$path"; then
@@ -134,7 +134,7 @@ while IFS= read -r path; do
       fi
       engine_changes[yinsh]=1
       ;;
-    internal/othello/*)
+    internal/plugins/othello/*)
       changed_games[othello]=1
       if [[ "$path" == "${version_files[othello]}" ]] &&
         compatibility_only_definition_change "$path"; then
@@ -142,11 +142,11 @@ while IFS= read -r path; do
       fi
       engine_changes[othello]=1
       ;;
-    internal/fugitive/*)
+    internal/plugins/fugitive/*)
       changed_games[fugitive]=1
       engine_changes[fugitive]=1
       ;;
-    internal/warchest/*)
+    internal/plugins/warchest/*)
       changed_games[warchest]=1
       if [[ "$path" == "${version_files[warchest]}" ]] &&
         compatibility_only_definition_change "$path"; then
@@ -154,7 +154,7 @@ while IFS= read -r path; do
       fi
       engine_changes[warchest]=1
       ;;
-    internal/quoridor/*)
+    internal/plugins/quoridor/*)
       changed_games[quoridor]=1
       if [[ "$path" == "${version_files[quoridor]}" ]] &&
         compatibility_only_definition_change "$path"; then
@@ -208,7 +208,7 @@ for game_name in acquire davinci splendor yinsh othello fugitive warchest quorid
     failures+=("${game_name}: implementation changed without an EngineVersion bump")
   fi
 
-  fixture="internal/${game_name}/testdata/replay_frame_golden.json"
+  fixture="internal/plugins/${game_name}/testdata/replay_frame_golden.json"
   if git diff --name-only "$base" "$head" -- "$fixture" | grep -q .; then
     old_schema="$(integer_constant_at "$base" "$file" ReplaySchemaVersion)"
     new_schema="$(integer_constant_at "$head" "$file" ReplaySchemaVersion)"

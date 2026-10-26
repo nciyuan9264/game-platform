@@ -3,7 +3,7 @@ package main
 import (
 	"log"
 
-	"github.com/nciyuan9264/game-platform/internal/quoridor"
+	"github.com/nciyuan9264/game-platform/internal/plugins/quoridor"
 	"github.com/nciyuan9264/game-platform/internal/roomhostapp"
 )
 

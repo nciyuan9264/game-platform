@@ -3,8 +3,8 @@ package main
 import (
 	"log"
 
+	"github.com/nciyuan9264/game-platform/internal/plugins/splendor"
 	"github.com/nciyuan9264/game-platform/internal/roomhostapp"
-	"github.com/nciyuan9264/game-platform/internal/splendor"
 )
 
 func main() {

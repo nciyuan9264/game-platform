@@ -3,8 +3,8 @@ package main
 import (
 	"log"
 
+	"github.com/nciyuan9264/game-platform/internal/plugins/warchest"
 	"github.com/nciyuan9264/game-platform/internal/roomhostapp"
-	"github.com/nciyuan9264/game-platform/internal/warchest"
 )
 
 func main() {

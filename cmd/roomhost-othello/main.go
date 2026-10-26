@@ -3,7 +3,7 @@ package main
 import (
 	"log"
 
-	"github.com/nciyuan9264/game-platform/internal/othello"
+	"github.com/nciyuan9264/game-platform/internal/plugins/othello"
 	"github.com/nciyuan9264/game-platform/internal/roomhostapp"
 )
 

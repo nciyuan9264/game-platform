@@ -13,17 +13,17 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
-	acquiregame "github.com/nciyuan9264/game-platform/internal/acquire"
-	acquiredomain "github.com/nciyuan9264/game-platform/internal/acquire/domain/domain"
 	"github.com/nciyuan9264/game-platform/internal/contracts"
 	"github.com/nciyuan9264/game-platform/internal/coordination"
-	davincigame "github.com/nciyuan9264/game-platform/internal/davinci"
 	"github.com/nciyuan9264/game-platform/internal/game"
 	"github.com/nciyuan9264/game-platform/internal/gamelog"
 	"github.com/nciyuan9264/game-platform/internal/history"
-	splendorgame "github.com/nciyuan9264/game-platform/internal/splendor"
+	acquiregame "github.com/nciyuan9264/game-platform/internal/plugins/acquire"
+	acquiredomain "github.com/nciyuan9264/game-platform/internal/plugins/acquire/domain/domain"
+	davincigame "github.com/nciyuan9264/game-platform/internal/plugins/davinci"
+	splendorgame "github.com/nciyuan9264/game-platform/internal/plugins/splendor"
+	yinshgame "github.com/nciyuan9264/game-platform/internal/plugins/yinsh"
 	"github.com/nciyuan9264/game-platform/internal/transport"
-	yinshgame "github.com/nciyuan9264/game-platform/internal/yinsh"
 )
 
 type roomhostTestEngine struct {

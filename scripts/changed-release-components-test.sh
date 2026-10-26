@@ -24,8 +24,8 @@ assert_case() {
 
 assert_case \
   '{"center":[],"games":["acquire"],"productionChange":true,"docsOnly":false}' \
-  internal/acquire/rules/step1.go \
-  internal/acquire/rules/step1_test.go
+  internal/plugins/acquire/rules/step1.go \
+  internal/plugins/acquire/rules/step1_test.go
 
 assert_case \
   '{"center":[],"games":["acquire","davinci","fugitive","othello","quoridor","splendor","warchest","yinsh"],"productionChange":true,"docsOnly":false}' \
@@ -51,27 +51,27 @@ assert_case \
 
 assert_case \
   '{"center":[],"games":["yinsh"],"productionChange":true,"docsOnly":false}' \
-  internal/yinsh/rules.go \
-  internal/yinsh/rules_test.go
+  internal/plugins/yinsh/rules.go \
+  internal/plugins/yinsh/rules_test.go
 
 assert_case \
   '{"center":[],"games":["othello"],"productionChange":true,"docsOnly":false}' \
-  internal/othello/rules.go \
-  internal/othello/rules_test.go
+  internal/plugins/othello/rules.go \
+  internal/plugins/othello/rules_test.go
 
 assert_case \
   '{"center":[],"games":["fugitive"],"productionChange":true,"docsOnly":false}' \
-  internal/fugitive/rules.go \
-  internal/fugitive/rules_test.go
+  internal/plugins/fugitive/rules.go \
+  internal/plugins/fugitive/rules_test.go
 
 assert_case \
   '{"center":[],"games":["warchest"],"productionChange":true,"docsOnly":false}' \
-  internal/warchest/rules.go \
-  internal/warchest/rules_test.go
+  internal/plugins/warchest/rules.go \
+  internal/plugins/warchest/rules_test.go
 
 assert_case \
   '{"center":[],"games":["quoridor"],"productionChange":true,"docsOnly":false}' \
-  internal/quoridor/rules.go \
-  internal/quoridor/rules_test.go
+  internal/plugins/quoridor/rules.go \
+  internal/plugins/quoridor/rules_test.go
 
 printf 'changed release component tests passed\n'

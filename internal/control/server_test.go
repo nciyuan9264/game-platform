@@ -14,7 +14,7 @@ import (
 	"github.com/nciyuan9264/game-platform/internal/authclient"
 	"github.com/nciyuan9264/game-platform/internal/contracts"
 	"github.com/nciyuan9264/game-platform/internal/coordination"
-	"github.com/nciyuan9264/game-platform/internal/davinci"
+	"github.com/nciyuan9264/game-platform/internal/plugins/davinci"
 	"github.com/nciyuan9264/game-platform/internal/store"
 )
 
