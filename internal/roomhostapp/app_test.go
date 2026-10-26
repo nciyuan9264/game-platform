@@ -11,6 +11,7 @@ import (
 	"github.com/nciyuan9264/game-platform/internal/game"
 	"github.com/nciyuan9264/game-platform/internal/othello"
 	"github.com/nciyuan9264/game-platform/internal/splendor"
+	"github.com/nciyuan9264/game-platform/internal/warchest"
 	"github.com/nciyuan9264/game-platform/internal/yinsh"
 )
 
@@ -41,6 +42,7 @@ func TestSelfTestCoversProductionDefinitions(t *testing.T) {
 		yinsh.Definition(),
 		othello.Definition(),
 		fugitive.Definition(),
+		warchest.Definition(),
 	}
 	for _, definition := range definitions {
 		t.Run(definition.GameType, func(t *testing.T) {

@@ -44,6 +44,16 @@ func (h *Handler) CreateRoom(ctx context.Context, req *platform.CreateRoomReq) (
 		gameType == contracts.GameFugitive {
 		turnTimeoutSeconds = 60
 	}
+	if gameType == contracts.GameWarChest {
+		if req.IsSetTurnTimeoutSeconds() &&
+			turnTimeoutSeconds != 90 {
+			return nil, platformError(
+				"invalid_request",
+				errors.New("warchest turnTimeoutSeconds is fixed at 90"),
+			)
+		}
+		turnTimeoutSeconds = 90
+	}
 	if turnTimeoutSeconds != 0 &&
 		turnTimeoutSeconds != 60 &&
 		turnTimeoutSeconds != 90 {

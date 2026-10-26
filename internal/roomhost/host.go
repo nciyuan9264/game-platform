@@ -1124,6 +1124,17 @@ func (r *RoomActor) StartMatch(ctx context.Context, matchID string) error {
 	if err != nil {
 		return err
 	}
+	if replacingMatch {
+		if preparer, ok := r.definition.Engine.(game.NextMatchPreparer); ok {
+			if err := preparer.PrepareNextMatch(
+				ctx,
+				r.state,
+				state,
+			); err != nil {
+				return fmt.Errorf("prepare next match state: %w", err)
+			}
+		}
+	}
 	presences, err := r.host.store.ListPresence(ctx, r.record.RoomID)
 	if err != nil {
 		return err

@@ -221,6 +221,24 @@ services:
       PUBLIC_ADDR: roomhost-fugitive-b:9000
       SERVICE_VERSION: ${FUGITIVE_ROOMHOST_B_VERSION:?set Fugitive RoomHost B artifact version}
 
+  roomhost-warchest-a:
+    <<: *roomhost-service
+    image: ${WARCHEST_ROOMHOST_A_IMAGE:?set War Chest RoomHost A image}
+    environment:
+      <<: *runtime-env
+      NODE_ID: roomhost-warchest-a
+      PUBLIC_ADDR: roomhost-warchest-a:9000
+      SERVICE_VERSION: ${WARCHEST_ROOMHOST_A_VERSION:?set War Chest RoomHost A artifact version}
+
+  roomhost-warchest-b:
+    <<: *roomhost-service
+    image: ${WARCHEST_ROOMHOST_B_IMAGE:?set War Chest RoomHost B image}
+    environment:
+      <<: *runtime-env
+      NODE_ID: roomhost-warchest-b
+      PUBLIC_ADDR: roomhost-warchest-b:9000
+      SERVICE_VERSION: ${WARCHEST_ROOMHOST_B_VERSION:?set War Chest RoomHost B artifact version}
+
 networks:
   global-network:
     external: true

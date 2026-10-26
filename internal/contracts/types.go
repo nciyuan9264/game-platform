@@ -12,6 +12,7 @@ const (
 	GameYinsh    = "yinsh"
 	GameOthello  = "othello"
 	GameFugitive = "fugitive"
+	GameWarChest = "warchest"
 
 	MaxOwnedRooms         = 5
 	RoomStatusCreating    = "creating"

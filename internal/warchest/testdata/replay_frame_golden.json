@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "frameFields": [
+    "playersData",
+    "privateData",
+    "result",
+    "roomData"
+  ],
+  "roomDataFields": [
+    "activityLog",
+    "board",
+    "controls",
+    "currentPlayer",
+    "currentSide",
+    "gameStatus",
+    "initiativePlayer",
+    "initiativeSide",
+    "lastData",
+    "legalActions",
+    "playerOrder",
+    "players",
+    "roundNo",
+    "turnDeadline",
+    "turnTimeoutMs"
+  ]
+}

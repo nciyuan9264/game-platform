@@ -21,6 +21,7 @@ var (
 type ReplayFrame struct {
 	RoomData    json.RawMessage `json:"roomData"`
 	PlayersData json.RawMessage `json:"playersData"`
+	PrivateData json.RawMessage `json:"privateData,omitempty"`
 	Result      json.RawMessage `json:"result"`
 }
 
@@ -123,6 +124,9 @@ func MaterializedReplayJSON(
 		"roomData":    roomData,
 		"playersData": frame.PlayersData,
 		"result":      frame.Result,
+	}
+	if len(frame.PrivateData) > 0 {
+		envelope["privateData"] = frame.PrivateData
 	}
 	if event != nil {
 		currentEvent := map[string]any{

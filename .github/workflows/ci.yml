@@ -23,7 +23,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: nciyuan9264/pam-idl
-          ref: 458313daafa365e7d6c59b668e7f8f25eeeaee0c
+          ref: 5b880e13f73aefdbee0ab9442d6c80564ecb0f46
           path: pam-idl
 
       - name: Setup Go
@@ -83,6 +83,7 @@ jobs:
             roomhost-yinsh
             roomhost-othello
             roomhost-fugitive
+            roomhost-warchest
             migrate-schema
             backfill-replay
             game-release
@@ -125,5 +126,9 @@ jobs:
           FUGITIVE_ROOMHOST_B_IMAGE: registry.example.com/game-platform-roomhost-fugitive:ci-b
           FUGITIVE_ROOMHOST_A_VERSION: ci-a
           FUGITIVE_ROOMHOST_B_VERSION: ci-b
+          WARCHEST_ROOMHOST_A_IMAGE: registry.example.com/game-platform-roomhost-warchest:ci-a
+          WARCHEST_ROOMHOST_B_IMAGE: registry.example.com/game-platform-roomhost-warchest:ci-b
+          WARCHEST_ROOMHOST_A_VERSION: ci-a
+          WARCHEST_ROOMHOST_B_VERSION: ci-b
         run: |
           ./scripts/validate-prod-config.sh

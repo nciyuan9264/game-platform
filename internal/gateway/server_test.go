@@ -283,6 +283,27 @@ func TestClientCommandPayload(t *testing.T) {
 		}
 	})
 
+	t.Run("warchest action payload", func(t *testing.T) {
+		got, err := clientCommandPayload(
+			contracts.GameWarChest,
+			"game_play_action",
+			map[string]any{
+				"warchest": map[string]any{
+					"playAction": map[string]any{
+						"actionID": "a-4-abcdef",
+					},
+				},
+			},
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		payload, ok := got.(map[string]any)
+		if !ok || payload["actionID"] != "a-4-abcdef" {
+			t.Fatalf("clientCommandPayload() = %#v", got)
+		}
+	})
+
 	t.Run("wrong union group", func(t *testing.T) {
 		if _, err := clientCommandPayload(contracts.GameAcquire, "game_place_tile", map[string]any{
 			"davinci": map[string]any{},

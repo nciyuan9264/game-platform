@@ -152,6 +152,14 @@ type AutomationStateResetter interface {
 	ResetAutomationState(ctx context.Context, state State) error
 }
 
+type NextMatchPreparer interface {
+	PrepareNextMatch(
+		ctx context.Context,
+		previous State,
+		next State,
+	) error
+}
+
 type RoomMetadata struct {
 	Visibility         string
 	DisplayName        string

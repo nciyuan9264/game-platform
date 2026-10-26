@@ -497,6 +497,34 @@ func selectFirstAction(
 				},
 			),
 		}, true
+	case "warchest":
+		actions, _ := roomData["legalActions"].([]any)
+		if len(actions) == 0 {
+			return legalAction{}, false
+		}
+		first, _ := actions[0].(map[string]any)
+		actionID := stringValue(first, "actionID")
+		if actionID == "" {
+			return legalAction{}, false
+		}
+		return legalAction{
+			Command: gameCommand(
+				gameType,
+				matchID,
+				commandID,
+				"game_play_action",
+				"playAction",
+				map[string]any{"actionID": actionID},
+			),
+			ConflictCommand: gameCommand(
+				gameType,
+				matchID,
+				commandID,
+				"game_play_action",
+				"playAction",
+				map[string]any{"actionID": "__intent_conflict__"},
+			),
+		}, true
 	default:
 		return legalAction{}, false
 	}

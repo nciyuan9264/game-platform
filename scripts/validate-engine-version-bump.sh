@@ -25,6 +25,7 @@ declare -A version_files=(
   [yinsh]='internal/yinsh/plugin.go'
   [othello]='internal/othello/plugin.go'
   [fugitive]='internal/fugitive/plugin.go'
+  [warchest]='internal/warchest/plugin.go'
 )
 declare -A changed_games=()
 declare -A engine_changes=()
@@ -69,6 +70,10 @@ while IFS= read -r path; do
       changed_games[othello]=1
       continue
       ;;
+    internal/warchest/testdata/replay_frame_golden.json)
+      changed_games[warchest]=1
+      continue
+      ;;
     internal/acquire/history.go)
       changed_games[acquire]=1
       continue
@@ -83,6 +88,10 @@ while IFS= read -r path; do
       ;;
     internal/othello/history.go)
       changed_games[othello]=1
+      continue
+      ;;
+    internal/warchest/history.go)
+      changed_games[warchest]=1
       continue
       ;;
     *_test.go|*/testdata/*)
@@ -128,6 +137,14 @@ while IFS= read -r path; do
       changed_games[fugitive]=1
       engine_changes[fugitive]=1
       ;;
+    internal/warchest/*)
+      changed_games[warchest]=1
+      if [[ "$path" == "${version_files[warchest]}" ]] &&
+        compatibility_only_definition_change "$path"; then
+        continue
+      fi
+      engine_changes[warchest]=1
+      ;;
   esac
 done < <(git diff --name-only "$base" "$head")
 
@@ -159,7 +176,7 @@ integer_constant_at() {
 
 failures=()
 validated=()
-for game_name in acquire davinci splendor yinsh othello fugitive; do
+for game_name in acquire davinci splendor yinsh othello fugitive warchest; do
   [[ -n "${changed_games[$game_name]:-}" ]] || continue
   file="${version_files[$game_name]}"
   old_version="$(constant_at "$base" "$file" EngineVersion)"

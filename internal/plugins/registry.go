@@ -7,6 +7,7 @@ import (
 	"github.com/nciyuan9264/game-platform/internal/game"
 	"github.com/nciyuan9264/game-platform/internal/othello"
 	"github.com/nciyuan9264/game-platform/internal/splendor"
+	"github.com/nciyuan9264/game-platform/internal/warchest"
 	"github.com/nciyuan9264/game-platform/internal/yinsh"
 )
 
@@ -18,5 +19,6 @@ func Registry() *game.Registry {
 		yinsh.Definition(),
 		othello.Definition(),
 		fugitive.Definition(),
+		warchest.Definition(),
 	)
 }

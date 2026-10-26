@@ -17,6 +17,7 @@ on:
           - yinsh
           - othello
           - fugitive
+          - warchest
       compatibility_ack:
         description: Reason an engine implementation change is version-compatible
         type: string
@@ -59,7 +60,7 @@ jobs:
               center='["control-plane","gateway","migrate-schema","platform-rpc"]'
               games='[]'
               ;;
-            acquire|davinci|splendor|yinsh|othello|fugitive)
+            acquire|davinci|splendor|yinsh|othello|fugitive|warchest)
               center='[]'
               games="$(jq -cn --arg game "${COMPONENT_OVERRIDE}" '[$game]')"
               ;;
@@ -222,6 +223,10 @@ jobs:
             export FUGITIVE_ROOMHOST_B_IMAGE="${FUGITIVE_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-fugitive:${IMAGE_TAG}}"
             export FUGITIVE_ROOMHOST_A_VERSION="${FUGITIVE_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
             export FUGITIVE_ROOMHOST_B_VERSION="${FUGITIVE_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
+            export WARCHEST_ROOMHOST_A_IMAGE="${WARCHEST_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-warchest:${IMAGE_TAG}}"
+            export WARCHEST_ROOMHOST_B_IMAGE="${WARCHEST_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-warchest:${IMAGE_TAG}}"
+            export WARCHEST_ROOMHOST_A_VERSION="${WARCHEST_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
+            export WARCHEST_ROOMHOST_B_VERSION="${WARCHEST_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
             printf '%s' "${TCR_PASSWORD}" | docker login "${TCR_LOGIN_SERVER}" \
               --username "${TCR_USERNAME}" --password-stdin
             chmod +x scripts/validate-prod-config.sh
@@ -326,6 +331,10 @@ jobs:
             export FUGITIVE_ROOMHOST_B_IMAGE="${FUGITIVE_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-fugitive:${IMAGE_TAG}}"
             export FUGITIVE_ROOMHOST_A_VERSION="${FUGITIVE_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
             export FUGITIVE_ROOMHOST_B_VERSION="${FUGITIVE_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
+            export WARCHEST_ROOMHOST_A_IMAGE="${WARCHEST_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-warchest:${IMAGE_TAG}}"
+            export WARCHEST_ROOMHOST_B_IMAGE="${WARCHEST_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-warchest:${IMAGE_TAG}}"
+            export WARCHEST_ROOMHOST_A_VERSION="${WARCHEST_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
+            export WARCHEST_ROOMHOST_B_VERSION="${WARCHEST_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
             printf '%s' "${TCR_PASSWORD}" | docker login "${TCR_LOGIN_SERVER}" \
               --username "${TCR_USERNAME}" --password-stdin
             chmod +x scripts/deploy-game-slot.sh scripts/validate-prod-config.sh

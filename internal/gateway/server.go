@@ -728,6 +728,12 @@ func clientCommandPayload(gameType, commandType string, payload any) (any, error
 		variant = "resign"
 	case "match_select_role":
 		variant = "selectRole"
+	case "game_set_setup_mode":
+		variant = "setSetupMode"
+	case "game_draft_unit":
+		variant = "draftUnit"
+	case "game_play_action":
+		variant = "playAction"
 	case "game_draw_card":
 		variant = "drawCard"
 	case "game_play_hideout":
