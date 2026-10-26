@@ -34,6 +34,23 @@ The script self-tests the image, chooses an empty A/B slot, waits for stable
 ready heartbeats, promotes with CAS, drains the old slot, and stops it only at
 zero active rooms.
 
+## First Quoridor Registration
+
+After a `quoridor-v1` RoomHost slot advertises ready, register the catalog entry
+once:
+
+```bash
+game-release register \
+  --game quoridor \
+  --version quoridor-v1 \
+  --default-max-players 2 \
+  --replay-schema-version 1 \
+  --artifact <quoridor-image-sha>
+```
+
+Registration is a production operation. It is not part of build verification
+or ordinary source delivery.
+
 ## Compatible Runtime Fix
 
 Keep `EngineVersion` unchanged only when state encoding, deterministic

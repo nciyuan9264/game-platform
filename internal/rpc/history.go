@@ -335,6 +335,11 @@ func (h *Handler) GetLeaderboard(ctx context.Context, req *platform.GetLeaderboa
 				Wins:    int32(valueOrZero(entry.Wins)),
 				WinRate: floatValueOrZero(entry.WinRate),
 			}
+		} else if gameType == contracts.GameQuoridor {
+			metric.Quoridor = &platform.QuoridorLeaderboardMetric{
+				Wins:    int32(valueOrZero(entry.Wins)),
+				WinRate: floatValueOrZero(entry.WinRate),
+			}
 		} else {
 			metric.Rank = &platform.RankLeaderboardMetric{AvgRank: floatValueOrZero(entry.AvgRank)}
 		}
@@ -370,7 +375,8 @@ func (h *Handler) replayGameType(ctx context.Context, value string) (string, err
 		gameType != contracts.GameSplendor &&
 		gameType != contracts.GameYinsh &&
 		gameType != contracts.GameOthello &&
-		gameType != contracts.GameWarChest {
+		gameType != contracts.GameWarChest &&
+		gameType != contracts.GameQuoridor {
 		return "", platformError("replay_not_supported", errors.New("game replay is not supported"))
 	}
 	return gameType, nil
@@ -428,6 +434,11 @@ func (h *Handler) buildReplaySnapshot(
 	case contracts.GameWarChest:
 		result.Warchest = &platform.WarChestReplaySnapshot{}
 		if err := json.Unmarshal(encoded, result.Warchest); err != nil {
+			return nil, platformError("replay_error", err)
+		}
+	case contracts.GameQuoridor:
+		result.Quoridor = &platform.QuoridorReplaySnapshot{}
+		if err := json.Unmarshal(encoded, result.Quoridor); err != nil {
 			return nil, platformError("replay_error", err)
 		}
 	default:

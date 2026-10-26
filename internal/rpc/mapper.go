@@ -128,6 +128,10 @@ func roomMetrics(room contracts.RoomRecord) *platform.RoomMetrics {
 			ProgressCurrent:        current,
 			ProgressTotal:          total,
 		}}
+	case contracts.GameQuoridor:
+		return &platform.RoomMetrics{Quoridor: &platform.QuoridorRoomMetrics{
+			TurnCount: current,
+		}}
 	case contracts.GameSplendor:
 		return &platform.RoomMetrics{Splendor: &platform.SplendorRoomMetrics{
 			MaxScore: current, ProgressCurrent: current, ProgressTotal: total,

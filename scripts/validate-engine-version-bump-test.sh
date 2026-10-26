@@ -85,4 +85,19 @@ git commit -qm new-othello
 new_othello="$(git rev-parse HEAD)"
 "$SCRIPT" "$new_othello_base" "$new_othello" >/dev/null
 
+new_quoridor_base="$new_othello"
+mkdir -p internal/quoridor/testdata
+cat >internal/quoridor/plugin.go <<'EOF'
+package quoridor
+const (
+	EngineVersion = "quoridor-v1"
+	ReplaySchemaVersion = 1
+)
+EOF
+printf '{"schemaVersion":1}\n' >internal/quoridor/testdata/replay_frame_golden.json
+git add .
+git commit -qm new-quoridor
+new_quoridor="$(git rev-parse HEAD)"
+"$SCRIPT" "$new_quoridor_base" "$new_quoridor" >/dev/null
+
 printf 'engine version validation tests passed\n'

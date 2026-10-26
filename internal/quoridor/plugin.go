@@ -1,0 +1,1122 @@
+package quoridor
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"reflect"
+	"sort"
+	"time"
+
+	"github.com/nciyuan9264/game-platform/internal/contracts"
+	"github.com/nciyuan9264/game-platform/internal/game"
+)
+
+const (
+	GameType            = "quoridor"
+	EngineVersion       = "quoridor-v1"
+	ReplaySchemaVersion = 1
+	defaultMaxPlayers   = 2
+	maxNoHumanChecks    = 3
+)
+
+const (
+	CommandMovePawn  = "game_move_pawn"
+	CommandPlaceWall = "game_place_wall"
+	CommandResign    = "game_resign"
+	CommandTimeout   = "turn_timeout"
+)
+
+const (
+	turnTimeout = 60 * time.Second
+	aiMinDelay  = 1200 * time.Millisecond
+	aiMaxDelay  = 2 * time.Second
+	aiTimeout   = 900 * time.Millisecond
+)
+
+type Plugin struct{}
+
+func Definition() game.Definition {
+	plugin := &Plugin{}
+	return game.Definition{
+		GameType:          GameType,
+		Version:           EngineVersion,
+		DefaultMaxPlayers: defaultMaxPlayers,
+		Engine:            plugin,
+		AI:                plugin,
+		Scheduler:         plugin,
+		History:           plugin,
+		LegacyReplay:      plugin,
+	}
+}
+
+func (p *Plugin) GameType() string { return GameType }
+
+func (p *Plugin) Version() string { return EngineVersion }
+
+func (p *Plugin) InitRoom(
+	_ context.Context,
+	cfg game.RoomConfig,
+) (game.State, error) {
+	if cfg.RandomSeed == 0 {
+		return nil, errors.New("random seed is required")
+	}
+	maxPlayers := cfg.MaxPlayers
+	if maxPlayers <= 0 {
+		maxPlayers = defaultMaxPlayers
+	}
+	if maxPlayers != defaultMaxPlayers {
+		return nil, errors.New("quoridor requires exactly two seats")
+	}
+	visibility := cfg.Visibility
+	if visibility == "" {
+		visibility = contracts.VisibilityPublic
+	}
+	roundNo := cfg.RoundNo
+	if roundNo <= 0 {
+		roundNo = 1
+	}
+	return &State{
+		RoomID:      cfg.RoomID,
+		OwnerID:     cfg.OwnerPlayerID,
+		Status:      StatusMatch,
+		MaxPlayers:  maxPlayers,
+		Visibility:  visibility,
+		RandomSeed:  cfg.RandomSeed,
+		RoundNo:     roundNo,
+		Roster:      map[string]*Player{},
+		PlayerOrder: []string{},
+		Pawns:       map[Side]Cell{},
+		Walls:       []Wall{},
+		WallStock:   map[Side]int{},
+		Log:         []Action{},
+	}, nil
+}
+
+func (p *Plugin) EncodeState(
+	_ context.Context,
+	state game.State,
+) ([]byte, error) {
+	typed, err := asState(state)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(typed)
+}
+
+func (p *Plugin) DecodeState(
+	_ context.Context,
+	data []byte,
+) (game.State, error) {
+	var state State
+	if err := json.Unmarshal(data, &state); err != nil {
+		return nil, err
+	}
+	if err := validateState(&state); err != nil {
+		return nil, err
+	}
+	return &state, nil
+}
+
+func (p *Plugin) RandomSeed(
+	_ context.Context,
+	state game.State,
+) (uint64, error) {
+	typed, err := asState(state)
+	if err != nil {
+		return 0, err
+	}
+	return typed.RandomSeed, nil
+}
+
+func (p *Plugin) PrepareNextMatch(
+	_ context.Context,
+	previous game.State,
+	next game.State,
+) error {
+	if _, err := asState(previous); err != nil {
+		return err
+	}
+	_, err := asState(next)
+	return err
+}
+
+func (p *Plugin) RoomMetadata(
+	_ context.Context,
+	state game.State,
+) (game.RoomMetadata, error) {
+	typed, err := asState(state)
+	if err != nil {
+		return game.RoomMetadata{}, err
+	}
+	return game.RoomMetadata{
+		Visibility:         typed.Visibility,
+		TurnTimeoutSeconds: int(turnTimeout / time.Second),
+	}, nil
+}
+
+func (p *Plugin) Roster(
+	_ context.Context,
+	state game.State,
+) ([]game.RosterPlayer, error) {
+	typed, err := asState(state)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]game.RosterPlayer, 0, len(typed.PlayerOrder))
+	for _, playerID := range typed.PlayerOrder {
+		player := typed.Roster[playerID]
+		if player == nil {
+			continue
+		}
+		displayName := ""
+		if player.AI {
+			displayName = player.DisplayName
+		}
+		result = append(result, game.RosterPlayer{
+			UserID:      player.UserID,
+			PlayerID:    player.PlayerID,
+			DisplayName: displayName,
+			Online:      player.Online,
+			IsAI:        player.AI,
+			SeatIndex:   player.SeatIndex,
+			Ready:       player.Ready,
+			GameRole:    string(player.Side),
+		})
+	}
+	return result, nil
+}
+
+func (p *Plugin) Progress(
+	_ context.Context,
+	state game.State,
+) (game.RoomProgress, error) {
+	typed, err := asState(state)
+	if err != nil {
+		return game.RoomProgress{}, err
+	}
+	return game.RoomProgress{Current: len(typed.Log), Total: 0}, nil
+}
+
+func (p *Plugin) ObserveHumanPresence(
+	_ context.Context,
+	state game.State,
+	hasHuman bool,
+) (game.HumanPresenceCheck, error) {
+	typed, err := asState(state)
+	if err != nil {
+		return game.HumanPresenceCheck{}, err
+	}
+	if hasHuman {
+		typed.NoHumanChecks = 0
+	} else {
+		typed.NoHumanChecks++
+	}
+	return game.HumanPresenceCheck{
+		ConsecutiveEmpty: typed.NoHumanChecks,
+		Limit:            maxNoHumanChecks,
+		ShouldClose:      typed.NoHumanChecks >= maxNoHumanChecks,
+	}, nil
+}
+
+func (p *Plugin) ApplyCommand(
+	ctx context.Context,
+	state game.State,
+	command contracts.RoomCommand,
+) (game.ApplyResult, error) {
+	typed, err := asState(state)
+	if err != nil {
+		return game.ApplyResult{}, err
+	}
+	staged := cloneState(typed)
+	payload, err := json.Marshal(command.Payload)
+	if err != nil {
+		return game.ApplyResult{}, err
+	}
+	removedPlayerID := ""
+	advanceTurn := false
+	switch command.Type {
+	case "connect":
+		err = connect(staged, command.PlayerID)
+	case "disconnect":
+		if player := staged.Roster[command.PlayerID]; player != nil {
+			player.Online = false
+		}
+	case "match_ready":
+		err = setReady(staged, command.PlayerID, payload)
+	case "match_add_ai":
+		err = addAI(staged, command.PlayerID, payload)
+	case "match_remove_player":
+		removedPlayerID, err = removePlayer(staged, command.PlayerID, payload)
+	case "room_update_settings":
+		err = updateVisibility(staged, command.PlayerID, payload)
+	case "match_begin":
+		err = beginMatch(staged, command.PlayerID)
+	case "game_ready":
+		wasPlaying := staged.Status == StatusPlaying
+		err = gameReady(staged, command.PlayerID, command.SentAt)
+		advanceTurn = err == nil && !wasPlaying &&
+			staged.Status == StatusPlaying
+	case CommandMovePawn:
+		var value struct {
+			To *Cell `json:"to"`
+		}
+		err = decodePayload(payload, &value)
+		if err == nil && value.To == nil {
+			err = errors.New("to is required")
+		}
+		if err == nil {
+			player := staged.Roster[command.PlayerID]
+			err = movePawn(
+				staged,
+				command.PlayerID,
+				*value.To,
+				player != nil && player.AI,
+			)
+			advanceTurn = err == nil
+		}
+	case CommandPlaceWall:
+		var value struct {
+			Wall *WallSpec `json:"wall"`
+		}
+		err = decodePayload(payload, &value)
+		if err == nil && value.Wall == nil {
+			err = errors.New("wall is required")
+		}
+		if err == nil {
+			player := staged.Roster[command.PlayerID]
+			err = placeWall(
+				staged,
+				command.PlayerID,
+				*value.Wall,
+				player != nil && player.AI,
+			)
+			advanceTurn = err == nil
+		}
+	case CommandResign:
+		err = resign(staged, command.PlayerID)
+		advanceTurn = err == nil
+	case CommandTimeout:
+		if command.ConnectionRef.Valid() {
+			err = errors.New("client cannot submit timeout commands")
+		} else {
+			err = applyTimeout(ctx, staged, command.PlayerID)
+			advanceTurn = err == nil
+		}
+	case "game_restart_game":
+		err = errors.New("finished rooms must start a new match")
+	default:
+		err = fmt.Errorf("unknown quoridor command %q", command.Type)
+	}
+	if err != nil {
+		return game.ApplyResult{}, err
+	}
+	if advanceTurn {
+		updateTurnDeadline(staged, command.SentAt)
+	}
+	if err := validateState(staged); err != nil {
+		return game.ApplyResult{}, err
+	}
+	*typed = *staged
+	result := game.ApplyResult{
+		Status:   typed.Status,
+		Finished: typed.Status == StatusEnd,
+	}
+	if removedPlayerID != "" {
+		result.Effects = append(result.Effects, game.DeliveryEffect{
+			Audience:       game.AudiencePlayer,
+			TargetPlayerID: removedPlayerID,
+			Reliable:       true,
+			CloseAfter:     true,
+			Payload: contracts.ErrorMessage{
+				Type:    contracts.MessageTypeError,
+				Code:    "REMOVED",
+				Message: "你已被移出房间",
+			},
+		})
+	}
+	if request := nextAIRequest(typed); request != nil {
+		result.AIRequests = append(result.AIRequests, *request)
+	}
+	return result, nil
+}
+
+func (p *Plugin) PendingCommands(
+	_ context.Context,
+	state game.State,
+) ([]game.ScheduledCommand, error) {
+	typed, err := asState(state)
+	if err != nil {
+		return nil, err
+	}
+	if typed.Status != StatusPlaying ||
+		typed.TurnDeadline.IsZero() ||
+		typed.CurrentPlayer == "" {
+		return nil, nil
+	}
+	player := typed.Roster[typed.CurrentPlayer]
+	if player == nil || player.AI {
+		return nil, nil
+	}
+	return []game.ScheduledCommand{{
+		Key: fmt.Sprintf(
+			"%s:%s:%d",
+			typed.Status,
+			typed.CurrentPlayer,
+			typed.TurnDeadline.UnixNano(),
+		),
+		ExecuteAt: typed.TurnDeadline,
+		PlayerID:  typed.CurrentPlayer,
+		Type:      CommandTimeout,
+	}}, nil
+}
+
+func (p *Plugin) BuildPlayerView(
+	_ context.Context,
+	state game.State,
+	request game.ViewRequest,
+) (any, error) {
+	typed, err := asState(state)
+	if err != nil {
+		return nil, err
+	}
+	if typed.Roster[request.PlayerID] == nil {
+		return nil, errors.New("player is not in room")
+	}
+	players := playerViews(typed, request.PlayerProfiles)
+	if typed.Status == StatusMatch {
+		return map[string]any{
+			"type":        contracts.MessageTypeMatchSync,
+			"roomID":      typed.RoomID,
+			"matchID":     request.MatchID,
+			"ownerID":     typed.OwnerID,
+			"status":      typed.Status,
+			"playerID":    request.PlayerID,
+			"visibility":  typed.Visibility,
+			"maxPlayers":  typed.MaxPlayers,
+			"players":     players,
+			"playerOrder": typed.PlayerOrder,
+		}, nil
+	}
+	return roomView(
+		typed,
+		request.PlayerID,
+		request.MatchID,
+		request.Seq,
+		players,
+		request.PlayerID == typed.CurrentPlayer,
+	), nil
+}
+
+func (p *Plugin) BuildSpectatorView(
+	_ context.Context,
+	state game.State,
+	seq int64,
+) (any, error) {
+	typed, err := asState(state)
+	if err != nil {
+		return nil, err
+	}
+	return roomView(
+		typed,
+		"",
+		"",
+		seq,
+		playerViews(typed, nil),
+		false,
+	), nil
+}
+
+func roomView(
+	state *State,
+	playerID,
+	matchID string,
+	seq int64,
+	players map[string]any,
+	interactive bool,
+) map[string]any {
+	var result any
+	if state.Status == StatusEnd {
+		result = resultView(state)
+	}
+	return map[string]any{
+		"type":       contracts.MessageTypeRoomSync,
+		"roomID":     state.RoomID,
+		"matchID":    matchID,
+		"seq":        seq,
+		"playerId":   playerID,
+		"ownerID":    state.OwnerID,
+		"visibility": state.Visibility,
+		"playerData": replayPlayerData(state),
+		"roomData":   roomDataView(state, players, interactive),
+		"result":     result,
+	}
+}
+
+func roomDataView(
+	state *State,
+	players map[string]any,
+	interactive bool,
+) map[string]any {
+	legal := []Cell{}
+	walls := []WallOption{}
+	if interactive && state.Status == StatusPlaying {
+		side := sideForPlayer(state, state.CurrentPlayer)
+		legal = legalMoves(state, side)
+		walls = wallOptions(state, side)
+	}
+	var lastAction any
+	if state.LastAction != nil {
+		lastAction = cloneAction(*state.LastAction)
+	}
+	referencePaths := map[Side][]Cell{
+		SideSouth: shortestPath(state, SideSouth),
+		SideNorth: shortestPath(state, SideNorth),
+	}
+	return map[string]any{
+		"pawns":          clonePawns(state.Pawns),
+		"walls":          append([]Wall(nil), state.Walls...),
+		"wallStock":      cloneWallStock(state.WallStock),
+		"currentPlayer":  state.CurrentPlayer,
+		"currentSide":    sideForPlayer(state, state.CurrentPlayer),
+		"southPlayerID":  state.SouthPlayerID,
+		"northPlayerID":  state.NorthPlayerID,
+		"firstPlayerID":  state.FirstPlayerID,
+		"roundNo":        state.RoundNo,
+		"gameStatus":     state.Status,
+		"legalMoves":     legal,
+		"wallOptions":    walls,
+		"referencePaths": referencePaths,
+		"moveLog":        cloneActions(state.Log),
+		"lastAction":     lastAction,
+		"turnDeadline":   deadlineValue(state.TurnDeadline),
+		"turnTimeoutMs":  timeoutValue(state.TurnTimeout),
+		"players":        players,
+		"playerOrder":    append([]string(nil), state.PlayerOrder...),
+	}
+}
+
+func resultView(state *State) map[string]any {
+	result := map[string]any{
+		"reason":          state.EndReason,
+		"turnCount":       len(state.Log),
+		"placedWallCount": len(state.Walls),
+	}
+	if state.WinnerID != "" {
+		result["winnerID"] = state.WinnerID
+		result["winnerSide"] = state.WinnerSide
+	}
+	return result
+}
+
+func playerViews(
+	state *State,
+	profiles map[string]game.PlayerProfile,
+) map[string]any {
+	result := make(map[string]any, len(state.PlayerOrder))
+	for _, playerID := range state.PlayerOrder {
+		player := state.Roster[playerID]
+		if player == nil {
+			continue
+		}
+		displayName := player.DisplayName
+		userID := player.UserID
+		avatar := ""
+		if profile, ok := profiles[playerID]; ok {
+			userID = profile.UserID
+			displayName = profile.DisplayName
+			avatar = profile.Avatar
+		}
+		if displayName == "" {
+			if player.AI {
+				displayName = "行舟"
+			} else {
+				displayName = fmt.Sprintf("玩家 %s", playerID)
+			}
+		}
+		result[playerID] = map[string]any{
+			"userID":      userID,
+			"playerID":    playerID,
+			"displayName": displayName,
+			"avatar":      avatar,
+			"online":      player.Online,
+			"ai":          player.AI,
+			"ready":       player.Ready,
+			"seatIndex":   player.SeatIndex,
+		}
+	}
+	return result
+}
+
+func replayPlayerData(state *State) map[string]any {
+	result := map[string]any{}
+	for _, playerID := range state.PlayerOrder {
+		player := state.Roster[playerID]
+		if player == nil ||
+			(player.Side != SideSouth && player.Side != SideNorth) {
+			continue
+		}
+		path := shortestPath(state, player.Side)
+		distance := 0
+		if len(path) > 0 {
+			distance = len(path) - 1
+		}
+		result[playerID] = map[string]any{
+			"side":           player.Side,
+			"wallsRemaining": state.WallStock[player.Side],
+			"distanceToGoal": distance,
+		}
+	}
+	return result
+}
+
+func connect(state *State, playerID string) error {
+	if playerID == "" {
+		return errors.New("player ID is required")
+	}
+	if player := state.Roster[playerID]; player != nil {
+		player.Online = true
+		return nil
+	}
+	if state.Status != StatusMatch {
+		return errors.New("game already started")
+	}
+	if len(state.Roster) >= state.MaxPlayers {
+		return errors.New("room is full")
+	}
+	state.Roster[playerID] = &Player{
+		UserID:    playerID,
+		PlayerID:  playerID,
+		Online:    true,
+		Ready:     playerID == state.OwnerID,
+		SeatIndex: firstFreeSeat(state),
+	}
+	state.PlayerOrder = append(state.PlayerOrder, playerID)
+	sortPlayerOrder(state)
+	return nil
+}
+
+func setReady(state *State, playerID string, payload []byte) error {
+	if state.Status != StatusMatch {
+		return errors.New("preparation phase has ended")
+	}
+	player := state.Roster[playerID]
+	if player == nil {
+		return errors.New("player not found")
+	}
+	var value struct {
+		Ready *bool `json:"ready"`
+	}
+	if err := decodePayload(payload, &value); err != nil ||
+		value.Ready == nil {
+		return errors.New("invalid ready payload")
+	}
+	if playerID == state.OwnerID && !*value.Ready {
+		return errors.New("owner is always ready")
+	}
+	player.Ready = *value.Ready
+	return nil
+}
+
+func addAI(state *State, actorID string, payload []byte) error {
+	if actorID != state.OwnerID || state.Status != StatusMatch {
+		return errors.New("only the owner can add AI during preparation")
+	}
+	if len(state.Roster) >= state.MaxPlayers {
+		return errors.New("room is full")
+	}
+	seatIndex := firstFreeSeat(state)
+	var value struct {
+		SeatIndex *int `json:"seatIndex"`
+	}
+	if len(payload) > 0 && string(payload) != "null" {
+		if err := json.Unmarshal(payload, &value); err != nil {
+			return errors.New("invalid seat")
+		}
+	}
+	if value.SeatIndex != nil {
+		seatIndex = *value.SeatIndex
+		if seatIndex < 0 ||
+			seatIndex >= state.MaxPlayers ||
+			seatOccupied(state, seatIndex) {
+			return errors.New("seat is unavailable")
+		}
+	}
+	playerID := fmt.Sprintf("ai_%d", seatIndex+1)
+	for state.Roster[playerID] != nil {
+		playerID += "_"
+	}
+	state.Roster[playerID] = &Player{
+		PlayerID:    playerID,
+		DisplayName: "行舟",
+		Online:      true,
+		Ready:       true,
+		GameReady:   true,
+		AI:          true,
+		SeatIndex:   seatIndex,
+	}
+	state.PlayerOrder = append(state.PlayerOrder, playerID)
+	sortPlayerOrder(state)
+	return nil
+}
+
+func removePlayer(
+	state *State,
+	actorID string,
+	payload []byte,
+) (string, error) {
+	if actorID != state.OwnerID || state.Status != StatusMatch {
+		return "", errors.New(
+			"only the owner can remove players during preparation",
+		)
+	}
+	var value struct {
+		PlayerID string `json:"playerID"`
+	}
+	if err := decodePayload(payload, &value); err != nil ||
+		value.PlayerID == "" ||
+		value.PlayerID == state.OwnerID {
+		return "", errors.New("invalid player")
+	}
+	if state.Roster[value.PlayerID] == nil {
+		return "", errors.New("player not found")
+	}
+	delete(state.Roster, value.PlayerID)
+	state.PlayerOrder = removeString(state.PlayerOrder, value.PlayerID)
+	return value.PlayerID, nil
+}
+
+func updateVisibility(state *State, actorID string, payload []byte) error {
+	if actorID != state.OwnerID || state.Status != StatusMatch {
+		return errors.New("only the owner can update room settings")
+	}
+	var value struct {
+		Visibility string `json:"visibility"`
+	}
+	if err := decodePayload(payload, &value); err != nil ||
+		(value.Visibility != contracts.VisibilityPublic &&
+			value.Visibility != contracts.VisibilityPrivate) {
+		return errors.New("invalid visibility")
+	}
+	state.Visibility = value.Visibility
+	return nil
+}
+
+func beginMatch(state *State, actorID string) error {
+	if actorID != state.OwnerID || state.Status != StatusMatch {
+		return errors.New("only the owner can start the match")
+	}
+	if len(state.Roster) != defaultMaxPlayers {
+		return errors.New("quoridor requires two players")
+	}
+	for _, player := range state.Roster {
+		if player == nil || !player.Ready || !player.Online {
+			return errors.New("all players must be ready and online")
+		}
+		player.Ready = player.AI
+		player.GameReady = player.AI
+	}
+	assignSidesAndFirstPlayer(state)
+	state.Pawns = freshPawns()
+	state.Walls = []Wall{}
+	state.WallStock = freshWallStock()
+	state.Log = []Action{}
+	state.LastAction = nil
+	state.WinnerID = ""
+	state.WinnerSide = ""
+	state.EndReason = ""
+	state.GameStartTime = time.Time{}
+	state.TurnDeadline = time.Time{}
+	state.TurnTimeout = 0
+	state.CurrentPlayer = state.FirstPlayerID
+	state.Status = StatusWaiting
+	return nil
+}
+
+func gameReady(state *State, playerID string, sentAt time.Time) error {
+	if state.Status != StatusWaiting {
+		return nil
+	}
+	player := state.Roster[playerID]
+	if player == nil {
+		return errors.New("player not found")
+	}
+	player.Ready = true
+	player.GameReady = true
+	for _, current := range state.Roster {
+		if current == nil || !current.GameReady {
+			return nil
+		}
+	}
+	if sentAt.IsZero() {
+		sentAt = time.Now().UTC()
+	}
+	state.GameStartTime = sentAt.UTC()
+	state.Status = StatusPlaying
+	state.CurrentPlayer = state.FirstPlayerID
+	return nil
+}
+
+func assignSidesAndFirstPlayer(state *State) {
+	if len(state.PlayerOrder) != 2 {
+		return
+	}
+	southIndex := (int(state.RandomSeed&1) + state.RoundNo - 1) % 2
+	firstIndex := (int((state.RandomSeed>>1)&1) + state.RoundNo - 1) % 2
+	state.SouthPlayerID = state.PlayerOrder[southIndex]
+	state.NorthPlayerID = state.PlayerOrder[1-southIndex]
+	state.FirstPlayerID = state.PlayerOrder[firstIndex]
+	state.Roster[state.SouthPlayerID].Side = SideSouth
+	state.Roster[state.NorthPlayerID].Side = SideNorth
+}
+
+func applyTimeout(
+	ctx context.Context,
+	state *State,
+	playerID string,
+) error {
+	if state.Status != StatusPlaying {
+		return errors.New("current phase cannot time out")
+	}
+	if state.CurrentPlayer != playerID {
+		return errors.New("timeout player is no longer active")
+	}
+	action, ok := bestAction(ctx, state, sideForPlayer(state, playerID))
+	if !ok {
+		return errors.New("no legal timeout action")
+	}
+	if action.Kind == "move" {
+		return movePawn(state, playerID, action.To, true)
+	}
+	return placeWall(state, playerID, action.Wall, true)
+}
+
+func nextAIRequest(state *State) *game.AIRequest {
+	player := state.Roster[state.CurrentPlayer]
+	if player == nil || !player.AI || state.Status != StatusPlaying {
+		return nil
+	}
+	delayRange := int((aiMaxDelay - aiMinDelay) / time.Millisecond)
+	delayOffset := int(
+		(state.RandomSeed + uint64(len(state.Log))*7919) %
+			uint64(delayRange+1),
+	)
+	fallback := contracts.RoomCommand{
+		Type:     CommandTimeout,
+		PlayerID: player.PlayerID,
+	}
+	return &game.AIRequest{
+		RoomID:          state.RoomID,
+		GameType:        GameType,
+		PlayerID:        player.PlayerID,
+		State:           cloneState(state),
+		Delay:           aiMinDelay + time.Duration(delayOffset)*time.Millisecond,
+		Timeout:         aiTimeout,
+		FallbackCommand: &fallback,
+	}
+}
+
+func updateTurnDeadline(state *State, commandTime time.Time) {
+	state.TurnDeadline = time.Time{}
+	state.TurnTimeout = 0
+	if state.Status != StatusPlaying {
+		return
+	}
+	player := state.Roster[state.CurrentPlayer]
+	if player == nil || player.AI {
+		return
+	}
+	if commandTime.IsZero() {
+		commandTime = time.Now().UTC()
+	}
+	state.TurnTimeout = turnTimeout
+	state.TurnDeadline = commandTime.UTC().Add(turnTimeout)
+}
+
+func asState(state game.State) (*State, error) {
+	var typed *State
+	switch value := state.(type) {
+	case *State:
+		typed = value
+	case State:
+		copyValue := value
+		typed = &copyValue
+	default:
+		return nil, fmt.Errorf("unexpected quoridor state %T", state)
+	}
+	if typed == nil {
+		return nil, errors.New("quoridor state is nil")
+	}
+	if err := validateState(typed); err != nil {
+		return nil, err
+	}
+	return typed, nil
+}
+
+func validateState(state *State) error {
+	if state.MaxPlayers != defaultMaxPlayers {
+		return errors.New("quoridor state must have exactly two seats")
+	}
+	if state.RandomSeed == 0 {
+		return errors.New("quoridor state is missing random seed")
+	}
+	if state.RoundNo <= 0 {
+		return errors.New("quoridor state has invalid round number")
+	}
+	if state.Visibility != contracts.VisibilityPublic &&
+		state.Visibility != contracts.VisibilityPrivate {
+		return errors.New("quoridor state has invalid visibility")
+	}
+	switch state.Status {
+	case StatusMatch, StatusWaiting, StatusPlaying, StatusEnd:
+	default:
+		return errors.New("quoridor state has invalid status")
+	}
+	if state.Roster == nil || state.PlayerOrder == nil ||
+		state.Pawns == nil || state.Walls == nil ||
+		state.WallStock == nil || state.Log == nil {
+		return errors.New("quoridor state has nil collections")
+	}
+	if len(state.Roster) != len(state.PlayerOrder) ||
+		len(state.Roster) > defaultMaxPlayers {
+		return errors.New("quoridor roster is inconsistent")
+	}
+	seenSeats := map[int]bool{}
+	seenPlayers := map[string]bool{}
+	for _, playerID := range state.PlayerOrder {
+		player := state.Roster[playerID]
+		if player == nil || player.PlayerID != playerID ||
+			player.SeatIndex < 0 || player.SeatIndex >= defaultMaxPlayers ||
+			seenSeats[player.SeatIndex] || seenPlayers[playerID] {
+			return errors.New("quoridor roster contains invalid player")
+		}
+		seenSeats[player.SeatIndex] = true
+		seenPlayers[playerID] = true
+	}
+	if state.Status == StatusMatch {
+		if len(state.Pawns) != 0 || len(state.Walls) != 0 ||
+			len(state.WallStock) != 0 ||
+			state.CurrentPlayer != "" ||
+			state.SouthPlayerID != "" ||
+			state.NorthPlayerID != "" ||
+			state.FirstPlayerID != "" ||
+			state.WinnerID != "" ||
+			state.WinnerSide != "" {
+			return errors.New("quoridor lobby contains board state")
+		}
+		for _, player := range state.Roster {
+			if player.Side != "" {
+				return errors.New("quoridor lobby contains game assignment")
+			}
+		}
+		return nil
+	}
+	if len(state.Roster) != defaultMaxPlayers ||
+		state.SouthPlayerID == "" || state.NorthPlayerID == "" ||
+		state.SouthPlayerID == state.NorthPlayerID ||
+		state.FirstPlayerID == "" {
+		return errors.New("quoridor side assignment is incomplete")
+	}
+	if state.Roster[state.SouthPlayerID] == nil ||
+		state.Roster[state.NorthPlayerID] == nil ||
+		state.Roster[state.FirstPlayerID] == nil ||
+		state.Roster[state.SouthPlayerID].Side != SideSouth ||
+		state.Roster[state.NorthPlayerID].Side != SideNorth {
+		return errors.New("quoridor side assignment is inconsistent")
+	}
+	south, southOK := state.Pawns[SideSouth]
+	north, northOK := state.Pawns[SideNorth]
+	if len(state.Pawns) != 2 || !southOK || !northOK ||
+		!inBoard(south) || !inBoard(north) || sameCell(south, north) {
+		return errors.New("quoridor pawns are invalid")
+	}
+	if len(state.WallStock) != 2 ||
+		state.WallStock[SideSouth] < 0 ||
+		state.WallStock[SideNorth] < 0 ||
+		state.WallStock[SideSouth] > 10 ||
+		state.WallStock[SideNorth] > 10 {
+		return errors.New("quoridor wall stock is invalid")
+	}
+	wallCounts := map[Side]int{}
+	for index, wall := range state.Walls {
+		if !validWallSpec(WallSpec{
+			Row:         wall.Row,
+			Column:      wall.Column,
+			Orientation: wall.Orientation,
+		}) || (wall.Side != SideSouth && wall.Side != SideNorth) {
+			return errors.New("quoridor wall is invalid")
+		}
+		wallCounts[wall.Side]++
+		check := cloneState(state)
+		check.Walls = append([]Wall(nil), state.Walls[:index]...)
+		check.WallStock[wall.Side]++
+		check.Status = StatusPlaying
+		if legal, reason := wallCheck(check, wall.Side, WallSpec{
+			Row:         wall.Row,
+			Column:      wall.Column,
+			Orientation: wall.Orientation,
+		}); !legal {
+			return fmt.Errorf("quoridor wall layout is invalid: %s", reason)
+		}
+	}
+	for _, side := range []Side{SideSouth, SideNorth} {
+		if wallCounts[side]+state.WallStock[side] != 10 {
+			return errors.New("quoridor wall conservation failed")
+		}
+		if len(shortestPath(state, side)) == 0 {
+			return errors.New("quoridor player has no path to goal")
+		}
+	}
+	if len(state.Log) > 0 && state.LastAction == nil {
+		return errors.New("quoridor last action is missing")
+	}
+	for index, action := range state.Log {
+		player := state.Roster[action.PlayerID]
+		if action.ID != index+1 ||
+			player == nil ||
+			action.Side != player.Side {
+			return errors.New("quoridor action log is invalid")
+		}
+		switch action.Kind {
+		case "move":
+			if action.From == nil || action.To == nil ||
+				action.Wall != nil ||
+				!inBoard(*action.From) ||
+				!inBoard(*action.To) {
+				return errors.New("quoridor move action is invalid")
+			}
+		case "wall":
+			if action.From != nil || action.To != nil ||
+				action.Wall == nil ||
+				!validWallSpec(*action.Wall) {
+				return errors.New("quoridor wall action is invalid")
+			}
+		case "resign":
+			if action.From != nil ||
+				action.To != nil ||
+				action.Wall != nil {
+				return errors.New("quoridor resign action is invalid")
+			}
+		default:
+			return errors.New("quoridor action kind is invalid")
+		}
+	}
+	if len(state.Log) > 0 &&
+		!reflect.DeepEqual(*state.LastAction, state.Log[len(state.Log)-1]) {
+		return errors.New("quoridor last action is inconsistent")
+	}
+	switch state.Status {
+	case StatusWaiting:
+		if state.CurrentPlayer != state.FirstPlayerID ||
+			!state.GameStartTime.IsZero() ||
+			len(state.Log) != 0 ||
+			len(state.Walls) != 0 ||
+			state.WallStock[SideSouth] != 10 ||
+			state.WallStock[SideNorth] != 10 {
+			return errors.New("waiting quoridor state is inconsistent")
+		}
+	case StatusPlaying:
+		if state.CurrentPlayer == "" ||
+			state.Roster[state.CurrentPlayer] == nil ||
+			state.GameStartTime.IsZero() ||
+			state.WinnerID != "" ||
+			state.WinnerSide != "" ||
+			state.EndReason != "" {
+			return errors.New("quoridor current player is invalid")
+		}
+	case StatusEnd:
+		if state.CurrentPlayer != "" ||
+			state.GameStartTime.IsZero() ||
+			state.WinnerID == "" ||
+			state.Roster[state.WinnerID] == nil ||
+			state.WinnerSide != state.Roster[state.WinnerID].Side ||
+			state.EndReason == "" {
+			return errors.New("finished quoridor state is inconsistent")
+		}
+	}
+	return nil
+}
+
+func decodePayload(data []byte, target any) error {
+	if len(data) == 0 || string(data) == "null" {
+		return errors.New("payload is required")
+	}
+	if err := json.Unmarshal(data, target); err != nil {
+		return errors.New("invalid command payload")
+	}
+	return nil
+}
+
+func firstFreeSeat(state *State) int {
+	for index := 0; index < state.MaxPlayers; index++ {
+		if !seatOccupied(state, index) {
+			return index
+		}
+	}
+	return len(state.Roster)
+}
+
+func seatOccupied(state *State, seat int) bool {
+	for _, player := range state.Roster {
+		if player != nil && player.SeatIndex == seat {
+			return true
+		}
+	}
+	return false
+}
+
+func sortPlayerOrder(state *State) {
+	sort.SliceStable(state.PlayerOrder, func(i, j int) bool {
+		return state.Roster[state.PlayerOrder[i]].SeatIndex <
+			state.Roster[state.PlayerOrder[j]].SeatIndex
+	})
+}
+
+func removeString(values []string, target string) []string {
+	result := values[:0]
+	for _, value := range values {
+		if value != target {
+			result = append(result, value)
+		}
+	}
+	return result
+}
+
+func clonePawns(values map[Side]Cell) map[Side]Cell {
+	result := make(map[Side]Cell, len(values))
+	for side, cell := range values {
+		result[side] = cell
+	}
+	return result
+}
+
+func cloneWallStock(values map[Side]int) map[Side]int {
+	result := make(map[Side]int, len(values))
+	for side, count := range values {
+		result[side] = count
+	}
+	return result
+}
+
+func cloneActions(values []Action) []Action {
+	result := make([]Action, len(values))
+	for index, value := range values {
+		result[index] = cloneAction(value)
+	}
+	return result
+}
+
+func deadlineValue(value time.Time) any {
+	if value.IsZero() {
+		return nil
+	}
+	return value.UTC().Format(time.RFC3339Nano)
+}
+
+func timeoutValue(value time.Duration) any {
+	if value <= 0 {
+		return nil
+	}
+	return value.Milliseconds()
+}

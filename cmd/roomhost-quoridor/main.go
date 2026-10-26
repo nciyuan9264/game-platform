@@ -1,0 +1,14 @@
+package main
+
+import (
+	"log"
+
+	"github.com/nciyuan9264/game-platform/internal/quoridor"
+	"github.com/nciyuan9264/game-platform/internal/roomhostapp"
+)
+
+func main() {
+	if err := roomhostapp.Run(quoridor.Definition()); err != nil {
+		log.Fatal(err)
+	}
+}

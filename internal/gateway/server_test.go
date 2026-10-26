@@ -304,6 +304,79 @@ func TestClientCommandPayload(t *testing.T) {
 		}
 	})
 
+	t.Run("quoridor move wall and empty payloads", func(t *testing.T) {
+		got, err := clientCommandPayload(
+			contracts.GameQuoridor,
+			"game_move_pawn",
+			map[string]any{
+				"quoridor": map[string]any{
+					"movePawn": map[string]any{
+						"to": map[string]any{
+							"row": float64(7), "column": float64(4),
+						},
+					},
+				},
+			},
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		payload, ok := got.(map[string]any)
+		to, toOK := payload["to"].(map[string]any)
+		if !ok || !toOK ||
+			to["row"] != float64(7) ||
+			to["column"] != float64(4) {
+			t.Fatalf("move payload = %#v", got)
+		}
+		got, err = clientCommandPayload(
+			contracts.GameQuoridor,
+			"game_place_wall",
+			map[string]any{
+				"quoridor": map[string]any{
+					"placeWall": map[string]any{
+						"wall": map[string]any{
+							"row":         float64(4),
+							"column":      float64(3),
+							"orientation": "h",
+						},
+					},
+				},
+			},
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		payload, ok = got.(map[string]any)
+		wall, wallOK := payload["wall"].(map[string]any)
+		if !ok || !wallOK || wall["orientation"] != "h" {
+			t.Fatalf("wall payload = %#v", got)
+		}
+		got, err = clientCommandPayload(
+			contracts.GameQuoridor,
+			"game_resign",
+			map[string]any{
+				"quoridor": map[string]any{
+					"resign": map[string]any{},
+				},
+			},
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := got.(map[string]any); !ok {
+			t.Fatalf("resign payload = %#v", got)
+		}
+		if _, err := clientCommandPayload(
+			contracts.GameQuoridor,
+			"game_move_pawn",
+			map[string]any{
+				"quoridor": map[string]any{},
+			},
+		); err == nil {
+			t.Fatal("missing quoridor union variant was accepted")
+		}
+	})
+
 	t.Run("wrong union group", func(t *testing.T) {
 		if _, err := clientCommandPayload(contracts.GameAcquire, "game_place_tile", map[string]any{
 			"davinci": map[string]any{},

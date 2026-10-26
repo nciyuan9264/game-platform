@@ -22,7 +22,7 @@ assert_supported() {
   fi
 }
 
-for game in acquire davinci splendor yinsh othello fugitive warchest; do
+for game in acquire davinci splendor yinsh othello fugitive warchest quoridor; do
   assert_supported "$game"
 done
 

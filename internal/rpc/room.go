@@ -54,6 +54,16 @@ func (h *Handler) CreateRoom(ctx context.Context, req *platform.CreateRoomReq) (
 		}
 		turnTimeoutSeconds = 90
 	}
+	if gameType == contracts.GameQuoridor {
+		if req.IsSetTurnTimeoutSeconds() &&
+			turnTimeoutSeconds != 60 {
+			return nil, platformError(
+				"invalid_request",
+				errors.New("quoridor turnTimeoutSeconds is fixed at 60"),
+			)
+		}
+		turnTimeoutSeconds = 60
+	}
 	if turnTimeoutSeconds != 0 &&
 		turnTimeoutSeconds != 60 &&
 		turnTimeoutSeconds != 90 {

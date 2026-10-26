@@ -164,6 +164,49 @@ func TestRunCanaryCoversIdempotencyRealtimeReconnectAndCleanup(t *testing.T) {
 	}
 }
 
+func TestSelectFirstQuoridorActionUsesFirstLegalMove(t *testing.T) {
+	view, err := json.Marshal(map[string]any{
+		"playerId": "7",
+		"roomData": map[string]any{
+			"currentPlayer": "7",
+			"legalMoves": []any{
+				map[string]any{"row": 7, "column": 4},
+				map[string]any{"row": 8, "column": 3},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	action, ok := selectFirstAction(
+		"test-run",
+		"quoridor",
+		"room-1-r1",
+		"7",
+		realtimeEnvelope{
+			Type: "ROOM_SYNC",
+			View: map[string]json.RawMessage{"quoridor": view},
+		},
+	)
+	if !ok ||
+		action.Command.Type != "game_move_pawn" ||
+		action.ConflictCommand.Type != "game_move_pawn" ||
+		action.Command.CommandID != action.ConflictCommand.CommandID {
+		t.Fatalf("action = %+v/%v", action, ok)
+	}
+	move, moveOK := action.Command.Payload["quoridor"].(map[string]any)
+	if !moveOK {
+		t.Fatalf("payload = %+v", action.Command.Payload)
+	}
+	movePawn, movePawnOK := move["movePawn"].(map[string]any)
+	to, toOK := movePawn["to"].(map[string]any)
+	if !movePawnOK || !toOK ||
+		numericValue(to["row"]) != 7 ||
+		numericValue(to["column"]) != 4 {
+		t.Fatalf("move payload = %+v", action.Command.Payload)
+	}
+}
+
 func writeTestRoom(w http.ResponseWriter, status string) {
 	writeTestJSON(w, http.StatusOK, map[string]any{
 		"status_code": 200,

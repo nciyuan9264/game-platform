@@ -14,6 +14,9 @@ Game Platform 是桌游平台的后端服务仓库，提供房间生命周期、
 - `cmd/roomhost-splendor`：Splendor 单游戏 RoomHost。
 - `cmd/roomhost-yinsh`：YINSH 单游戏 RoomHost。
 - `cmd/roomhost-othello`：Othello 单游戏 RoomHost。
+- `cmd/roomhost-fugitive`：Fugitive 单游戏 RoomHost。
+- `cmd/roomhost-warchest`：War Chest 单游戏 RoomHost。
+- `cmd/roomhost-quoridor`：步步为营（Quoridor）单游戏 RoomHost。
 - `cmd/migrate-schema`：发布前执行的幂等数据库 Schema Migration。
 - `cmd/game-release`：执行单游戏 A/B slot 发布、晋级、排空和回滚。
 - `cmd/backfill-replay`：按显式 engine mapping 回填旧录像物化数据的运维工具。
@@ -106,7 +109,8 @@ go test ./...
 for service in \
   backfill-replay control-plane game-release gateway migrate-schema \
   platform-rpc roomhost-acquire roomhost-davinci roomhost-splendor \
-  roomhost-yinsh roomhost-othello
+  roomhost-yinsh roomhost-othello roomhost-fugitive roomhost-warchest \
+  roomhost-quoridor
 do
   go build -o "/tmp/${service}" "./cmd/${service}"
 done
@@ -130,7 +134,8 @@ RPC 代码从固定版本的 `pam-idl` 生成。修改 IDL 后运行 `scripts/ge
 
 - 一次性 `schema-migrate`；
 - `control-plane`、`platform-rpc`、`gateway`；
-- Acquire、DaVinci、Splendor、YINSH 各自的 A/B RoomHost slot。
+- Acquire、DaVinci、Splendor、YINSH、Othello、Fugitive、War Chest 和
+  Quoridor 各自的 A/B RoomHost slot。
 
 共享 Redis、NATS、etcd 和 OpenTelemetry Collector 由相邻 `infra/docker-compose.yml` 管理，PostgreSQL 使用远端 RDS。部署前必须设置 `.env` 中的 RDS DSN、WebSocket Origin allowlist 和各游戏 slot 的镜像与版本。
 

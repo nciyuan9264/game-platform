@@ -20,6 +20,7 @@ mark_all_games() {
   games[othello]=1
   games[fugitive]=1
   games[warchest]=1
+  games[quoridor]=1
 }
 
 mark_all_centers() {
@@ -73,6 +74,9 @@ for path in "${files[@]}"; do
       ;;
     internal/warchest/*|cmd/roomhost-warchest/*)
       games[warchest]=1
+      ;;
+    internal/quoridor/*|cmd/roomhost-quoridor/*)
+      games[quoridor]=1
       ;;
     internal/game/*|internal/roomhost/*|internal/roomhostapp/*|internal/gamelog/*)
       mark_all_games

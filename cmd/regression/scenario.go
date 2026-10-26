@@ -525,6 +525,43 @@ func selectFirstAction(
 				map[string]any{"actionID": "__intent_conflict__"},
 			),
 		}, true
+	case "quoridor":
+		moves, _ := roomData["legalMoves"].([]any)
+		if len(moves) == 0 {
+			return legalAction{}, false
+		}
+		first, _ := moves[0].(map[string]any)
+		row := numericValue(first["row"])
+		column := numericValue(first["column"])
+		if row < 0 || row >= 9 || column < 0 || column >= 9 {
+			return legalAction{}, false
+		}
+		return legalAction{
+			Command: gameCommand(
+				gameType,
+				matchID,
+				commandID,
+				"game_move_pawn",
+				"movePawn",
+				map[string]any{
+					"to": map[string]any{
+						"row": row, "column": column,
+					},
+				},
+			),
+			ConflictCommand: gameCommand(
+				gameType,
+				matchID,
+				commandID,
+				"game_move_pawn",
+				"movePawn",
+				map[string]any{
+					"to": map[string]any{
+						"row": -1, "column": -1,
+					},
+				},
+			),
+		}, true
 	default:
 		return legalAction{}, false
 	}

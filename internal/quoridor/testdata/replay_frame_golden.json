@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "frameFields": [
+    "playersData",
+    "result",
+    "roomData"
+  ],
+  "roomDataFields": [
+    "currentPlayer",
+    "currentSide",
+    "firstPlayerID",
+    "gameStatus",
+    "lastAction",
+    "legalMoves",
+    "moveLog",
+    "northPlayerID",
+    "pawns",
+    "playerOrder",
+    "players",
+    "referencePaths",
+    "roundNo",
+    "southPlayerID",
+    "turnDeadline",
+    "turnTimeoutMs",
+    "wallOptions",
+    "wallStock",
+    "walls"
+  ]
+}

@@ -13,6 +13,7 @@ const (
 	GameOthello  = "othello"
 	GameFugitive = "fugitive"
 	GameWarChest = "warchest"
+	GameQuoridor = "quoridor"
 
 	MaxOwnedRooms         = 5
 	RoomStatusCreating    = "creating"
