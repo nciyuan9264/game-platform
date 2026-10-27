@@ -17,6 +17,7 @@ Game Platform 是桌游平台的后端服务仓库，提供房间生命周期、
 - `cmd/roomhost-fugitive`：Fugitive 单游戏 RoomHost。
 - `cmd/roomhost-warchest`：War Chest 单游戏 RoomHost。
 - `cmd/roomhost-quoridor`：步步为营（Quoridor）单游戏 RoomHost。
+- `cmd/roomhost-hex`：连边棋（Hex）单游戏 RoomHost。
 - `cmd/roomhost-loveletter`：掌心密信（Love Letter）单游戏 RoomHost。
 - `cmd/roomhost-sixnimmt`：6 nimmt! 单游戏 RoomHost。
 - `cmd/migrate-schema`：发布前执行的幂等数据库 Schema Migration。
@@ -112,7 +113,7 @@ for service in \
   backfill-replay control-plane game-release gateway migrate-schema \
   platform-rpc roomhost-acquire roomhost-davinci roomhost-splendor \
   roomhost-yinsh roomhost-othello roomhost-fugitive roomhost-warchest \
-  roomhost-quoridor roomhost-loveletter roomhost-sixnimmt
+  roomhost-quoridor roomhost-hex roomhost-loveletter roomhost-sixnimmt
 do
   go build -o "/tmp/${service}" "./cmd/${service}"
 done

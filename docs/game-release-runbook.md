@@ -62,6 +62,21 @@ game-release register \
 Registration is a production operation. It is not part of build verification
 or ordinary source delivery.
 
+## First Hex Registration
+
+After a `hex-v1` RoomHost slot advertises ready, register the catalog entry:
+
+```bash
+game-release register \
+  --game hex \
+  --version hex-v1 \
+  --default-max-players 2 \
+  --replay-schema-version 1 \
+  --artifact <hex-image-sha>
+```
+
+Run the Hex regression canary before exposing the frontend route.
+
 ## Compatible Runtime Fix
 
 Keep `EngineVersion` unchanged only when state encoding, deterministic

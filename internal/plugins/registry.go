@@ -5,6 +5,7 @@ import (
 	"github.com/nciyuan9264/game-platform/internal/plugins/acquire"
 	"github.com/nciyuan9264/game-platform/internal/plugins/davinci"
 	"github.com/nciyuan9264/game-platform/internal/plugins/fugitive"
+	"github.com/nciyuan9264/game-platform/internal/plugins/hex"
 	"github.com/nciyuan9264/game-platform/internal/plugins/loveletter"
 	"github.com/nciyuan9264/game-platform/internal/plugins/othello"
 	"github.com/nciyuan9264/game-platform/internal/plugins/quoridor"
@@ -26,5 +27,6 @@ func Registry() *game.Registry {
 		sixnimmt.Definition(),
 		warchest.Definition(),
 		quoridor.Definition(),
+		hex.Definition(),
 	)
 }

@@ -19,6 +19,7 @@ func TestRegistryContainsAllGamePlugins(t *testing.T) {
 		contracts.GameFugitive,
 		contracts.GameWarChest,
 		contracts.GameQuoridor,
+		contracts.GameHex,
 		contracts.GameLoveLetter,
 		contracts.GameSixNimmt,
 	} {
@@ -41,6 +42,7 @@ func TestAllGamePluginsSupportRoomVisibilitySettings(t *testing.T) {
 		contracts.GameFugitive,
 		contracts.GameWarChest,
 		contracts.GameQuoridor,
+		contracts.GameHex,
 		contracts.GameLoveLetter,
 		contracts.GameSixNimmt,
 	} {

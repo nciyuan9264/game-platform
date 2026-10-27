@@ -100,7 +100,22 @@ git commit -qm new-quoridor
 new_quoridor="$(git rev-parse HEAD)"
 "$SCRIPT" "$new_quoridor_base" "$new_quoridor" >/dev/null
 
-new_loveletter_base="$new_quoridor"
+new_hex_base="$new_quoridor"
+mkdir -p internal/plugins/hex/testdata
+cat >internal/plugins/hex/plugin.go <<'EOF'
+package hex
+const (
+	EngineVersion = "hex-v1"
+	ReplaySchemaVersion = 1
+)
+EOF
+printf '{"schemaVersion":1}\n' >internal/plugins/hex/testdata/replay_frame_golden.json
+git add .
+git commit -qm new-hex
+new_hex="$(git rev-parse HEAD)"
+"$SCRIPT" "$new_hex_base" "$new_hex" >/dev/null
+
+new_loveletter_base="$new_hex"
 mkdir -p internal/plugins/loveletter/testdata
 cat >internal/plugins/loveletter/plugin.go <<'EOF'
 package loveletter

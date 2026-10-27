@@ -85,6 +85,7 @@ jobs:
             roomhost-fugitive
             roomhost-warchest
             roomhost-quoridor
+            roomhost-hex
             roomhost-loveletter
             roomhost-sixnimmt
             migrate-schema
@@ -137,6 +138,10 @@ jobs:
           QUORIDOR_ROOMHOST_B_IMAGE: registry.example.com/game-platform-roomhost-quoridor:ci-b
           QUORIDOR_ROOMHOST_A_VERSION: ci-a
           QUORIDOR_ROOMHOST_B_VERSION: ci-b
+          HEX_ROOMHOST_A_IMAGE: registry.example.com/game-platform-roomhost-hex:ci-a
+          HEX_ROOMHOST_B_IMAGE: registry.example.com/game-platform-roomhost-hex:ci-b
+          HEX_ROOMHOST_A_VERSION: ci-a
+          HEX_ROOMHOST_B_VERSION: ci-b
           LOVELETTER_ROOMHOST_A_IMAGE: registry.example.com/game-platform-roomhost-loveletter:ci-a
           LOVELETTER_ROOMHOST_B_IMAGE: registry.example.com/game-platform-roomhost-loveletter:ci-b
           LOVELETTER_ROOMHOST_A_VERSION: ci-a

@@ -14,6 +14,7 @@ const (
 	GameFugitive   = "fugitive"
 	GameWarChest   = "warchest"
 	GameQuoridor   = "quoridor"
+	GameHex        = "hex"
 	GameLoveLetter = "loveletter"
 	GameSixNimmt   = "sixnimmt"
 

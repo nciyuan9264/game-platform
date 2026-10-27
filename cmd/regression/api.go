@@ -210,6 +210,8 @@ func (c *apiClient) probeLeaderboard(ctx context.Context, gameType string) error
 			key = "warchest"
 		} else if gameType == "quoridor" {
 			key = "quoridor"
+		} else if gameType == "hex" {
+			key = "hex"
 		}
 		if metric[key] == nil {
 			return fmt.Errorf("leaderboard metric %q is missing", key)

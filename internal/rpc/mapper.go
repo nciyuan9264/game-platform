@@ -132,6 +132,10 @@ func roomMetrics(room contracts.RoomRecord) *platform.RoomMetrics {
 		return &platform.RoomMetrics{Quoridor: &platform.QuoridorRoomMetrics{
 			TurnCount: current,
 		}}
+	case contracts.GameHex:
+		return &platform.RoomMetrics{Hex: &platform.HexRoomMetrics{
+			TurnCount: current,
+		}}
 	case contracts.GameLoveLetter:
 		return &platform.RoomMetrics{Loveletter: &platform.LoveLetterRoomMetrics{
 			CurrentRound:    0,

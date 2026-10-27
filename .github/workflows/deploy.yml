@@ -19,6 +19,7 @@ on:
           - fugitive
           - warchest
           - quoridor
+          - hex
           - loveletter
           - sixnimmt
       compatibility_ack:
@@ -66,7 +67,7 @@ jobs:
               center='["control-plane","gateway","migrate-schema","platform-rpc"]'
               games='[]'
               ;;
-            acquire|davinci|splendor|yinsh|othello|fugitive|warchest|quoridor|loveletter|sixnimmt)
+            acquire|davinci|splendor|yinsh|othello|fugitive|warchest|quoridor|hex|loveletter|sixnimmt)
               center='[]'
               games="$(jq -cn --arg game "${COMPONENT_OVERRIDE}" '[$game]')"
               ;;
@@ -237,6 +238,10 @@ jobs:
             export QUORIDOR_ROOMHOST_B_IMAGE="${QUORIDOR_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-quoridor:${IMAGE_TAG}}"
             export QUORIDOR_ROOMHOST_A_VERSION="${QUORIDOR_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
             export QUORIDOR_ROOMHOST_B_VERSION="${QUORIDOR_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
+            export HEX_ROOMHOST_A_IMAGE="${HEX_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-hex:${IMAGE_TAG}}"
+            export HEX_ROOMHOST_B_IMAGE="${HEX_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-hex:${IMAGE_TAG}}"
+            export HEX_ROOMHOST_A_VERSION="${HEX_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
+            export HEX_ROOMHOST_B_VERSION="${HEX_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
             export LOVELETTER_ROOMHOST_A_IMAGE="${LOVELETTER_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-loveletter:${IMAGE_TAG}}"
             export LOVELETTER_ROOMHOST_B_IMAGE="${LOVELETTER_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-loveletter:${IMAGE_TAG}}"
             export LOVELETTER_ROOMHOST_A_VERSION="${LOVELETTER_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
@@ -357,6 +362,10 @@ jobs:
             export QUORIDOR_ROOMHOST_B_IMAGE="${QUORIDOR_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-quoridor:${IMAGE_TAG}}"
             export QUORIDOR_ROOMHOST_A_VERSION="${QUORIDOR_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
             export QUORIDOR_ROOMHOST_B_VERSION="${QUORIDOR_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
+            export HEX_ROOMHOST_A_IMAGE="${HEX_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-hex:${IMAGE_TAG}}"
+            export HEX_ROOMHOST_B_IMAGE="${HEX_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-hex:${IMAGE_TAG}}"
+            export HEX_ROOMHOST_A_VERSION="${HEX_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
+            export HEX_ROOMHOST_B_VERSION="${HEX_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
             export LOVELETTER_ROOMHOST_A_IMAGE="${LOVELETTER_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-loveletter:${IMAGE_TAG}}"
             export LOVELETTER_ROOMHOST_B_IMAGE="${LOVELETTER_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-loveletter:${IMAGE_TAG}}"
             export LOVELETTER_ROOMHOST_A_VERSION="${LOVELETTER_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"

@@ -21,6 +21,7 @@ mark_all_games() {
   games[fugitive]=1
   games[warchest]=1
   games[quoridor]=1
+  games[hex]=1
   games[loveletter]=1
   games[sixnimmt]=1
 }
@@ -79,6 +80,9 @@ for path in "${files[@]}"; do
       ;;
     internal/plugins/quoridor/*|cmd/roomhost-quoridor/*)
       games[quoridor]=1
+      ;;
+    internal/plugins/hex/*|cmd/roomhost-hex/*)
+      games[hex]=1
       ;;
     internal/plugins/loveletter/*|cmd/roomhost-loveletter/*)
       games[loveletter]=1
