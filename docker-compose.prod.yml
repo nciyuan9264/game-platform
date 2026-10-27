@@ -257,6 +257,24 @@ services:
       PUBLIC_ADDR: roomhost-quoridor-b:9000
       SERVICE_VERSION: ${QUORIDOR_ROOMHOST_B_VERSION:?set Quoridor RoomHost B artifact version}
 
+  roomhost-loveletter-a:
+    <<: *roomhost-service
+    image: ${LOVELETTER_ROOMHOST_A_IMAGE:?set Love Letter RoomHost A image}
+    environment:
+      <<: *runtime-env
+      NODE_ID: roomhost-loveletter-a
+      PUBLIC_ADDR: roomhost-loveletter-a:9000
+      SERVICE_VERSION: ${LOVELETTER_ROOMHOST_A_VERSION:?set Love Letter RoomHost A artifact version}
+
+  roomhost-loveletter-b:
+    <<: *roomhost-service
+    image: ${LOVELETTER_ROOMHOST_B_IMAGE:?set Love Letter RoomHost B image}
+    environment:
+      <<: *runtime-env
+      NODE_ID: roomhost-loveletter-b
+      PUBLIC_ADDR: roomhost-loveletter-b:9000
+      SERVICE_VERSION: ${LOVELETTER_ROOMHOST_B_VERSION:?set Love Letter RoomHost B artifact version}
+
 networks:
   global-network:
     external: true

@@ -376,7 +376,8 @@ func (h *Handler) replayGameType(ctx context.Context, value string) (string, err
 		gameType != contracts.GameYinsh &&
 		gameType != contracts.GameOthello &&
 		gameType != contracts.GameWarChest &&
-		gameType != contracts.GameQuoridor {
+		gameType != contracts.GameQuoridor &&
+		gameType != contracts.GameLoveLetter {
 		return "", platformError("replay_not_supported", errors.New("game replay is not supported"))
 	}
 	return gameType, nil
@@ -439,6 +440,11 @@ func (h *Handler) buildReplaySnapshot(
 	case contracts.GameQuoridor:
 		result.Quoridor = &platform.QuoridorReplaySnapshot{}
 		if err := json.Unmarshal(encoded, result.Quoridor); err != nil {
+			return nil, platformError("replay_error", err)
+		}
+	case contracts.GameLoveLetter:
+		result.Loveletter = &platform.LoveLetterReplaySnapshot{}
+		if err := json.Unmarshal(encoded, result.Loveletter); err != nil {
 			return nil, platformError("replay_error", err)
 		}
 	default:

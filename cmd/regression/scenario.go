@@ -73,9 +73,13 @@ func runCanary(
 		result.Checks = append(result.Checks, verifier.VerifyClosed(ctx, observation)...)
 	}()
 
+	maxPlayers := 2
+	if gameType == "loveletter" {
+		maxPlayers = 6
+	}
 	if !appendGameCheck(&result, "create private room", func() error {
 		var err error
-		room, err = api.createRoom(ctx, gameType, result.Request, 2)
+		room, err = api.createRoom(ctx, gameType, result.Request, maxPlayers)
 		if err != nil {
 			return err
 		}
@@ -91,7 +95,7 @@ func runCanary(
 	}
 
 	if !appendGameCheck(&result, "create request is idempotent", func() error {
-		repeated, err := api.createRoom(ctx, gameType, result.Request, 2)
+		repeated, err := api.createRoom(ctx, gameType, result.Request, maxPlayers)
 		if err != nil {
 			return err
 		}
@@ -105,7 +109,7 @@ func runCanary(
 	}
 
 	if !appendGameCheck(&result, "create request detects intent conflict", func() error {
-		_, err := api.createRoom(ctx, gameType, result.Request, 3)
+		_, err := api.createRoom(ctx, gameType, result.Request, maxPlayers-1)
 		if !isAPIError(err, http.StatusConflict, "idempotency_conflict") {
 			return fmt.Errorf("conflicting create error = %v", err)
 		}
@@ -560,6 +564,28 @@ func selectFirstAction(
 						"row": -1, "column": -1,
 					},
 				},
+			),
+		}, true
+	case "loveletter":
+		if stringValue(roomData, "gameStatus") != "draw" {
+			return legalAction{}, false
+		}
+		return legalAction{
+			Command: gameCommand(
+				gameType,
+				matchID,
+				commandID,
+				"game_draw_card",
+				"drawCard",
+				map[string]any{},
+			),
+			ConflictCommand: gameCommand(
+				gameType,
+				matchID,
+				commandID,
+				"game_play_card",
+				"playCard",
+				map[string]any{"cardID": "__intent_conflict__"},
 			),
 		}, true
 	default:

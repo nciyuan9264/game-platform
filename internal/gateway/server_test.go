@@ -398,6 +398,46 @@ func TestClientCommandPayload(t *testing.T) {
 		}
 	})
 
+	t.Run("loveletter card and empty payloads", func(t *testing.T) {
+		got, err := clientCommandPayload(
+			contracts.GameLoveLetter,
+			"game_play_card",
+			map[string]any{
+				"loveletter": map[string]any{
+					"playCard": map[string]any{
+						"cardID":         "r1-1-0",
+						"targetPlayerID": "player-2",
+						"guessRank":      float64(9),
+					},
+				},
+			},
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		payload, ok := got.(map[string]any)
+		if !ok ||
+			payload["cardID"] != "r1-1-0" ||
+			payload["guessRank"] != float64(9) {
+			t.Fatalf("play card payload = %#v", got)
+		}
+		got, err = clientCommandPayload(
+			contracts.GameLoveLetter,
+			"game_next_round",
+			map[string]any{
+				"loveletter": map[string]any{
+					"nextRound": map[string]any{},
+				},
+			},
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := got.(map[string]any); !ok {
+			t.Fatalf("next round payload = %#v", got)
+		}
+	})
+
 	t.Run("wrong union group", func(t *testing.T) {
 		if _, err := clientCommandPayload(contracts.GameAcquire, "game_place_tile", map[string]any{
 			"davinci": map[string]any{},

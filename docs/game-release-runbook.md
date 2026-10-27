@@ -34,18 +34,18 @@ The script self-tests the image, chooses an empty A/B slot, waits for stable
 ready heartbeats, promotes with CAS, drains the old slot, and stops it only at
 zero active rooms.
 
-## First Quoridor Registration
+## First Game Registration
 
-After a `quoridor-v1` RoomHost slot advertises ready, register the catalog entry
-once:
+After a new game's RoomHost slot advertises ready, register its catalog entry
+once. For Love Letter:
 
 ```bash
 game-release register \
-  --game quoridor \
-  --version quoridor-v1 \
-  --default-max-players 2 \
+  --game loveletter \
+  --version loveletter-v1 \
+  --default-max-players 6 \
   --replay-schema-version 1 \
-  --artifact <quoridor-image-sha>
+  --artifact <loveletter-image-sha>
 ```
 
 Registration is a production operation. It is not part of build verification

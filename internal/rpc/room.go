@@ -64,6 +64,16 @@ func (h *Handler) CreateRoom(ctx context.Context, req *platform.CreateRoomReq) (
 		}
 		turnTimeoutSeconds = 60
 	}
+	if gameType == contracts.GameLoveLetter {
+		if req.IsSetTurnTimeoutSeconds() &&
+			turnTimeoutSeconds != 60 {
+			return nil, platformError(
+				"invalid_request",
+				errors.New("loveletter turnTimeoutSeconds is fixed at 60"),
+			)
+		}
+		turnTimeoutSeconds = 60
+	}
 	if turnTimeoutSeconds != 0 &&
 		turnTimeoutSeconds != 60 &&
 		turnTimeoutSeconds != 90 {

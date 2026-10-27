@@ -207,6 +207,42 @@ func TestSelectFirstQuoridorActionUsesFirstLegalMove(t *testing.T) {
 	}
 }
 
+func TestSelectFirstLoveLetterActionDrawsWithoutLeakingIntent(t *testing.T) {
+	view, err := json.Marshal(map[string]any{
+		"playerId": "7",
+		"roomData": map[string]any{
+			"currentPlayer": "7",
+			"gameStatus":    "draw",
+		},
+		"privateData": map[string]any{
+			"hand": []any{map[string]any{"cardID": "r1-4-0", "rank": 4}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	action, ok := selectFirstAction(
+		"test-run",
+		"loveletter",
+		"room-1-r1",
+		"7",
+		realtimeEnvelope{
+			Type: "ROOM_SYNC",
+			View: map[string]json.RawMessage{"loveletter": view},
+		},
+	)
+	if !ok ||
+		action.Command.Type != "game_draw_card" ||
+		action.ConflictCommand.Type != "game_play_card" ||
+		action.Command.CommandID != action.ConflictCommand.CommandID {
+		t.Fatalf("action = %+v/%v", action, ok)
+	}
+	draw, drawOK := action.Command.Payload["loveletter"].(map[string]any)
+	if !drawOK || draw["drawCard"] == nil {
+		t.Fatalf("draw payload = %+v", action.Command.Payload)
+	}
+}
+
 func writeTestRoom(w http.ResponseWriter, status string) {
 	writeTestJSON(w, http.StatusOK, map[string]any{
 		"status_code": 200,
