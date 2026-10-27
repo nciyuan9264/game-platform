@@ -20,6 +20,7 @@ const (
 	GameForSale    = "forsale"
 	GameOnitama    = "onitama"
 	GameHive       = "hive"
+	GameCantStop   = "cantstop"
 
 	MaxOwnedRooms         = 5
 	RoomStatusCreating    = "creating"

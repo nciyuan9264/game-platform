@@ -692,7 +692,8 @@ func usesWinRateLeaderboard(gameType string) bool {
 		gameType == contracts.GameFugitive ||
 		gameType == contracts.GameWarChest ||
 		gameType == contracts.GameQuoridor ||
-		gameType == contracts.GameOnitama
+		gameType == contracts.GameOnitama ||
+		gameType == contracts.GameCantStop
 }
 
 func (s *PostgresStore) ListReplayBackfillGameIDs(

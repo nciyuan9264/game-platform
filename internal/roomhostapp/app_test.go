@@ -7,6 +7,7 @@ import (
 	"github.com/nciyuan9264/game-platform/internal/contracts"
 	"github.com/nciyuan9264/game-platform/internal/game"
 	"github.com/nciyuan9264/game-platform/internal/plugins/acquire"
+	"github.com/nciyuan9264/game-platform/internal/plugins/cantstop"
 	"github.com/nciyuan9264/game-platform/internal/plugins/davinci"
 	"github.com/nciyuan9264/game-platform/internal/plugins/forsale"
 	"github.com/nciyuan9264/game-platform/internal/plugins/fugitive"
@@ -55,6 +56,7 @@ func TestSelfTestCoversProductionDefinitions(t *testing.T) {
 		forsale.Definition(),
 		onitama.Definition(),
 		hive.Definition(),
+		cantstop.Definition(),
 	}
 	for _, definition := range definitions {
 		t.Run(definition.GameType, func(t *testing.T) {

@@ -167,6 +167,13 @@ func roomMetrics(room contracts.RoomRecord) *platform.RoomMetrics {
 			ProgressCurrent:  current,
 			ProgressTotal:    total,
 		}}
+	case contracts.GameCantStop:
+		return &platform.RoomMetrics{Cantstop: &platform.CantStopRoomMetrics{
+			MaxClaimedColumns: current,
+			TargetColumns:     total,
+			ProgressCurrent:   current,
+			ProgressTotal:     total,
+		}}
 	case contracts.GameSplendor:
 		return &platform.RoomMetrics{Splendor: &platform.SplendorRoomMetrics{
 			MaxScore: current, ProgressCurrent: current, ProgressTotal: total,

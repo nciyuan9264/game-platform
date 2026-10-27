@@ -30,6 +30,7 @@ var supportedGames = []string{
 	"forsale",
 	"onitama",
 	"hive",
+	"cantstop",
 }
 
 type config struct {

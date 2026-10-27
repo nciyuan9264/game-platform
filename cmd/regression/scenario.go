@@ -80,6 +80,9 @@ func runCanary(
 	if gameType == "sixnimmt" {
 		maxPlayers = 10
 	}
+	if gameType == "cantstop" {
+		maxPlayers = 4
+	}
 	if !appendGameCheck(&result, "create private room", func() error {
 		var err error
 		room, err = api.createRoom(ctx, gameType, result.Request, maxPlayers)
@@ -599,6 +602,28 @@ func selectFirstAction(
 			ConflictCommand: gameCommand(
 				gameType, matchID, commandID,
 				"game_bid", "bid", map[string]any{"amount": 999},
+			),
+		}, true
+	case "cantstop":
+		if stringValue(roomData, "gameStatus") != "roll" {
+			return legalAction{}, false
+		}
+		return legalAction{
+			Command: gameCommand(
+				gameType,
+				matchID,
+				commandID,
+				"game_roll_dice",
+				"rollDice",
+				map[string]any{},
+			),
+			ConflictCommand: gameCommand(
+				gameType,
+				matchID,
+				commandID,
+				"game_advance",
+				"advance",
+				map[string]any{"actionID": "__intent_conflict__"},
 			),
 		}, true
 	case "loveletter":

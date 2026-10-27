@@ -23,6 +23,7 @@ Game Platform 是桌游平台的后端服务仓库，提供房间生命周期、
 - `cmd/roomhost-forsale`：For Sale 地产拍卖单游戏 RoomHost。
 - `cmd/roomhost-onitama`：御神乐棋（Onitama）单游戏 RoomHost。
 - `cmd/roomhost-hive`：虫棋（HIVE）单游戏 RoomHost。
+- `cmd/roomhost-cantstop`：Can't Stop 单游戏 RoomHost。
 - `cmd/migrate-schema`：发布前执行的幂等数据库 Schema Migration。
 - `cmd/game-release`：执行单游戏 A/B slot 发布、晋级、排空和回滚。
 - `cmd/backfill-replay`：按显式 engine mapping 回填旧录像物化数据的运维工具。
@@ -117,7 +118,7 @@ for service in \
   platform-rpc roomhost-acquire roomhost-davinci roomhost-splendor \
   roomhost-yinsh roomhost-othello roomhost-fugitive roomhost-warchest \
   roomhost-quoridor roomhost-hex roomhost-loveletter roomhost-sixnimmt \
-  roomhost-forsale roomhost-onitama roomhost-hive
+  roomhost-forsale roomhost-onitama roomhost-hive roomhost-cantstop
 do
   go build -o "/tmp/${service}" "./cmd/${service}"
 done

@@ -90,6 +90,7 @@ func TestWinRateLeaderboardGames(t *testing.T) {
 		!usesWinRateLeaderboard(contracts.GameWarChest) ||
 		!usesWinRateLeaderboard(contracts.GameQuoridor) ||
 		!usesWinRateLeaderboard(contracts.GameOnitama) ||
+		!usesWinRateLeaderboard(contracts.GameCantStop) ||
 		usesWinRateLeaderboard(contracts.GameAcquire) ||
 		usesWinRateLeaderboard(contracts.GameSplendor) ||
 		usesWinRateLeaderboard(contracts.GameLoveLetter) {

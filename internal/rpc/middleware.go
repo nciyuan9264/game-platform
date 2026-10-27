@@ -75,16 +75,22 @@ func HTTPResponseMiddleware(next endpoint.Endpoint) endpoint.Endpoint {
 }
 
 func methodAuthRequired(method string) (bool, bool) {
-	descriptor := platform.GetFileDescriptorForService().GetMethodDescriptor("GamePlatformService", method)
-	if descriptor == nil {
-		return false, false
-	}
-	values := descriptor.GetAnnotations()["api.auth_required"]
-	if len(values) != 1 {
-		return false, false
-	}
-	required, err := strconv.ParseBool(values[0])
-	return required, err == nil
+	required, ok := methodAuthPolicies[method]
+	return required, ok
+}
+
+var methodAuthPolicies = map[string]bool{
+	"CreateRoom":       true,
+	"ListRooms":        true,
+	"GetRoom":          true,
+	"CloseRoom":        true,
+	"StartNextMatch":   true,
+	"ListHistoryGames": true,
+	"GetHistoryDetail": true,
+	"GetSnapshot":      true,
+	"ListSnapshots":    true,
+	"GetStats":         true,
+	"GetLeaderboard":   false,
 }
 
 func authenticatedIdentity(ctx context.Context) (identity, bool) {

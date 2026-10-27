@@ -365,6 +365,24 @@ services:
       PUBLIC_ADDR: roomhost-hive-b:9000
       SERVICE_VERSION: ${HIVE_ROOMHOST_B_VERSION:?set Hive RoomHost B artifact version}
 
+  roomhost-cantstop-a:
+    <<: *roomhost-service
+    image: ${CANTSTOP_ROOMHOST_A_IMAGE:?set Can't Stop RoomHost A image}
+    environment:
+      <<: *runtime-env
+      NODE_ID: roomhost-cantstop-a
+      PUBLIC_ADDR: roomhost-cantstop-a:9000
+      SERVICE_VERSION: ${CANTSTOP_ROOMHOST_A_VERSION:?set Can't Stop RoomHost A artifact version}
+
+  roomhost-cantstop-b:
+    <<: *roomhost-service
+    image: ${CANTSTOP_ROOMHOST_B_IMAGE:?set Can't Stop RoomHost B image}
+    environment:
+      <<: *runtime-env
+      NODE_ID: roomhost-cantstop-b
+      PUBLIC_ADDR: roomhost-cantstop-b:9000
+      SERVICE_VERSION: ${CANTSTOP_ROOMHOST_B_VERSION:?set Can't Stop RoomHost B artifact version}
+
 networks:
   global-network:
     external: true

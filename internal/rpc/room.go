@@ -184,6 +184,16 @@ func createRoomTurnTimeoutSeconds(gameType string, req *platform.CreateRoomReq) 
 		}
 		return 120, nil
 	}
+	if gameType == contracts.GameCantStop {
+		if req.IsSetTurnTimeoutSeconds() &&
+			turnTimeoutSeconds != 60 {
+			return 0, platformError(
+				"invalid_request",
+				errors.New("cantstop turnTimeoutSeconds is fixed at 60"),
+			)
+		}
+		return 60, nil
+	}
 	if turnTimeoutSeconds != 0 &&
 		turnTimeoutSeconds != 60 &&
 		turnTimeoutSeconds != 90 {

@@ -3,6 +3,7 @@ package plugins
 import (
 	"github.com/nciyuan9264/game-platform/internal/game"
 	"github.com/nciyuan9264/game-platform/internal/plugins/acquire"
+	"github.com/nciyuan9264/game-platform/internal/plugins/cantstop"
 	"github.com/nciyuan9264/game-platform/internal/plugins/davinci"
 	"github.com/nciyuan9264/game-platform/internal/plugins/forsale"
 	"github.com/nciyuan9264/game-platform/internal/plugins/fugitive"
@@ -34,5 +35,6 @@ func Registry() *game.Registry {
 		quoridor.Definition(),
 		hex.Definition(),
 		onitama.Definition(),
+		cantstop.Definition(),
 	)
 }

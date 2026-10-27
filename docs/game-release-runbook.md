@@ -101,6 +101,23 @@ game-release register \
 Run this only during the production rollout, after center services support the
 Onitama DTOs and before the frontend entry is published.
 
+## First Can't Stop Registration
+
+After a `cantstop-v1` RoomHost slot advertises ready, register the catalog
+entry once:
+
+```bash
+game-release register \
+  --game cantstop \
+  --version cantstop-v1 \
+  --default-max-players 4 \
+  --replay-schema-version 1 \
+  --artifact <cantstop-image-sha>
+```
+
+Run this only during the production rollout, after center services support the
+Can't Stop DTOs and before the frontend entry is published.
+
 ## First Hex Registration
 
 After a `hex-v1` RoomHost slot advertises ready, register the catalog entry:

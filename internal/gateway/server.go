@@ -779,6 +779,14 @@ func clientCommandPayload(gameType, commandType string, payload any) (any, error
 		variant = "chooseRow"
 	case "game_next_round":
 		variant = "nextRound"
+	case "game_roll_dice":
+		variant = "rollDice"
+	case "game_advance":
+		variant = "advance"
+	case "game_bank":
+		variant = "bank"
+	case "game_next_turn":
+		variant = "nextTurn"
 	default:
 		return nil, fmt.Errorf("unsupported command type %q", commandType)
 	}

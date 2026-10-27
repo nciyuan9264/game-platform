@@ -345,6 +345,11 @@ func (h *Handler) GetLeaderboard(ctx context.Context, req *platform.GetLeaderboa
 				Wins:    int32(valueOrZero(entry.Wins)),
 				WinRate: floatValueOrZero(entry.WinRate),
 			}
+		} else if gameType == contracts.GameCantStop {
+			metric.Cantstop = &platform.CantStopLeaderboardMetric{
+				Wins:    int32(valueOrZero(entry.Wins)),
+				WinRate: floatValueOrZero(entry.WinRate),
+			}
 		} else {
 			metric.Rank = &platform.RankLeaderboardMetric{AvgRank: floatValueOrZero(entry.AvgRank)}
 		}
@@ -387,7 +392,8 @@ func (h *Handler) replayGameType(ctx context.Context, value string) (string, err
 		gameType != contracts.GameSixNimmt &&
 		gameType != contracts.GameForSale &&
 		gameType != contracts.GameOnitama &&
-		gameType != contracts.GameHive {
+		gameType != contracts.GameHive &&
+		gameType != contracts.GameCantStop {
 		return "", platformError("replay_not_supported", errors.New("game replay is not supported"))
 	}
 	return gameType, nil
@@ -480,6 +486,11 @@ func (h *Handler) buildReplaySnapshot(
 	case contracts.GameHive:
 		result.Hive = &platform.HiveReplaySnapshot{}
 		if err := json.Unmarshal(encoded, result.Hive); err != nil {
+			return nil, platformError("replay_error", err)
+		}
+	case contracts.GameCantStop:
+		result.Cantstop = &platform.CantStopReplaySnapshot{}
+		if err := json.Unmarshal(encoded, result.Cantstop); err != nil {
 			return nil, platformError("replay_error", err)
 		}
 	default:
