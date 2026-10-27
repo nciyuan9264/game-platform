@@ -77,6 +77,9 @@ func runCanary(
 	if gameType == "loveletter" {
 		maxPlayers = 6
 	}
+	if gameType == "sixnimmt" {
+		maxPlayers = 10
+	}
 	if !appendGameCheck(&result, "create private room", func() error {
 		var err error
 		room, err = api.createRoom(ctx, gameType, result.Request, maxPlayers)
@@ -345,7 +348,9 @@ func selectFirstAction(
 		return legalAction{}, false
 	}
 	roomData, _ := view["roomData"].(map[string]any)
-	if roomData == nil || stringValue(roomData, "currentPlayer") != playerID {
+	if roomData == nil ||
+		(gameType != "sixnimmt" &&
+			stringValue(roomData, "currentPlayer") != playerID) {
 		return legalAction{}, false
 	}
 	commandID := canaryCommandID(runID, gameType, "action")
@@ -586,6 +591,38 @@ func selectFirstAction(
 				"game_play_card",
 				"playCard",
 				map[string]any{"cardID": "__intent_conflict__"},
+			),
+		}, true
+	case "sixnimmt":
+		privateData, _ := view["privateData"].(map[string]any)
+		rawCards, _ := privateData["legalCards"].([]any)
+		cards := make([]int, 0, len(rawCards))
+		for _, raw := range rawCards {
+			card := numericValue(raw)
+			if card >= 1 && card <= 104 {
+				cards = append(cards, card)
+			}
+		}
+		sort.Ints(cards)
+		if len(cards) == 0 {
+			return legalAction{}, false
+		}
+		return legalAction{
+			Command: gameCommand(
+				gameType,
+				matchID,
+				commandID,
+				"game_lock_card",
+				"lockCard",
+				map[string]any{"card": cards[0]},
+			),
+			ConflictCommand: gameCommand(
+				gameType,
+				matchID,
+				commandID,
+				"game_lock_card",
+				"lockCard",
+				map[string]any{"card": -1},
 			),
 		}, true
 	default:

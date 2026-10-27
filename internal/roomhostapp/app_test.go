@@ -12,6 +12,7 @@ import (
 	"github.com/nciyuan9264/game-platform/internal/plugins/loveletter"
 	"github.com/nciyuan9264/game-platform/internal/plugins/othello"
 	"github.com/nciyuan9264/game-platform/internal/plugins/quoridor"
+	"github.com/nciyuan9264/game-platform/internal/plugins/sixnimmt"
 	"github.com/nciyuan9264/game-platform/internal/plugins/splendor"
 	"github.com/nciyuan9264/game-platform/internal/plugins/warchest"
 	"github.com/nciyuan9264/game-platform/internal/plugins/yinsh"
@@ -47,6 +48,7 @@ func TestSelfTestCoversProductionDefinitions(t *testing.T) {
 		warchest.Definition(),
 		quoridor.Definition(),
 		loveletter.Definition(),
+		sixnimmt.Definition(),
 	}
 	for _, definition := range definitions {
 		t.Run(definition.GameType, func(t *testing.T) {

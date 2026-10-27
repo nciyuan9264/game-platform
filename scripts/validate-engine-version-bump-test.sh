@@ -115,4 +115,19 @@ git commit -qm new-loveletter
 new_loveletter="$(git rev-parse HEAD)"
 "$SCRIPT" "$new_loveletter_base" "$new_loveletter" >/dev/null
 
+new_sixnimmt_base="$new_loveletter"
+mkdir -p internal/plugins/sixnimmt/testdata
+cat >internal/plugins/sixnimmt/plugin.go <<'EOF'
+package sixnimmt
+const (
+	EngineVersion = "sixnimmt-v1"
+	ReplaySchemaVersion = 1
+)
+EOF
+printf '{"schemaVersion":1}\n' >internal/plugins/sixnimmt/testdata/replay_frame_golden.json
+git add .
+git commit -qm new-sixnimmt
+new_sixnimmt="$(git rev-parse HEAD)"
+"$SCRIPT" "$new_sixnimmt_base" "$new_sixnimmt" >/dev/null
+
 printf 'engine version validation tests passed\n'

@@ -86,6 +86,7 @@ jobs:
             roomhost-warchest
             roomhost-quoridor
             roomhost-loveletter
+            roomhost-sixnimmt
             migrate-schema
             backfill-replay
             game-release
@@ -140,5 +141,9 @@ jobs:
           LOVELETTER_ROOMHOST_B_IMAGE: registry.example.com/game-platform-roomhost-loveletter:ci-b
           LOVELETTER_ROOMHOST_A_VERSION: ci-a
           LOVELETTER_ROOMHOST_B_VERSION: ci-b
+          SIXNIMMT_ROOMHOST_A_IMAGE: registry.example.com/game-platform-roomhost-sixnimmt:ci-a
+          SIXNIMMT_ROOMHOST_B_IMAGE: registry.example.com/game-platform-roomhost-sixnimmt:ci-b
+          SIXNIMMT_ROOMHOST_A_VERSION: ci-a
+          SIXNIMMT_ROOMHOST_B_VERSION: ci-b
         run: |
           ./scripts/validate-prod-config.sh

@@ -14,6 +14,7 @@ func TestReplayCodecRoundTrip(t *testing.T) {
 		"playersData": map[string]any{"alice": map[string]any{"score": 3}},
 		"deck":        []any{map[string]any{"cardID": "c1", "rank": 1}},
 		"reserve":     map[string]any{"cardID": "c0", "rank": 0},
+		"unusedCards": []int{2, 3, 4},
 		"result":      map[string]any{"alice": map[string]any{"rank": 1}},
 	})
 	if err != nil {
@@ -65,6 +66,10 @@ func TestReplayCodecRoundTrip(t *testing.T) {
 	reserve := decoded["reserve"].(map[string]any)
 	if len(deck) != 1 || reserve["cardID"] != "c0" {
 		t.Fatalf("hidden replay fields = deck %+v reserve %+v", deck, reserve)
+	}
+	unusedCards := decoded["unusedCards"].([]any)
+	if len(unusedCards) != 3 || unusedCards[2] != float64(4) {
+		t.Fatalf("unused replay cards = %+v", unusedCards)
 	}
 	roomData := decoded["roomData"].(map[string]any)
 	profile := roomData["players"].(map[string]any)["alice"].(map[string]any)

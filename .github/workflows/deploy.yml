@@ -20,6 +20,7 @@ on:
           - warchest
           - quoridor
           - loveletter
+          - sixnimmt
       compatibility_ack:
         description: Reason an engine implementation change is version-compatible
         type: string
@@ -65,7 +66,7 @@ jobs:
               center='["control-plane","gateway","migrate-schema","platform-rpc"]'
               games='[]'
               ;;
-            acquire|davinci|splendor|yinsh|othello|fugitive|warchest|quoridor|loveletter)
+            acquire|davinci|splendor|yinsh|othello|fugitive|warchest|quoridor|loveletter|sixnimmt)
               center='[]'
               games="$(jq -cn --arg game "${COMPONENT_OVERRIDE}" '[$game]')"
               ;;
@@ -240,6 +241,10 @@ jobs:
             export LOVELETTER_ROOMHOST_B_IMAGE="${LOVELETTER_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-loveletter:${IMAGE_TAG}}"
             export LOVELETTER_ROOMHOST_A_VERSION="${LOVELETTER_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
             export LOVELETTER_ROOMHOST_B_VERSION="${LOVELETTER_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
+            export SIXNIMMT_ROOMHOST_A_IMAGE="${SIXNIMMT_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-sixnimmt:${IMAGE_TAG}}"
+            export SIXNIMMT_ROOMHOST_B_IMAGE="${SIXNIMMT_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-sixnimmt:${IMAGE_TAG}}"
+            export SIXNIMMT_ROOMHOST_A_VERSION="${SIXNIMMT_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
+            export SIXNIMMT_ROOMHOST_B_VERSION="${SIXNIMMT_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
             printf '%s' "${TCR_PASSWORD}" | docker login "${TCR_LOGIN_SERVER}" \
               --username "${TCR_USERNAME}" --password-stdin
             chmod +x scripts/validate-prod-config.sh
@@ -356,6 +361,10 @@ jobs:
             export LOVELETTER_ROOMHOST_B_IMAGE="${LOVELETTER_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-loveletter:${IMAGE_TAG}}"
             export LOVELETTER_ROOMHOST_A_VERSION="${LOVELETTER_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
             export LOVELETTER_ROOMHOST_B_VERSION="${LOVELETTER_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
+            export SIXNIMMT_ROOMHOST_A_IMAGE="${SIXNIMMT_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-sixnimmt:${IMAGE_TAG}}"
+            export SIXNIMMT_ROOMHOST_B_IMAGE="${SIXNIMMT_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-sixnimmt:${IMAGE_TAG}}"
+            export SIXNIMMT_ROOMHOST_A_VERSION="${SIXNIMMT_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
+            export SIXNIMMT_ROOMHOST_B_VERSION="${SIXNIMMT_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
             printf '%s' "${TCR_PASSWORD}" | docker login "${TCR_LOGIN_SERVER}" \
               --username "${TCR_USERNAME}" --password-stdin
             chmod +x scripts/deploy-game-slot.sh scripts/validate-prod-config.sh

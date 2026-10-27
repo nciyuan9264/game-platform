@@ -24,6 +24,7 @@ type ReplayFrame struct {
 	PrivateData json.RawMessage `json:"privateData,omitempty"`
 	Deck        json.RawMessage `json:"deck,omitempty"`
 	Reserve     json.RawMessage `json:"reserve,omitempty"`
+	UnusedCards json.RawMessage `json:"unusedCards,omitempty"`
 	Result      json.RawMessage `json:"result"`
 }
 
@@ -135,6 +136,9 @@ func MaterializedReplayJSON(
 	}
 	if len(frame.Reserve) > 0 {
 		envelope["reserve"] = frame.Reserve
+	}
+	if len(frame.UnusedCards) > 0 {
+		envelope["unusedCards"] = frame.UnusedCards
 	}
 	if event != nil {
 		currentEvent := map[string]any{

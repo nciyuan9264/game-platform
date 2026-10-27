@@ -134,6 +134,16 @@ func createRoomTurnTimeoutSeconds(gameType string, req *platform.CreateRoomReq) 
 		}
 		return 60, nil
 	}
+	if gameType == contracts.GameSixNimmt {
+		if req.IsSetTurnTimeoutSeconds() &&
+			turnTimeoutSeconds != 60 {
+			return 0, platformError(
+				"invalid_request",
+				errors.New("sixnimmt turnTimeoutSeconds is fixed at 60"),
+			)
+		}
+		return 60, nil
+	}
 	if turnTimeoutSeconds != 0 &&
 		turnTimeoutSeconds != 60 &&
 		turnTimeoutSeconds != 90 {

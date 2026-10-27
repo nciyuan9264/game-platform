@@ -275,6 +275,24 @@ services:
       PUBLIC_ADDR: roomhost-loveletter-b:9000
       SERVICE_VERSION: ${LOVELETTER_ROOMHOST_B_VERSION:?set Love Letter RoomHost B artifact version}
 
+  roomhost-sixnimmt-a:
+    <<: *roomhost-service
+    image: ${SIXNIMMT_ROOMHOST_A_IMAGE:?set Six Nimmt RoomHost A image}
+    environment:
+      <<: *runtime-env
+      NODE_ID: roomhost-sixnimmt-a
+      PUBLIC_ADDR: roomhost-sixnimmt-a:9000
+      SERVICE_VERSION: ${SIXNIMMT_ROOMHOST_A_VERSION:?set Six Nimmt RoomHost A artifact version}
+
+  roomhost-sixnimmt-b:
+    <<: *roomhost-service
+    image: ${SIXNIMMT_ROOMHOST_B_IMAGE:?set Six Nimmt RoomHost B image}
+    environment:
+      <<: *runtime-env
+      NODE_ID: roomhost-sixnimmt-b
+      PUBLIC_ADDR: roomhost-sixnimmt-b:9000
+      SERVICE_VERSION: ${SIXNIMMT_ROOMHOST_B_VERSION:?set Six Nimmt RoomHost B artifact version}
+
 networks:
   global-network:
     external: true

@@ -438,6 +438,39 @@ func TestClientCommandPayload(t *testing.T) {
 		}
 	})
 
+	t.Run("sixnimmt card row and empty payloads", func(t *testing.T) {
+		got, err := clientCommandPayload(
+			contracts.GameSixNimmt,
+			"game_lock_card",
+			map[string]any{
+				"sixnimmt": map[string]any{
+					"lockCard": map[string]any{"card": float64(55)},
+				},
+			},
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.(map[string]any)["card"] != float64(55) {
+			t.Fatalf("lock card payload = %#v", got)
+		}
+		got, err = clientCommandPayload(
+			contracts.GameSixNimmt,
+			"game_choose_row",
+			map[string]any{
+				"sixnimmt": map[string]any{
+					"chooseRow": map[string]any{"rowIndex": float64(2)},
+				},
+			},
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.(map[string]any)["rowIndex"] != float64(2) {
+			t.Fatalf("choose row payload = %#v", got)
+		}
+	})
+
 	t.Run("wrong union group", func(t *testing.T) {
 		if _, err := clientCommandPayload(contracts.GameAcquire, "game_place_tile", map[string]any{
 			"davinci": map[string]any{},

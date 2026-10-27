@@ -28,6 +28,7 @@ declare -A version_files=(
   [warchest]='internal/plugins/warchest/plugin.go'
   [quoridor]='internal/plugins/quoridor/plugin.go'
   [loveletter]='internal/plugins/loveletter/plugin.go'
+  [sixnimmt]='internal/plugins/sixnimmt/plugin.go'
 )
 declare -A changed_games=()
 declare -A engine_changes=()
@@ -84,6 +85,10 @@ while IFS= read -r path; do
       changed_games[loveletter]=1
       continue
       ;;
+    internal/plugins/sixnimmt/testdata/replay_frame_golden.json)
+      changed_games[sixnimmt]=1
+      continue
+      ;;
     internal/plugins/acquire/history.go)
       changed_games[acquire]=1
       continue
@@ -106,6 +111,10 @@ while IFS= read -r path; do
       ;;
     internal/plugins/quoridor/history.go)
       changed_games[quoridor]=1
+      continue
+      ;;
+    internal/plugins/sixnimmt/history.go)
+      changed_games[sixnimmt]=1
       continue
       ;;
     *_test.go|*/testdata/*)
@@ -175,6 +184,14 @@ while IFS= read -r path; do
       fi
       engine_changes[loveletter]=1
       ;;
+    internal/plugins/sixnimmt/*)
+      changed_games[sixnimmt]=1
+      if [[ "$path" == "${version_files[sixnimmt]}" ]] &&
+        compatibility_only_definition_change "$path"; then
+        continue
+      fi
+      engine_changes[sixnimmt]=1
+      ;;
   esac
 done < <(git diff --name-only "$base" "$head")
 
@@ -206,7 +223,7 @@ integer_constant_at() {
 
 failures=()
 validated=()
-for game_name in acquire davinci splendor yinsh othello fugitive warchest quoridor loveletter; do
+for game_name in acquire davinci splendor yinsh othello fugitive warchest quoridor loveletter sixnimmt; do
   [[ -n "${changed_games[$game_name]:-}" ]] || continue
   file="${version_files[$game_name]}"
   old_version="$(constant_at "$base" "$file" EngineVersion)"

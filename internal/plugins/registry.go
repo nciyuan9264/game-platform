@@ -8,6 +8,7 @@ import (
 	"github.com/nciyuan9264/game-platform/internal/plugins/loveletter"
 	"github.com/nciyuan9264/game-platform/internal/plugins/othello"
 	"github.com/nciyuan9264/game-platform/internal/plugins/quoridor"
+	"github.com/nciyuan9264/game-platform/internal/plugins/sixnimmt"
 	"github.com/nciyuan9264/game-platform/internal/plugins/splendor"
 	"github.com/nciyuan9264/game-platform/internal/plugins/warchest"
 	"github.com/nciyuan9264/game-platform/internal/plugins/yinsh"
@@ -22,6 +23,7 @@ func Registry() *game.Registry {
 		othello.Definition(),
 		fugitive.Definition(),
 		loveletter.Definition(),
+		sixnimmt.Definition(),
 		warchest.Definition(),
 		quoridor.Definition(),
 	)

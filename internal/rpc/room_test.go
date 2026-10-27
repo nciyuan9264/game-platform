@@ -52,3 +52,26 @@ func TestCreateRoomTurnTimeoutSecondsKeepsGenericTimeoutLimit(t *testing.T) {
 		t.Fatalf("error = %v, want invalid_request", err)
 	}
 }
+
+func TestCreateRoomTurnTimeoutSecondsFixesSixNimmtAtSixty(t *testing.T) {
+	got, err := createRoomTurnTimeoutSeconds(
+		contracts.GameSixNimmt,
+		&platform.CreateRoomReq{},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != 60 {
+		t.Fatalf("timeout = %d, want 60", got)
+	}
+	timeout := int32(90)
+	_, err = createRoomTurnTimeoutSeconds(
+		contracts.GameSixNimmt,
+		&platform.CreateRoomReq{TurnTimeoutSeconds: &timeout},
+	)
+	var platformErr interface{ GetCode() string }
+	if !errors.As(err, &platformErr) ||
+		platformErr.GetCode() != "invalid_request" {
+		t.Fatalf("error = %v, want invalid_request", err)
+	}
+}

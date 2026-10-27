@@ -243,6 +243,43 @@ func TestSelectFirstLoveLetterActionDrawsWithoutLeakingIntent(t *testing.T) {
 	}
 }
 
+func TestSelectFirstSixNimmtActionLocksLowestLegalCard(t *testing.T) {
+	view, err := json.Marshal(map[string]any{
+		"playerId": "7",
+		"roomData": map[string]any{
+			"gameStatus": "selecting",
+		},
+		"privateData": map[string]any{
+			"hand":       []int{55, 24, 88},
+			"legalCards": []int{55, 24, 88},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	action, ok := selectFirstAction(
+		"test-run",
+		"sixnimmt",
+		"room-1-r1",
+		"7",
+		realtimeEnvelope{
+			Type: "ROOM_SYNC",
+			View: map[string]json.RawMessage{"sixnimmt": view},
+		},
+	)
+	if !ok ||
+		action.Command.Type != "game_lock_card" ||
+		action.ConflictCommand.Type != "game_lock_card" ||
+		action.Command.CommandID != action.ConflictCommand.CommandID {
+		t.Fatalf("action = %+v/%v", action, ok)
+	}
+	group, groupOK := action.Command.Payload["sixnimmt"].(map[string]any)
+	lock, lockOK := group["lockCard"].(map[string]any)
+	if !groupOK || !lockOK || numericValue(lock["card"]) != 24 {
+		t.Fatalf("lock payload = %+v", action.Command.Payload)
+	}
+}
+
 func writeTestRoom(w http.ResponseWriter, status string) {
 	writeTestJSON(w, http.StatusOK, map[string]any{
 		"status_code": 200,

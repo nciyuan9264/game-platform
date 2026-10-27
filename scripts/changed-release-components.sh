@@ -22,6 +22,7 @@ mark_all_games() {
   games[warchest]=1
   games[quoridor]=1
   games[loveletter]=1
+  games[sixnimmt]=1
 }
 
 mark_all_centers() {
@@ -81,6 +82,9 @@ for path in "${files[@]}"; do
       ;;
     internal/plugins/loveletter/*|cmd/roomhost-loveletter/*)
       games[loveletter]=1
+      ;;
+    internal/plugins/sixnimmt/*|cmd/roomhost-sixnimmt/*)
+      games[sixnimmt]=1
       ;;
     internal/game/*|internal/roomhost/*|internal/roomhostapp/*|internal/gamelog/*)
       mark_all_games

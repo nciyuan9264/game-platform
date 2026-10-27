@@ -48,6 +48,17 @@ game-release register \
   --artifact <loveletter-image-sha>
 ```
 
+6 nimmt! 首次注册使用固定 10 席与 replay schema 1：
+
+```bash
+game-release register \
+  --game sixnimmt \
+  --version sixnimmt-v1 \
+  --default-max-players 10 \
+  --replay-schema-version 1 \
+  --artifact <sixnimmt-image-sha>
+```
+
 Registration is a production operation. It is not part of build verification
 or ordinary source delivery.
 
