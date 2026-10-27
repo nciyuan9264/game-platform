@@ -520,7 +520,7 @@ func validatedCommands(
 		commands = append(commands, record)
 		expectedSeq++
 	}
-	if match.LastAppliedSeq > 0 && expectedSeq-1 != match.LastAppliedSeq {
+	if match.LastAppliedSeq > 0 && expectedSeq-1 < match.LastAppliedSeq {
 		return nil, fmt.Errorf(
 			"command log incomplete: restored seq %d, durable head %d",
 			expectedSeq-1,
