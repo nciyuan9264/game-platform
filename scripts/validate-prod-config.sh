@@ -68,7 +68,7 @@ require 'PROFILE_REFRESH_INTERVAL:[[:space:]]*[0-9]+(ms|s|m)' 'gateway profile r
 require '^[[:space:]]{2}gateway:[[:space:]]*$' 'one realtime gateway instance is required'
 require 'game-platform-gateway' 'realtime gateway global-network alias is required'
 
-for game in acquire davinci splendor yinsh othello fugitive warchest quoridor loveletter; do
+for game in acquire davinci splendor yinsh othello fugitive warchest quoridor loveletter forsale; do
   for slot in a b; do
     service="roomhost-${game}-${slot}"
     require "^[[:space:]]{2}${service}:[[:space:]]*$" "${service} slot is required"
@@ -94,7 +94,9 @@ require_source '\$\{QUORIDOR_ROOMHOST_A_IMAGE:\?' 'Quoridor A must use a complet
 require_source '\$\{QUORIDOR_ROOMHOST_B_IMAGE:\?' 'Quoridor B must use a complete independent image reference'
 require_source '\$\{LOVELETTER_ROOMHOST_A_IMAGE:\?' 'Love Letter A must use a complete independent image reference'
 require_source '\$\{LOVELETTER_ROOMHOST_B_IMAGE:\?' 'Love Letter B must use a complete independent image reference'
-for prefix in ACQUIRE DAVINCI SPLENDOR YINSH OTHELLO FUGITIVE WARCHEST QUORIDOR LOVELETTER; do
+require_source '\${FORSALE_ROOMHOST_A_IMAGE:\?}' 'For Sale A must use a complete independent image reference'
+require_source '\${FORSALE_ROOMHOST_B_IMAGE:\?}' 'For Sale B must use a complete independent image reference'
+for prefix in ACQUIRE DAVINCI SPLENDOR YINSH OTHELLO FUGITIVE WARCHEST QUORIDOR LOVELETTER FORSALE; do
   for slot in A B; do
     require_source \
       "\\\$\\{${prefix}_ROOMHOST_${slot}_VERSION:\\?" \

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if [[ $# -ne 2 ]]; then
-  printf 'usage: %s <acquire|davinci|splendor|yinsh|othello|fugitive|warchest|quoridor|loveletter> <immutable-image>\n' "$0" >&2
+  printf 'usage: %s <acquire|davinci|splendor|yinsh|othello|fugitive|warchest|quoridor|loveletter|forsale> <immutable-image>\n' "$0" >&2
   exit 2
 fi
 
@@ -51,6 +51,11 @@ case "$game" in
     ;;
   loveletter)
     image_prefix='LOVELETTER_ROOMHOST'
+    default_max_players=6
+    replay_schema_version=1
+    ;;
+  forsale)
+    image_prefix='FORSALE_ROOMHOST'
     default_max_players=6
     replay_schema_version=1
     ;;

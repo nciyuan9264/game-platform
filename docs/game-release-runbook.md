@@ -48,6 +48,17 @@ game-release register \
   --artifact <loveletter-image-sha>
 ```
 
+For For Sale:
+
+```bash
+game-release register \
+  --game forsale \
+  --version forsale-v1 \
+  --default-max-players 6 \
+  --replay-schema-version 1 \
+  --artifact <forsale-image-sha>
+```
+
 Registration is a production operation. It is not part of build verification
 or ordinary source delivery.
 

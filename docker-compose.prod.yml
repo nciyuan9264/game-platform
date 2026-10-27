@@ -275,6 +275,24 @@ services:
       PUBLIC_ADDR: roomhost-loveletter-b:9000
       SERVICE_VERSION: ${LOVELETTER_ROOMHOST_B_VERSION:?set Love Letter RoomHost B artifact version}
 
+  roomhost-forsale-a:
+    <<: *roomhost-service
+    image: ${FORSALE_ROOMHOST_A_IMAGE:?set For Sale RoomHost A image}
+    environment:
+      <<: *runtime-env
+      NODE_ID: roomhost-forsale-a
+      PUBLIC_ADDR: roomhost-forsale-a:9000
+      SERVICE_VERSION: ${FORSALE_ROOMHOST_A_VERSION:?set For Sale RoomHost A artifact version}
+
+  roomhost-forsale-b:
+    <<: *roomhost-service
+    image: ${FORSALE_ROOMHOST_B_IMAGE:?set For Sale RoomHost B image}
+    environment:
+      <<: *runtime-env
+      NODE_ID: roomhost-forsale-b
+      PUBLIC_ADDR: roomhost-forsale-b:9000
+      SERVICE_VERSION: ${FORSALE_ROOMHOST_B_VERSION:?set For Sale RoomHost B artifact version}
+
 networks:
   global-network:
     external: true

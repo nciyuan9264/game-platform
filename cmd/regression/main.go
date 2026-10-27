@@ -25,6 +25,7 @@ var supportedGames = []string{
 	"warchest",
 	"quoridor",
 	"loveletter",
+	"forsale",
 }
 
 type config struct {

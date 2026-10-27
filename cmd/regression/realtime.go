@@ -236,13 +236,17 @@ func gameCommand(
 	variant string,
 	payload any,
 ) clientCommand {
+	group := gameType
+	if gameType == "forsale" {
+		group = "forSale"
+	}
 	return clientCommand{
 		SchemaVersion: realtimeSchemaVersion,
 		CommandID:     commandID,
 		MatchID:       matchID,
 		Type:          commandType,
 		Payload: map[string]any{
-			gameType: map[string]any{variant: payload},
+			group: map[string]any{variant: payload},
 		},
 	}
 }
