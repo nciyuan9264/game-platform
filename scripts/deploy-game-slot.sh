@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if [[ $# -ne 2 ]]; then
-  printf 'usage: %s <acquire|davinci|splendor|yinsh|othello|fugitive|warchest|quoridor|hex|loveletter|sixnimmt|forsale|onitama|hive> <immutable-image>\n' "$0" >&2
+  printf 'usage: %s <acquire|davinci|splendor|yinsh|othello|fugitive|warchest|quoridor|hex|loveletter|sixnimmt|forsale|onitama|hive|cantstop> <immutable-image>\n' "$0" >&2
   exit 2
 fi
 
@@ -77,6 +77,11 @@ case "$game" in
   hive)
     image_prefix='HIVE_ROOMHOST'
     default_max_players=2
+    replay_schema_version=1
+    ;;
+  cantstop)
+    image_prefix='CANTSTOP_ROOMHOST'
+    default_max_players=4
     replay_schema_version=1
     ;;
   *)

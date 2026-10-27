@@ -31,7 +31,7 @@ DaVinci 支持 history、stats 和 leaderboard，不支持 replay；回放接口
 ```bash
 go run ./cmd/regression \
   --mode probe \
-  --games acquire,davinci,splendor,yinsh,othello,fugitive,warchest,quoridor,hex,hive,loveletter,sixnimmt \
+  --games acquire,davinci,splendor,yinsh,othello,fugitive,warchest,quoridor,hex,hive,loveletter,sixnimmt,forsale,onitama,cantstop \
   --report-dir .artifacts/regression/manual/probe
 ```
 

@@ -91,6 +91,7 @@ jobs:
             roomhost-forsale
             roomhost-onitama
             roomhost-hive
+            roomhost-cantstop
             migrate-schema
             backfill-replay
             game-release
@@ -165,5 +166,9 @@ jobs:
           HIVE_ROOMHOST_B_IMAGE: registry.example.com/game-platform-roomhost-hive:ci-b
           HIVE_ROOMHOST_A_VERSION: ci-a
           HIVE_ROOMHOST_B_VERSION: ci-b
+          CANTSTOP_ROOMHOST_A_IMAGE: registry.example.com/game-platform-roomhost-cantstop:ci-a
+          CANTSTOP_ROOMHOST_B_IMAGE: registry.example.com/game-platform-roomhost-cantstop:ci-b
+          CANTSTOP_ROOMHOST_A_VERSION: ci-a
+          CANTSTOP_ROOMHOST_B_VERSION: ci-b
         run: |
           ./scripts/validate-prod-config.sh

@@ -25,6 +25,7 @@ on:
           - forsale
           - onitama
           - hive
+          - cantstop
       compatibility_ack:
         description: Reason an engine implementation change is version-compatible
         type: string
@@ -70,7 +71,7 @@ jobs:
               center='["control-plane","gateway","migrate-schema","platform-rpc"]'
               games='[]'
               ;;
-            acquire|davinci|splendor|yinsh|othello|fugitive|warchest|quoridor|hex|loveletter|sixnimmt|forsale|onitama|hive)
+            acquire|davinci|splendor|yinsh|othello|fugitive|warchest|quoridor|hex|loveletter|sixnimmt|forsale|onitama|hive|cantstop)
               center='[]'
               games="$(jq -cn --arg game "${COMPONENT_OVERRIDE}" '[$game]')"
               ;;
@@ -265,6 +266,10 @@ jobs:
             export HIVE_ROOMHOST_B_IMAGE="${HIVE_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-hive:${IMAGE_TAG}}"
             export HIVE_ROOMHOST_A_VERSION="${HIVE_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
             export HIVE_ROOMHOST_B_VERSION="${HIVE_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
+            export CANTSTOP_ROOMHOST_A_IMAGE="${CANTSTOP_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-cantstop:${IMAGE_TAG}}"
+            export CANTSTOP_ROOMHOST_B_IMAGE="${CANTSTOP_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-cantstop:${IMAGE_TAG}}"
+            export CANTSTOP_ROOMHOST_A_VERSION="${CANTSTOP_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
+            export CANTSTOP_ROOMHOST_B_VERSION="${CANTSTOP_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
             printf '%s' "${TCR_PASSWORD}" | docker login "${TCR_LOGIN_SERVER}" \
               --username "${TCR_USERNAME}" --password-stdin
             chmod +x scripts/validate-prod-config.sh
@@ -411,6 +416,10 @@ jobs:
             export HIVE_ROOMHOST_B_IMAGE="${HIVE_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-hive:${IMAGE_TAG}}"
             export HIVE_ROOMHOST_A_VERSION="${HIVE_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
             export HIVE_ROOMHOST_B_VERSION="${HIVE_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
+            export CANTSTOP_ROOMHOST_A_IMAGE="${CANTSTOP_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-cantstop:${IMAGE_TAG}}"
+            export CANTSTOP_ROOMHOST_B_IMAGE="${CANTSTOP_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-cantstop:${IMAGE_TAG}}"
+            export CANTSTOP_ROOMHOST_A_VERSION="${CANTSTOP_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
+            export CANTSTOP_ROOMHOST_B_VERSION="${CANTSTOP_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
             printf '%s' "${TCR_PASSWORD}" | docker login "${TCR_LOGIN_SERVER}" \
               --username "${TCR_USERNAME}" --password-stdin
             chmod +x scripts/deploy-game-slot.sh scripts/validate-prod-config.sh

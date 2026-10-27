@@ -68,7 +68,7 @@ require 'PROFILE_REFRESH_INTERVAL:[[:space:]]*[0-9]+(ms|s|m)' 'gateway profile r
 require '^[[:space:]]{2}gateway:[[:space:]]*$' 'one realtime gateway instance is required'
 require 'game-platform-gateway' 'realtime gateway global-network alias is required'
 
-for game in acquire davinci splendor yinsh othello fugitive warchest quoridor hex loveletter sixnimmt forsale onitama hive; do
+for game in acquire davinci splendor yinsh othello fugitive warchest quoridor hex loveletter sixnimmt forsale onitama hive cantstop; do
   for slot in a b; do
     service="roomhost-${game}-${slot}"
     require "^[[:space:]]{2}${service}:[[:space:]]*$" "${service} slot is required"
@@ -104,7 +104,9 @@ require_source '\$\{ONITAMA_ROOMHOST_A_IMAGE:\?' 'Onitama A must use a complete 
 require_source '\$\{ONITAMA_ROOMHOST_B_IMAGE:\?' 'Onitama B must use a complete independent image reference'
 require_source '\$\{HIVE_ROOMHOST_A_IMAGE:\?' 'Hive A must use a complete independent image reference'
 require_source '\$\{HIVE_ROOMHOST_B_IMAGE:\?' 'Hive B must use a complete independent image reference'
-for prefix in ACQUIRE DAVINCI SPLENDOR YINSH OTHELLO FUGITIVE WARCHEST QUORIDOR HEX LOVELETTER SIXNIMMT FORSALE ONITAMA HIVE; do
+require_source '\$\{CANTSTOP_ROOMHOST_A_IMAGE:\?' 'Can'\''t Stop A must use a complete independent image reference'
+require_source '\$\{CANTSTOP_ROOMHOST_B_IMAGE:\?' 'Can'\''t Stop B must use a complete independent image reference'
+for prefix in ACQUIRE DAVINCI SPLENDOR YINSH OTHELLO FUGITIVE WARCHEST QUORIDOR HEX LOVELETTER SIXNIMMT FORSALE ONITAMA HIVE CANTSTOP; do
   for slot in A B; do
     require_source \
       "\\\$\\{${prefix}_ROOMHOST_${slot}_VERSION:\\?" \

@@ -190,4 +190,19 @@ git commit -qm new-onitama
 new_onitama="$(git rev-parse HEAD)"
 "$SCRIPT" "$new_onitama_base" "$new_onitama" >/dev/null
 
+new_cantstop_base="$new_onitama"
+mkdir -p internal/plugins/cantstop/testdata
+cat >internal/plugins/cantstop/plugin.go <<'EOF'
+package cantstop
+const (
+	EngineVersion = "cantstop-v1"
+	ReplaySchemaVersion = 1
+)
+EOF
+printf '{"schemaVersion":1}\n' >internal/plugins/cantstop/testdata/replay_frame_golden.json
+git add .
+git commit -qm new-cantstop
+new_cantstop="$(git rev-parse HEAD)"
+"$SCRIPT" "$new_cantstop_base" "$new_cantstop" >/dev/null
+
 printf 'engine version validation tests passed\n'

@@ -22,7 +22,7 @@ assert_supported() {
   fi
 }
 
-for game in acquire davinci splendor yinsh othello fugitive warchest quoridor hex loveletter sixnimmt forsale onitama hive; do
+for game in acquire davinci splendor yinsh othello fugitive warchest quoridor hex loveletter sixnimmt forsale onitama hive cantstop; do
   assert_supported "$game"
 done
 

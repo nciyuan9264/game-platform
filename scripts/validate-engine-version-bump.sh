@@ -33,6 +33,7 @@ declare -A version_files=(
   [forsale]='internal/plugins/forsale/plugin.go'
   [onitama]='internal/plugins/onitama/plugin.go'
   [hive]='internal/plugins/hive/plugin.go'
+  [cantstop]='internal/plugins/cantstop/plugin.go'
 )
 declare -A changed_games=()
 declare -A engine_changes=()
@@ -109,6 +110,10 @@ while IFS= read -r path; do
       changed_games[hive]=1
       continue
       ;;
+    internal/plugins/cantstop/testdata/replay_frame_golden.json)
+      changed_games[cantstop]=1
+      continue
+      ;;
     internal/plugins/acquire/history.go)
       changed_games[acquire]=1
       continue
@@ -147,6 +152,10 @@ while IFS= read -r path; do
       ;;
     internal/plugins/hive/history.go)
       changed_games[hive]=1
+      continue
+      ;;
+    internal/plugins/cantstop/history.go)
+      changed_games[cantstop]=1
       continue
       ;;
     *_test.go|*/testdata/*)
@@ -256,6 +265,14 @@ while IFS= read -r path; do
       fi
       engine_changes[hive]=1
       ;;
+    internal/plugins/cantstop/*)
+      changed_games[cantstop]=1
+      if [[ "$path" == "${version_files[cantstop]}" ]] &&
+        compatibility_only_definition_change "$path"; then
+        continue
+      fi
+      engine_changes[cantstop]=1
+      ;;
   esac
 done < <(git diff --name-only "$base" "$head")
 
@@ -287,7 +304,7 @@ integer_constant_at() {
 
 failures=()
 validated=()
-for game_name in acquire davinci splendor yinsh othello fugitive warchest quoridor hex loveletter sixnimmt forsale onitama hive; do
+for game_name in acquire davinci splendor yinsh othello fugitive warchest quoridor hex loveletter sixnimmt forsale onitama hive cantstop; do
   [[ -n "${changed_games[$game_name]:-}" ]] || continue
   file="${version_files[$game_name]}"
   old_version="$(constant_at "$base" "$file" EngineVersion)"

@@ -27,6 +27,7 @@ mark_all_games() {
   games[hive]=1
   games[forsale]=1
   games[onitama]=1
+  games[cantstop]=1
 }
 
 mark_all_centers() {
@@ -101,6 +102,9 @@ for path in "${files[@]}"; do
       ;;
     internal/plugins/onitama/*|cmd/roomhost-onitama/*)
       games[onitama]=1
+      ;;
+    internal/plugins/cantstop/*|cmd/roomhost-cantstop/*)
+      games[cantstop]=1
       ;;
     internal/game/*|internal/roomhost/*|internal/roomhostapp/*|internal/gamelog/*)
       mark_all_games
