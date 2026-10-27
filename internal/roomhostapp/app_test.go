@@ -8,6 +8,7 @@ import (
 	"github.com/nciyuan9264/game-platform/internal/game"
 	"github.com/nciyuan9264/game-platform/internal/plugins/acquire"
 	"github.com/nciyuan9264/game-platform/internal/plugins/davinci"
+	"github.com/nciyuan9264/game-platform/internal/plugins/forsale"
 	"github.com/nciyuan9264/game-platform/internal/plugins/fugitive"
 	"github.com/nciyuan9264/game-platform/internal/plugins/loveletter"
 	"github.com/nciyuan9264/game-platform/internal/plugins/othello"
@@ -49,6 +50,7 @@ func TestSelfTestCoversProductionDefinitions(t *testing.T) {
 		quoridor.Definition(),
 		loveletter.Definition(),
 		sixnimmt.Definition(),
+		forsale.Definition(),
 	}
 	for _, definition := range definitions {
 		t.Run(definition.GameType, func(t *testing.T) {

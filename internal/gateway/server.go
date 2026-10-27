@@ -674,6 +674,9 @@ func clientCommandPayload(gameType, commandType string, payload any) (any, error
 		return nil, errors.New("command payload must be a generated union object")
 	}
 	group := gameType
+	if gameType == contracts.GameForSale {
+		group = "forSale"
+	}
 	variant := ""
 	switch commandType {
 	case "match_ready":
@@ -752,6 +755,14 @@ func clientCommandPayload(gameType, commandType string, payload any) (any, error
 		variant = "layLow"
 	case "game_search_hideouts":
 		variant = "searchHideouts"
+	case "game_bid":
+		variant = "bid"
+	case "game_lock_sale":
+		variant = "lockSale"
+	case "game_reveal_sale":
+		variant = "revealSale"
+	case "game_start_selling":
+		variant = "startSelling"
 	case "game_play_card":
 		variant = "playCard"
 	case "game_settle_chancellor":

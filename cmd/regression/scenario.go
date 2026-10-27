@@ -74,7 +74,7 @@ func runCanary(
 	}()
 
 	maxPlayers := 2
-	if gameType == "loveletter" {
+	if gameType == "loveletter" || gameType == "forsale" {
 		maxPlayers = 6
 	}
 	if gameType == "sixnimmt" {
@@ -167,9 +167,20 @@ func runCanary(
 		})
 	}
 
-	addAI := commonCommand(room.CurrentMatchID, canaryCommandID(cfg.RunID, gameType, "add-ai"), "match_add_ai", map[string]any{"seatIndex": 1})
-	if !sendAccepted("add AI", addAI) {
-		return result
+	aiCount := 1
+	if gameType == "forsale" {
+		aiCount = 2
+	}
+	for index := 0; index < aiCount; index++ {
+		addAI := commonCommand(
+			room.CurrentMatchID,
+			canaryCommandID(cfg.RunID, gameType, fmt.Sprintf("add-ai-%d", index+1)),
+			"match_add_ai",
+			map[string]any{"seatIndex": index + 1},
+		)
+		if !sendAccepted(fmt.Sprintf("add AI %d", index+1), addAI) {
+			return result
+		}
 	}
 	begin := commonCommand(room.CurrentMatchID, canaryCommandID(cfg.RunID, gameType, "begin"), "match_begin", nil)
 	if !sendAccepted("begin match", begin) {
@@ -340,11 +351,15 @@ func selectFirstAction(
 	playerID string,
 	message realtimeEnvelope,
 ) (legalAction, bool) {
-	if message.Type != "ROOM_SYNC" || len(message.View[gameType]) == 0 {
+	viewGroup := gameType
+	if gameType == "forsale" {
+		viewGroup = "forSale"
+	}
+	if message.Type != "ROOM_SYNC" || len(message.View[viewGroup]) == 0 {
 		return legalAction{}, false
 	}
 	var view map[string]any
-	if err := json.Unmarshal(message.View[gameType], &view); err != nil {
+	if err := json.Unmarshal(message.View[viewGroup], &view); err != nil {
 		return legalAction{}, false
 	}
 	roomData, _ := view["roomData"].(map[string]any)
@@ -569,6 +584,21 @@ func selectFirstAction(
 						"row": -1, "column": -1,
 					},
 				},
+			),
+		}, true
+	case "forsale":
+		if stringValue(roomData, "gameStatus") != "auction" ||
+			stringValue(roomData, "currentPlayer") != playerID {
+			return legalAction{}, false
+		}
+		return legalAction{
+			Command: gameCommand(
+				gameType, matchID, commandID,
+				"game_pass", "pass", map[string]any{},
+			),
+			ConflictCommand: gameCommand(
+				gameType, matchID, commandID,
+				"game_bid", "bid", map[string]any{"amount": 999},
 			),
 		}, true
 	case "loveletter":

@@ -17,6 +17,7 @@ const (
 	GameHex        = "hex"
 	GameLoveLetter = "loveletter"
 	GameSixNimmt   = "sixnimmt"
+	GameForSale    = "forsale"
 
 	MaxOwnedRooms         = 5
 	RoomStatusCreating    = "creating"

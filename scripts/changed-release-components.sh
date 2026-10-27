@@ -24,6 +24,7 @@ mark_all_games() {
   games[hex]=1
   games[loveletter]=1
   games[sixnimmt]=1
+  games[forsale]=1
 }
 
 mark_all_centers() {
@@ -89,6 +90,9 @@ for path in "${files[@]}"; do
       ;;
     internal/plugins/sixnimmt/*|cmd/roomhost-sixnimmt/*)
       games[sixnimmt]=1
+      ;;
+    internal/plugins/forsale/*|cmd/roomhost-forsale/*)
+      games[forsale]=1
       ;;
     internal/game/*|internal/roomhost/*|internal/roomhostapp/*|internal/gamelog/*)
       mark_all_games

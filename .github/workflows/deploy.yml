@@ -22,6 +22,7 @@ on:
           - hex
           - loveletter
           - sixnimmt
+          - forsale
       compatibility_ack:
         description: Reason an engine implementation change is version-compatible
         type: string
@@ -67,7 +68,7 @@ jobs:
               center='["control-plane","gateway","migrate-schema","platform-rpc"]'
               games='[]'
               ;;
-            acquire|davinci|splendor|yinsh|othello|fugitive|warchest|quoridor|hex|loveletter|sixnimmt)
+            acquire|davinci|splendor|yinsh|othello|fugitive|warchest|quoridor|hex|loveletter|sixnimmt|forsale)
               center='[]'
               games="$(jq -cn --arg game "${COMPONENT_OVERRIDE}" '[$game]')"
               ;;
@@ -250,6 +251,10 @@ jobs:
             export SIXNIMMT_ROOMHOST_B_IMAGE="${SIXNIMMT_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-sixnimmt:${IMAGE_TAG}}"
             export SIXNIMMT_ROOMHOST_A_VERSION="${SIXNIMMT_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
             export SIXNIMMT_ROOMHOST_B_VERSION="${SIXNIMMT_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
+            export FORSALE_ROOMHOST_A_IMAGE="${FORSALE_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-forsale:${IMAGE_TAG}}"
+            export FORSALE_ROOMHOST_B_IMAGE="${FORSALE_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-forsale:${IMAGE_TAG}}"
+            export FORSALE_ROOMHOST_A_VERSION="${FORSALE_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
+            export FORSALE_ROOMHOST_B_VERSION="${FORSALE_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
             printf '%s' "${TCR_PASSWORD}" | docker login "${TCR_LOGIN_SERVER}" \
               --username "${TCR_USERNAME}" --password-stdin
             chmod +x scripts/validate-prod-config.sh
@@ -384,6 +389,10 @@ jobs:
             export SIXNIMMT_ROOMHOST_B_IMAGE="${SIXNIMMT_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-sixnimmt:${IMAGE_TAG}}"
             export SIXNIMMT_ROOMHOST_A_VERSION="${SIXNIMMT_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
             export SIXNIMMT_ROOMHOST_B_VERSION="${SIXNIMMT_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
+            export FORSALE_ROOMHOST_A_IMAGE="${FORSALE_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-forsale:${IMAGE_TAG}}"
+            export FORSALE_ROOMHOST_B_IMAGE="${FORSALE_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-forsale:${IMAGE_TAG}}"
+            export FORSALE_ROOMHOST_A_VERSION="${FORSALE_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
+            export FORSALE_ROOMHOST_B_VERSION="${FORSALE_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
             printf '%s' "${TCR_PASSWORD}" | docker login "${TCR_LOGIN_SERVER}" \
               --username "${TCR_USERNAME}" --password-stdin
             chmod +x scripts/deploy-game-slot.sh scripts/validate-prod-config.sh

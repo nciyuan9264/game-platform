@@ -145,4 +145,19 @@ git commit -qm new-sixnimmt
 new_sixnimmt="$(git rev-parse HEAD)"
 "$SCRIPT" "$new_sixnimmt_base" "$new_sixnimmt" >/dev/null
 
+new_forsale_base="$new_sixnimmt"
+mkdir -p internal/plugins/forsale/testdata
+cat >internal/plugins/forsale/plugin.go <<'EOF'
+package forsale
+const (
+	EngineVersion = "forsale-v1"
+	ReplaySchemaVersion = 1
+)
+EOF
+printf '{"schemaVersion":1}\n' >internal/plugins/forsale/testdata/replay_frame_golden.json
+git add .
+git commit -qm new-forsale
+new_forsale="$(git rev-parse HEAD)"
+"$SCRIPT" "$new_forsale_base" "$new_forsale" >/dev/null
+
 printf 'engine version validation tests passed\n'

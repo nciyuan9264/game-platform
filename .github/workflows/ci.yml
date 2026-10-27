@@ -23,7 +23,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: nciyuan9264/pam-idl
-          ref: 9d61518e95a9eec3adc235900700b2f5d9282ff4
+          ref: 74f63acb1a0fc24f26ba235475327fb0020f0984
           path: pam-idl
 
       - name: Setup Go
@@ -88,6 +88,7 @@ jobs:
             roomhost-hex
             roomhost-loveletter
             roomhost-sixnimmt
+            roomhost-forsale
             migrate-schema
             backfill-replay
             game-release
@@ -150,5 +151,9 @@ jobs:
           SIXNIMMT_ROOMHOST_B_IMAGE: registry.example.com/game-platform-roomhost-sixnimmt:ci-b
           SIXNIMMT_ROOMHOST_A_VERSION: ci-a
           SIXNIMMT_ROOMHOST_B_VERSION: ci-b
+          FORSALE_ROOMHOST_A_IMAGE: registry.example.com/game-platform-roomhost-forsale:ci-a
+          FORSALE_ROOMHOST_B_IMAGE: registry.example.com/game-platform-roomhost-forsale:ci-b
+          FORSALE_ROOMHOST_A_VERSION: ci-a
+          FORSALE_ROOMHOST_B_VERSION: ci-b
         run: |
           ./scripts/validate-prod-config.sh

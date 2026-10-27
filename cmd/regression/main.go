@@ -27,6 +27,7 @@ var supportedGames = []string{
 	"hex",
 	"loveletter",
 	"sixnimmt",
+	"forsale",
 }
 
 type config struct {
