@@ -27,8 +27,10 @@ declare -A version_files=(
   [fugitive]='internal/plugins/fugitive/plugin.go'
   [warchest]='internal/plugins/warchest/plugin.go'
   [quoridor]='internal/plugins/quoridor/plugin.go'
+  [hex]='internal/plugins/hex/plugin.go'
   [loveletter]='internal/plugins/loveletter/plugin.go'
   [sixnimmt]='internal/plugins/sixnimmt/plugin.go'
+  [forsale]='internal/plugins/forsale/plugin.go'
   [onitama]='internal/plugins/onitama/plugin.go'
 )
 declare -A changed_games=()
@@ -82,12 +84,20 @@ while IFS= read -r path; do
       changed_games[quoridor]=1
       continue
       ;;
+    internal/plugins/hex/testdata/replay_frame_golden.json)
+      changed_games[hex]=1
+      continue
+      ;;
     internal/plugins/loveletter/testdata/replay_frame_golden.json)
       changed_games[loveletter]=1
       continue
       ;;
     internal/plugins/sixnimmt/testdata/replay_frame_golden.json)
       changed_games[sixnimmt]=1
+      continue
+      ;;
+    internal/plugins/forsale/testdata/replay_frame_golden.json)
+      changed_games[forsale]=1
       continue
       ;;
     internal/plugins/onitama/testdata/replay_frame_golden.json)
@@ -116,6 +126,10 @@ while IFS= read -r path; do
       ;;
     internal/plugins/quoridor/history.go)
       changed_games[quoridor]=1
+      continue
+      ;;
+    internal/plugins/hex/history.go)
+      changed_games[hex]=1
       continue
       ;;
     internal/plugins/sixnimmt/history.go)
@@ -185,6 +199,14 @@ while IFS= read -r path; do
       fi
       engine_changes[quoridor]=1
       ;;
+    internal/plugins/hex/*)
+      changed_games[hex]=1
+      if [[ "$path" == "${version_files[hex]}" ]] &&
+        compatibility_only_definition_change "$path"; then
+        continue
+      fi
+      engine_changes[hex]=1
+      ;;
     internal/plugins/loveletter/*)
       changed_games[loveletter]=1
       if [[ "$path" == "${version_files[loveletter]}" ]] &&
@@ -200,6 +222,14 @@ while IFS= read -r path; do
         continue
       fi
       engine_changes[sixnimmt]=1
+      ;;
+    internal/plugins/forsale/*)
+      changed_games[forsale]=1
+      if [[ "$path" == "${version_files[forsale]}" ]] &&
+        compatibility_only_definition_change "$path"; then
+        continue
+      fi
+      engine_changes[forsale]=1
       ;;
     internal/plugins/onitama/*)
       changed_games[onitama]=1
@@ -240,7 +270,7 @@ integer_constant_at() {
 
 failures=()
 validated=()
-for game_name in acquire davinci splendor yinsh othello fugitive warchest quoridor loveletter sixnimmt onitama; do
+for game_name in acquire davinci splendor yinsh othello fugitive warchest quoridor hex loveletter sixnimmt forsale onitama; do
   [[ -n "${changed_games[$game_name]:-}" ]] || continue
   file="${version_files[$game_name]}"
   old_version="$(constant_at "$base" "$file" EngineVersion)"

@@ -124,6 +124,16 @@ func createRoomTurnTimeoutSeconds(gameType string, req *platform.CreateRoomReq) 
 		}
 		return 60, nil
 	}
+	if gameType == contracts.GameHex {
+		if req.IsSetTurnTimeoutSeconds() &&
+			turnTimeoutSeconds != 60 {
+			return 0, platformError(
+				"invalid_request",
+				errors.New("hex turnTimeoutSeconds is fixed at 60"),
+			)
+		}
+		return 60, nil
+	}
 	if gameType == contracts.GameLoveLetter {
 		if req.IsSetTurnTimeoutSeconds() &&
 			turnTimeoutSeconds != 60 {
@@ -140,6 +150,16 @@ func createRoomTurnTimeoutSeconds(gameType string, req *platform.CreateRoomReq) 
 			return 0, platformError(
 				"invalid_request",
 				errors.New("sixnimmt turnTimeoutSeconds is fixed at 60"),
+			)
+		}
+		return 60, nil
+	}
+	if gameType == contracts.GameForSale {
+		if req.IsSetTurnTimeoutSeconds() &&
+			turnTimeoutSeconds != 60 {
+			return 0, platformError(
+				"invalid_request",
+				errors.New("forsale turnTimeoutSeconds is fixed at 60"),
 			)
 		}
 		return 60, nil

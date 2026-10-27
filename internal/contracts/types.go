@@ -14,8 +14,10 @@ const (
 	GameFugitive   = "fugitive"
 	GameWarChest   = "warchest"
 	GameQuoridor   = "quoridor"
+	GameHex        = "hex"
 	GameLoveLetter = "loveletter"
 	GameSixNimmt   = "sixnimmt"
+	GameForSale    = "forsale"
 	GameOnitama    = "onitama"
 
 	MaxOwnedRooms         = 5

@@ -4,7 +4,9 @@ import (
 	"github.com/nciyuan9264/game-platform/internal/game"
 	"github.com/nciyuan9264/game-platform/internal/plugins/acquire"
 	"github.com/nciyuan9264/game-platform/internal/plugins/davinci"
+	"github.com/nciyuan9264/game-platform/internal/plugins/forsale"
 	"github.com/nciyuan9264/game-platform/internal/plugins/fugitive"
+	"github.com/nciyuan9264/game-platform/internal/plugins/hex"
 	"github.com/nciyuan9264/game-platform/internal/plugins/loveletter"
 	"github.com/nciyuan9264/game-platform/internal/plugins/onitama"
 	"github.com/nciyuan9264/game-platform/internal/plugins/othello"
@@ -23,10 +25,12 @@ func Registry() *game.Registry {
 		yinsh.Definition(),
 		othello.Definition(),
 		fugitive.Definition(),
+		forsale.Definition(),
 		loveletter.Definition(),
 		sixnimmt.Definition(),
 		warchest.Definition(),
 		quoridor.Definition(),
+		hex.Definition(),
 		onitama.Definition(),
 	)
 }

@@ -28,11 +28,11 @@ assert_case \
   internal/plugins/acquire/rules/step1_test.go
 
 assert_case \
-  '{"center":[],"games":["acquire","davinci","fugitive","loveletter","onitama","othello","quoridor","sixnimmt","splendor","warchest","yinsh"],"productionChange":true,"docsOnly":false}' \
+  '{"center":[],"games":["acquire","davinci","forsale","fugitive","hex","loveletter","onitama","othello","quoridor","sixnimmt","splendor","warchest","yinsh"],"productionChange":true,"docsOnly":false}' \
   internal/roomhost/host.go
 
 assert_case \
-  '{"center":["platform-rpc"],"games":["acquire","davinci","fugitive","loveletter","onitama","othello","quoridor","sixnimmt","splendor","warchest","yinsh"],"productionChange":true,"docsOnly":false}' \
+  '{"center":["platform-rpc"],"games":["acquire","davinci","forsale","fugitive","hex","loveletter","onitama","othello","quoridor","sixnimmt","splendor","warchest","yinsh"],"productionChange":true,"docsOnly":false}' \
   internal/history/replay_codec.go
 
 assert_case \
@@ -41,11 +41,11 @@ assert_case \
   docs/game-plugin-guide.md
 
 assert_case \
-  '{"center":["control-plane","gateway","migrate-schema","platform-rpc"],"games":["acquire","davinci","fugitive","loveletter","onitama","othello","quoridor","sixnimmt","splendor","warchest","yinsh"],"productionChange":true,"docsOnly":false}' \
+  '{"center":["control-plane","gateway","migrate-schema","platform-rpc"],"games":["acquire","davinci","forsale","fugitive","hex","loveletter","onitama","othello","quoridor","sixnimmt","splendor","warchest","yinsh"],"productionChange":true,"docsOnly":false}' \
   internal/contracts/types.go
 
 assert_case \
-  '{"center":["control-plane","gateway","migrate-schema","platform-rpc"],"games":["acquire","davinci","fugitive","loveletter","onitama","othello","quoridor","sixnimmt","splendor","warchest","yinsh"],"productionChange":true,"docsOnly":false}' \
+  '{"center":["control-plane","gateway","migrate-schema","platform-rpc"],"games":["acquire","davinci","forsale","fugitive","hex","loveletter","onitama","othello","quoridor","sixnimmt","splendor","warchest","yinsh"],"productionChange":true,"docsOnly":false}' \
   docker-compose.prod.yml \
   .github/workflows/deploy.yml
 
@@ -75,6 +75,11 @@ assert_case \
   internal/plugins/quoridor/rules_test.go
 
 assert_case \
+  '{"center":[],"games":["hex"],"productionChange":true,"docsOnly":false}' \
+  internal/plugins/hex/rules.go \
+  internal/plugins/hex/rules_test.go
+
+assert_case \
   '{"center":[],"games":["loveletter"],"productionChange":true,"docsOnly":false}' \
   internal/plugins/loveletter/rules.go \
   internal/plugins/loveletter/rules_test.go
@@ -83,6 +88,11 @@ assert_case \
   '{"center":[],"games":["sixnimmt"],"productionChange":true,"docsOnly":false}' \
   internal/plugins/sixnimmt/rules.go \
   internal/plugins/sixnimmt/rules_test.go
+
+assert_case \
+  '{"center":[],"games":["forsale"],"productionChange":true,"docsOnly":false}' \
+  internal/plugins/forsale/rules.go \
+  internal/plugins/forsale/rules_test.go
 
 assert_case \
   '{"center":[],"games":["onitama"],"productionChange":true,"docsOnly":false}' \

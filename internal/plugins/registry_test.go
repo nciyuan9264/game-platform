@@ -19,8 +19,10 @@ func TestRegistryContainsAllGamePlugins(t *testing.T) {
 		contracts.GameFugitive,
 		contracts.GameWarChest,
 		contracts.GameQuoridor,
+		contracts.GameHex,
 		contracts.GameLoveLetter,
 		contracts.GameSixNimmt,
+		contracts.GameForSale,
 		contracts.GameOnitama,
 	} {
 		definition, ok := registry.Get(gameType)
@@ -42,8 +44,10 @@ func TestAllGamePluginsSupportRoomVisibilitySettings(t *testing.T) {
 		contracts.GameFugitive,
 		contracts.GameWarChest,
 		contracts.GameQuoridor,
+		contracts.GameHex,
 		contracts.GameLoveLetter,
 		contracts.GameSixNimmt,
+		contracts.GameForSale,
 		contracts.GameOnitama,
 	} {
 		t.Run(gameType, func(t *testing.T) {

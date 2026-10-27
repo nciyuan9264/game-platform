@@ -59,6 +59,17 @@ game-release register \
   --artifact <sixnimmt-image-sha>
 ```
 
+For For Sale:
+
+```bash
+game-release register \
+  --game forsale \
+  --version forsale-v1 \
+  --default-max-players 6 \
+  --replay-schema-version 1 \
+  --artifact <forsale-image-sha>
+```
+
 Registration is a production operation. It is not part of build verification
 or ordinary source delivery.
 
@@ -78,6 +89,21 @@ game-release register \
 
 Run this only during the production rollout, after center services support the
 Onitama DTOs and before the frontend entry is published.
+
+## First Hex Registration
+
+After a `hex-v1` RoomHost slot advertises ready, register the catalog entry:
+
+```bash
+game-release register \
+  --game hex \
+  --version hex-v1 \
+  --default-max-players 2 \
+  --replay-schema-version 1 \
+  --artifact <hex-image-sha>
+```
+
+Run the Hex regression canary before exposing the frontend route.
 
 ## Compatible Runtime Fix
 

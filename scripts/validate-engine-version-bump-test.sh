@@ -100,7 +100,22 @@ git commit -qm new-quoridor
 new_quoridor="$(git rev-parse HEAD)"
 "$SCRIPT" "$new_quoridor_base" "$new_quoridor" >/dev/null
 
-new_loveletter_base="$new_quoridor"
+new_hex_base="$new_quoridor"
+mkdir -p internal/plugins/hex/testdata
+cat >internal/plugins/hex/plugin.go <<'EOF'
+package hex
+const (
+	EngineVersion = "hex-v1"
+	ReplaySchemaVersion = 1
+)
+EOF
+printf '{"schemaVersion":1}\n' >internal/plugins/hex/testdata/replay_frame_golden.json
+git add .
+git commit -qm new-hex
+new_hex="$(git rev-parse HEAD)"
+"$SCRIPT" "$new_hex_base" "$new_hex" >/dev/null
+
+new_loveletter_base="$new_hex"
 mkdir -p internal/plugins/loveletter/testdata
 cat >internal/plugins/loveletter/plugin.go <<'EOF'
 package loveletter
@@ -130,7 +145,22 @@ git commit -qm new-sixnimmt
 new_sixnimmt="$(git rev-parse HEAD)"
 "$SCRIPT" "$new_sixnimmt_base" "$new_sixnimmt" >/dev/null
 
-new_onitama_base="$new_sixnimmt"
+new_forsale_base="$new_sixnimmt"
+mkdir -p internal/plugins/forsale/testdata
+cat >internal/plugins/forsale/plugin.go <<'EOF'
+package forsale
+const (
+	EngineVersion = "forsale-v1"
+	ReplaySchemaVersion = 1
+)
+EOF
+printf '{"schemaVersion":1}\n' >internal/plugins/forsale/testdata/replay_frame_golden.json
+git add .
+git commit -qm new-forsale
+new_forsale="$(git rev-parse HEAD)"
+"$SCRIPT" "$new_forsale_base" "$new_forsale" >/dev/null
+
+new_onitama_base="$new_forsale"
 mkdir -p internal/plugins/onitama/testdata
 cat >internal/plugins/onitama/plugin.go <<'EOF'
 package onitama

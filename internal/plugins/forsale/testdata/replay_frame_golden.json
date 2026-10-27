@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "frameFields": [
+    "playersData",
+    "result",
+    "roomData"
+  ],
+  "roomDataFields": [
+    "actionLog",
+    "chequeMarket",
+    "currentPlayer",
+    "gameStatus",
+    "highestBid",
+    "lockedCount",
+    "playerOrder",
+    "players",
+    "propertyMarket",
+    "purchases",
+    "round",
+    "sales",
+    "starterPlayer",
+    "totalRounds"
+  ]
+}

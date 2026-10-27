@@ -290,6 +290,46 @@ func TestSelectFirstLoveLetterActionDrawsWithoutLeakingIntent(t *testing.T) {
 	}
 }
 
+func TestSelectFirstHexActionUsesFirstLegalCell(t *testing.T) {
+	view, err := json.Marshal(map[string]any{
+		"playerId": "7",
+		"roomData": map[string]any{
+			"currentPlayer": "7",
+			"legalMoves": []any{
+				map[string]any{"row": 5, "column": 5},
+				map[string]any{"row": 5, "column": 6},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	action, ok := selectFirstAction(
+		"test-run",
+		"hex",
+		"room-1-r1",
+		"7",
+		realtimeEnvelope{
+			Type: "ROOM_SYNC",
+			View: map[string]json.RawMessage{"hex": view},
+		},
+	)
+	if !ok ||
+		action.Command.Type != "game_place_stone" ||
+		action.ConflictCommand.Type != "game_place_stone" ||
+		action.Command.CommandID != action.ConflictCommand.CommandID {
+		t.Fatalf("action = %+v/%v", action, ok)
+	}
+	group, groupOK := action.Command.Payload["hex"].(map[string]any)
+	place, placeOK := group["placeStone"].(map[string]any)
+	cell, cellOK := place["cell"].(map[string]any)
+	if !groupOK || !placeOK || !cellOK ||
+		numericValue(cell["row"]) != 5 ||
+		numericValue(cell["column"]) != 5 {
+		t.Fatalf("place payload = %+v", action.Command.Payload)
+	}
+}
+
 func TestSelectFirstSixNimmtActionLocksLowestLegalCard(t *testing.T) {
 	view, err := json.Marshal(map[string]any{
 		"playerId": "7",

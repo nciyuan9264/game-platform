@@ -340,6 +340,11 @@ func (h *Handler) GetLeaderboard(ctx context.Context, req *platform.GetLeaderboa
 				Wins:    int32(valueOrZero(entry.Wins)),
 				WinRate: floatValueOrZero(entry.WinRate),
 			}
+		} else if gameType == contracts.GameHex {
+			metric.Hex = &platform.HexLeaderboardMetric{
+				Wins:    int32(valueOrZero(entry.Wins)),
+				WinRate: floatValueOrZero(entry.WinRate),
+			}
 		} else {
 			metric.Rank = &platform.RankLeaderboardMetric{AvgRank: floatValueOrZero(entry.AvgRank)}
 		}
@@ -377,8 +382,10 @@ func (h *Handler) replayGameType(ctx context.Context, value string) (string, err
 		gameType != contracts.GameOthello &&
 		gameType != contracts.GameWarChest &&
 		gameType != contracts.GameQuoridor &&
+		gameType != contracts.GameHex &&
 		gameType != contracts.GameLoveLetter &&
 		gameType != contracts.GameSixNimmt &&
+		gameType != contracts.GameForSale &&
 		gameType != contracts.GameOnitama {
 		return "", platformError("replay_not_supported", errors.New("game replay is not supported"))
 	}
@@ -444,6 +451,11 @@ func (h *Handler) buildReplaySnapshot(
 		if err := json.Unmarshal(encoded, result.Quoridor); err != nil {
 			return nil, platformError("replay_error", err)
 		}
+	case contracts.GameHex:
+		result.Hex = &platform.HexReplaySnapshot{}
+		if err := json.Unmarshal(encoded, result.Hex); err != nil {
+			return nil, platformError("replay_error", err)
+		}
 	case contracts.GameLoveLetter:
 		result.Loveletter = &platform.LoveLetterReplaySnapshot{}
 		if err := json.Unmarshal(encoded, result.Loveletter); err != nil {
@@ -452,6 +464,11 @@ func (h *Handler) buildReplaySnapshot(
 	case contracts.GameSixNimmt:
 		result.Sixnimmt = &platform.SixNimmtReplaySnapshot{}
 		if err := json.Unmarshal(encoded, result.Sixnimmt); err != nil {
+			return nil, platformError("replay_error", err)
+		}
+	case contracts.GameForSale:
+		result.ForSale = &platform.ForSaleReplaySnapshot{}
+		if err := json.Unmarshal(encoded, result.ForSale); err != nil {
 			return nil, platformError("replay_error", err)
 		}
 	case contracts.GameOnitama:

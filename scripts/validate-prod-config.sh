@@ -68,7 +68,7 @@ require 'PROFILE_REFRESH_INTERVAL:[[:space:]]*[0-9]+(ms|s|m)' 'gateway profile r
 require '^[[:space:]]{2}gateway:[[:space:]]*$' 'one realtime gateway instance is required'
 require 'game-platform-gateway' 'realtime gateway global-network alias is required'
 
-for game in acquire davinci splendor yinsh othello fugitive warchest quoridor loveletter sixnimmt onitama; do
+for game in acquire davinci splendor yinsh othello fugitive warchest quoridor hex loveletter sixnimmt forsale onitama; do
   for slot in a b; do
     service="roomhost-${game}-${slot}"
     require "^[[:space:]]{2}${service}:[[:space:]]*$" "${service} slot is required"
@@ -92,13 +92,17 @@ require_source '\$\{WARCHEST_ROOMHOST_A_IMAGE:\?' 'War Chest A must use a comple
 require_source '\$\{WARCHEST_ROOMHOST_B_IMAGE:\?' 'War Chest B must use a complete independent image reference'
 require_source '\$\{QUORIDOR_ROOMHOST_A_IMAGE:\?' 'Quoridor A must use a complete independent image reference'
 require_source '\$\{QUORIDOR_ROOMHOST_B_IMAGE:\?' 'Quoridor B must use a complete independent image reference'
+require_source '\$\{HEX_ROOMHOST_A_IMAGE:\?' 'Hex A must use a complete independent image reference'
+require_source '\$\{HEX_ROOMHOST_B_IMAGE:\?' 'Hex B must use a complete independent image reference'
 require_source '\$\{LOVELETTER_ROOMHOST_A_IMAGE:\?' 'Love Letter A must use a complete independent image reference'
 require_source '\$\{LOVELETTER_ROOMHOST_B_IMAGE:\?' 'Love Letter B must use a complete independent image reference'
 require_source '\$\{SIXNIMMT_ROOMHOST_A_IMAGE:\?' 'Six Nimmt A must use a complete independent image reference'
 require_source '\$\{SIXNIMMT_ROOMHOST_B_IMAGE:\?' 'Six Nimmt B must use a complete independent image reference'
+require_source '\$\{FORSALE_ROOMHOST_A_IMAGE:\?' 'For Sale A must use a complete independent image reference'
+require_source '\$\{FORSALE_ROOMHOST_B_IMAGE:\?' 'For Sale B must use a complete independent image reference'
 require_source '\$\{ONITAMA_ROOMHOST_A_IMAGE:\?' 'Onitama A must use a complete independent image reference'
 require_source '\$\{ONITAMA_ROOMHOST_B_IMAGE:\?' 'Onitama B must use a complete independent image reference'
-for prefix in ACQUIRE DAVINCI SPLENDOR YINSH OTHELLO FUGITIVE WARCHEST QUORIDOR LOVELETTER SIXNIMMT ONITAMA; do
+for prefix in ACQUIRE DAVINCI SPLENDOR YINSH OTHELLO FUGITIVE WARCHEST QUORIDOR HEX LOVELETTER SIXNIMMT FORSALE ONITAMA; do
   for slot in A B; do
     require_source \
       "\\\$\\{${prefix}_ROOMHOST_${slot}_VERSION:\\?" \
