@@ -1477,6 +1477,32 @@ func (s *PostgresStore) GetMatch(ctx context.Context, matchID string) (contracts
 	return match, nil
 }
 
+func (s *PostgresStore) LatestMatchForRoom(
+	ctx context.Context,
+	roomID string,
+) (contracts.MatchRecord, error) {
+	row := s.db.QueryRowContext(ctx, `
+		SELECT match_id, runtime_room_id, game_type, display_name, turn_timeout_seconds, status, owner_user_id, owner_player_id,
+			runtime_owner_node, epoch, max_players, player_count, engine_version,
+			round_no, last_applied_seq, random_seed,
+			started_at, updated_at, ended_at, duration_seconds,
+			winner_user_id, winner_player_id, end_reason
+		FROM matches
+		WHERE runtime_room_id = $1
+		ORDER BY round_no DESC, started_at DESC, match_id DESC
+		LIMIT 1`, roomID)
+	match, err := scanMatch(row)
+	if err != nil {
+		return contracts.MatchRecord{}, err
+	}
+	players, err := s.listMatchPlayers(ctx, match.MatchID)
+	if err != nil {
+		return contracts.MatchRecord{}, err
+	}
+	match.Players = players
+	return match, nil
+}
+
 func (s *PostgresStore) UpsertMatchPlayer(ctx context.Context, matchID string, player contracts.MatchPlayerRecord) error {
 	return upsertMatchPlayer(ctx, s.db, matchID, player)
 }

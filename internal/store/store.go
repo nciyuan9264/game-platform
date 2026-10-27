@@ -230,6 +230,10 @@ func (s *Store) GetMatch(ctx context.Context, matchID string) (contracts.MatchRe
 	return s.Postgres.GetMatch(ctx, matchID)
 }
 
+func (s *Store) LatestMatchForRoom(ctx context.Context, roomID string) (contracts.MatchRecord, error) {
+	return s.Postgres.LatestMatchForRoom(ctx, roomID)
+}
+
 func (s *Store) ReserveNextMatch(ctx context.Context, roomID, requestID string, randomSeed uint64) (contracts.RoomRecord, contracts.MatchRecord, bool, error) {
 	return s.Postgres.ReserveNextMatch(ctx, roomID, requestID, randomSeed)
 }

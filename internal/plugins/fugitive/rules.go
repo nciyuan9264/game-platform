@@ -5,17 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/nciyuan9264/game-platform/internal/contracts"
 )
 
 const (
-	defaultRoomName       = "午夜追缉"
-	defaultTurnTimeout    = 60
-	maxNoHumanChecks      = 3
-	maxRoomNameCharacters = 18
+	defaultRoomName    = "午夜追缉"
+	defaultTurnTimeout = 120
+	maxNoHumanChecks   = 3
 )
 
 func ensureState(state *State) {
@@ -37,14 +35,8 @@ func ensureState(state *State) {
 	if state.OwnerRole != RoleMarshal {
 		state.OwnerRole = RoleFugitive
 	}
-	if state.DisplayName == "" {
-		state.DisplayName = defaultRoomName
-	}
-	if state.TurnTimeoutSeconds != 0 &&
-		state.TurnTimeoutSeconds != 60 &&
-		state.TurnTimeoutSeconds != 90 {
-		state.TurnTimeoutSeconds = defaultTurnTimeout
-	}
+	state.DisplayName = defaultRoomName
+	state.TurnTimeoutSeconds = defaultTurnTimeout
 	for _, player := range state.Roster {
 		if player != nil && player.Hand == nil {
 			player.Hand = []Card{}
@@ -179,9 +171,7 @@ func updateRoomSettings(
 		return errors.New("only the owner can update room settings")
 	}
 	var value struct {
-		Visibility         string  `json:"visibility"`
-		DisplayName        *string `json:"displayName"`
-		TurnTimeoutSeconds *int    `json:"turnTimeoutSeconds"`
+		Visibility string `json:"visibility"`
 	}
 	if err := decodePayload(payload, &value); err != nil {
 		return err
@@ -190,23 +180,9 @@ func updateRoomSettings(
 		value.Visibility != contracts.VisibilityPrivate {
 		return errors.New("invalid visibility")
 	}
-	name := state.DisplayName
-	if value.DisplayName != nil {
-		name = strings.TrimSpace(*value.DisplayName)
-		if size := len([]rune(name)); size < 1 || size > maxRoomNameCharacters {
-			return errors.New("room name must contain 1 to 18 characters")
-		}
-	}
-	timeout := state.TurnTimeoutSeconds
-	if value.TurnTimeoutSeconds != nil {
-		timeout = *value.TurnTimeoutSeconds
-		if timeout != 0 && timeout != 60 && timeout != 90 {
-			return errors.New("turn timeout must be 0, 60, or 90 seconds")
-		}
-	}
 	state.Visibility = value.Visibility
-	state.DisplayName = name
-	state.TurnTimeoutSeconds = timeout
+	state.DisplayName = defaultRoomName
+	state.TurnTimeoutSeconds = defaultTurnTimeout
 	return nil
 }
 

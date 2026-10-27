@@ -38,6 +38,41 @@ func TestBaseDeckAndInitialDeal(t *testing.T) {
 	}
 }
 
+func TestRoomSettingsKeepFixedFugitiveRules(t *testing.T) {
+	plugin := &Plugin{}
+	value, err := plugin.InitRoom(
+		context.Background(),
+		game.RoomConfig{
+			RoomID:             "fixed-rules",
+			OwnerPlayerID:      "owner",
+			MaxPlayers:         2,
+			RandomSeed:         42,
+			Visibility:         contracts.VisibilityPublic,
+			DisplayName:        "custom",
+			TurnTimeoutSeconds: 60,
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := value.(*State)
+	apply(t, plugin, state, "owner", "connect", nil)
+	apply(t, plugin, state, "owner", "room_update_settings", map[string]any{
+		"visibility":         contracts.VisibilityPrivate,
+		"displayName":        "legacy client",
+		"turnTimeoutSeconds": 0,
+	})
+	if state.Visibility != contracts.VisibilityPrivate {
+		t.Fatalf("visibility = %q", state.Visibility)
+	}
+	if state.DisplayName != defaultRoomName {
+		t.Fatalf("display name = %q", state.DisplayName)
+	}
+	if state.TurnTimeoutSeconds != defaultTurnTimeout {
+		t.Fatalf("turn timeout = %d", state.TurnTimeoutSeconds)
+	}
+}
+
 func TestOpeningAndFirstMarshalDraw(t *testing.T) {
 	state := startedState(t, RoleFugitive)
 	plugin := &Plugin{}

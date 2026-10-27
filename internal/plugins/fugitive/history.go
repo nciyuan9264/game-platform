@@ -122,10 +122,29 @@ func historyFrame(state *State) map[string]any {
 			"hiddenHideoutCount": hiddenHideoutCount(state),
 			"route":              route,
 		},
+		"playersData": historyPlayerData(state),
 		"result": map[string]any{
 			"winnerID":   state.WinnerID,
 			"winnerRole": state.WinnerRole,
 			"reason":     state.EndReason,
+			"searches":   state.Searches,
 		},
 	}
+}
+
+func historyPlayerData(state *State) map[string]any {
+	players := make(map[string]any, len(state.PlayerOrder))
+	for _, playerID := range state.PlayerOrder {
+		player := state.Roster[playerID]
+		if player == nil {
+			continue
+		}
+		players[playerID] = map[string]any{
+			"role":      player.Role,
+			"handCount": len(player.Hand),
+			"seatIndex": player.SeatIndex,
+			"ai":        player.AI,
+		}
+	}
+	return players
 }

@@ -13,7 +13,7 @@ import (
 
 const (
 	GameType            = "fugitive"
-	EngineVersion       = "fugitive-v1"
+	EngineVersion       = "fugitive-v2"
 	ReplaySchemaVersion = 1
 	defaultMaxPlayers   = 2
 )
@@ -74,22 +74,14 @@ func (p *Plugin) InitRoom(
 	if roundNo <= 0 {
 		roundNo = 1
 	}
-	displayName := cfg.DisplayName
-	if displayName == "" {
-		displayName = defaultRoomName
-	}
-	timeout := cfg.TurnTimeoutSeconds
-	if timeout != 0 && timeout != 60 && timeout != 90 {
-		timeout = defaultTurnTimeout
-	}
 	return &State{
 		RoomID:             cfg.RoomID,
 		OwnerID:            cfg.OwnerPlayerID,
 		Status:             StatusMatch,
 		MaxPlayers:         maxPlayers,
 		Visibility:         visibility,
-		DisplayName:        displayName,
-		TurnTimeoutSeconds: timeout,
+		DisplayName:        defaultRoomName,
+		TurnTimeoutSeconds: defaultTurnTimeout,
 		RandomSeed:         cfg.RandomSeed,
 		MatchRoundNo:       roundNo,
 		Roster:             map[string]*Player{},
