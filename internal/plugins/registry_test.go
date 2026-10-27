@@ -19,6 +19,7 @@ func TestRegistryContainsAllGamePlugins(t *testing.T) {
 		contracts.GameFugitive,
 		contracts.GameWarChest,
 		contracts.GameQuoridor,
+		contracts.GameOnitama,
 	} {
 		definition, ok := registry.Get(gameType)
 		if !ok || definition.Engine == nil || definition.Version == "" ||
@@ -39,6 +40,7 @@ func TestAllGamePluginsSupportRoomVisibilitySettings(t *testing.T) {
 		contracts.GameFugitive,
 		contracts.GameWarChest,
 		contracts.GameQuoridor,
+		contracts.GameOnitama,
 	} {
 		t.Run(gameType, func(t *testing.T) {
 			definition, ok := registry.Get(gameType)

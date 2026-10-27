@@ -398,6 +398,69 @@ func TestClientCommandPayload(t *testing.T) {
 		}
 	})
 
+	t.Run("onitama move pass and invalid variants", func(t *testing.T) {
+		got, err := clientCommandPayload(
+			contracts.GameOnitama,
+			"game_move_piece",
+			map[string]any{
+				"onitama": map[string]any{
+					"movePiece": map[string]any{
+						"cardID":  "tiger",
+						"pieceID": "blue-master",
+						"to": map[string]any{
+							"row": float64(2), "column": float64(2),
+						},
+					},
+				},
+			},
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		payload, ok := got.(map[string]any)
+		to, toOK := payload["to"].(map[string]any)
+		if !ok || !toOK ||
+			payload["cardID"] != "tiger" ||
+			payload["pieceID"] != "blue-master" ||
+			to["row"] != float64(2) {
+			t.Fatalf("move payload = %#v", got)
+		}
+		got, err = clientCommandPayload(
+			contracts.GameOnitama,
+			"game_pass",
+			map[string]any{
+				"onitama": map[string]any{
+					"pass": map[string]any{"cardID": "crane"},
+				},
+			},
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		payload, ok = got.(map[string]any)
+		if !ok || payload["cardID"] != "crane" {
+			t.Fatalf("pass payload = %#v", got)
+		}
+		if _, err := clientCommandPayload(
+			contracts.GameOnitama,
+			"game_move_piece",
+			map[string]any{
+				"onitama": map[string]any{},
+			},
+		); err == nil {
+			t.Fatal("missing onitama union variant was accepted")
+		}
+		if _, err := clientCommandPayload(
+			contracts.GameOnitama,
+			"game_move_piece",
+			map[string]any{
+				"quoridor": map[string]any{},
+			},
+		); err == nil {
+			t.Fatal("wrong onitama union group was accepted")
+		}
+	})
+
 	t.Run("wrong union group", func(t *testing.T) {
 		if _, err := clientCommandPayload(contracts.GameAcquire, "game_place_tile", map[string]any{
 			"davinci": map[string]any{},

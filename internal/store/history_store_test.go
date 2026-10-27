@@ -89,6 +89,7 @@ func TestWinRateLeaderboardGames(t *testing.T) {
 		!usesWinRateLeaderboard(contracts.GameFugitive) ||
 		!usesWinRateLeaderboard(contracts.GameWarChest) ||
 		!usesWinRateLeaderboard(contracts.GameQuoridor) ||
+		!usesWinRateLeaderboard(contracts.GameOnitama) ||
 		usesWinRateLeaderboard(contracts.GameAcquire) ||
 		usesWinRateLeaderboard(contracts.GameSplendor) {
 		t.Fatal("win-rate leaderboard routing does not match game semantics")

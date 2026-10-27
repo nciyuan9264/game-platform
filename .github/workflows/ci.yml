@@ -23,7 +23,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: nciyuan9264/pam-idl
-          ref: 68a4d3d7859c495154355f8b82058a8dd42e13f4
+          ref: c37adec3992f81067a27be3a446bb7a5808ad82e
           path: pam-idl
 
       - name: Setup Go
@@ -85,6 +85,7 @@ jobs:
             roomhost-fugitive
             roomhost-warchest
             roomhost-quoridor
+            roomhost-onitama
             migrate-schema
             backfill-replay
             game-release
@@ -135,5 +136,9 @@ jobs:
           QUORIDOR_ROOMHOST_B_IMAGE: registry.example.com/game-platform-roomhost-quoridor:ci-b
           QUORIDOR_ROOMHOST_A_VERSION: ci-a
           QUORIDOR_ROOMHOST_B_VERSION: ci-b
+          ONITAMA_ROOMHOST_A_IMAGE: registry.example.com/game-platform-roomhost-onitama:ci-a
+          ONITAMA_ROOMHOST_B_IMAGE: registry.example.com/game-platform-roomhost-onitama:ci-b
+          ONITAMA_ROOMHOST_A_VERSION: ci-a
+          ONITAMA_ROOMHOST_B_VERSION: ci-b
         run: |
           ./scripts/validate-prod-config.sh

@@ -9,6 +9,7 @@ import (
 	"github.com/nciyuan9264/game-platform/internal/plugins/acquire"
 	"github.com/nciyuan9264/game-platform/internal/plugins/davinci"
 	"github.com/nciyuan9264/game-platform/internal/plugins/fugitive"
+	"github.com/nciyuan9264/game-platform/internal/plugins/onitama"
 	"github.com/nciyuan9264/game-platform/internal/plugins/othello"
 	"github.com/nciyuan9264/game-platform/internal/plugins/quoridor"
 	"github.com/nciyuan9264/game-platform/internal/plugins/splendor"
@@ -45,6 +46,7 @@ func TestSelfTestCoversProductionDefinitions(t *testing.T) {
 		fugitive.Definition(),
 		warchest.Definition(),
 		quoridor.Definition(),
+		onitama.Definition(),
 	}
 	for _, definition := range definitions {
 		t.Run(definition.GameType, func(t *testing.T) {

@@ -724,6 +724,8 @@ func clientCommandPayload(gameType, commandType string, payload any) (any, error
 		variant = "placeDisc"
 	case "game_move_pawn":
 		variant = "movePawn"
+	case "game_move_piece":
+		variant = "movePiece"
 	case "game_place_wall":
 		variant = "placeWall"
 	case "game_pass":

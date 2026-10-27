@@ -100,4 +100,19 @@ git commit -qm new-quoridor
 new_quoridor="$(git rev-parse HEAD)"
 "$SCRIPT" "$new_quoridor_base" "$new_quoridor" >/dev/null
 
+new_onitama_base="$new_quoridor"
+mkdir -p internal/plugins/onitama/testdata
+cat >internal/plugins/onitama/plugin.go <<'EOF'
+package onitama
+const (
+	EngineVersion = "onitama-v1"
+	ReplaySchemaVersion = 1
+)
+EOF
+printf '{"schemaVersion":1}\n' >internal/plugins/onitama/testdata/replay_frame_golden.json
+git add .
+git commit -qm new-onitama
+new_onitama="$(git rev-parse HEAD)"
+"$SCRIPT" "$new_onitama_base" "$new_onitama" >/dev/null
+
 printf 'engine version validation tests passed\n'

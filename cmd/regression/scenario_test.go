@@ -207,6 +207,53 @@ func TestSelectFirstQuoridorActionUsesFirstLegalMove(t *testing.T) {
 	}
 }
 
+func TestSelectFirstOnitamaActionUsesFirstLegalMove(t *testing.T) {
+	view, err := json.Marshal(map[string]any{
+		"playerId": "7",
+		"roomData": map[string]any{
+			"currentPlayer": "7",
+			"legalMoves": []any{
+				map[string]any{
+					"cardID":  "tiger",
+					"pieceID": "blue-master",
+					"to": map[string]any{
+						"row": 2, "column": 2,
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	action, ok := selectFirstAction(
+		"test-run",
+		"onitama",
+		"room-1-r1",
+		"7",
+		realtimeEnvelope{
+			Type: "ROOM_SYNC",
+			View: map[string]json.RawMessage{"onitama": view},
+		},
+	)
+	if !ok ||
+		action.Command.Type != "game_move_piece" ||
+		action.ConflictCommand.Type != "game_move_piece" ||
+		action.Command.CommandID != action.ConflictCommand.CommandID {
+		t.Fatalf("action = %+v/%v", action, ok)
+	}
+	group, groupOK := action.Command.Payload["onitama"].(map[string]any)
+	move, moveOK := group["movePiece"].(map[string]any)
+	to, toOK := move["to"].(map[string]any)
+	if !groupOK || !moveOK || !toOK ||
+		move["cardID"] != "tiger" ||
+		move["pieceID"] != "blue-master" ||
+		numericValue(to["row"]) != 2 ||
+		numericValue(to["column"]) != 2 {
+		t.Fatalf("move payload = %+v", action.Command.Payload)
+	}
+}
+
 func writeTestRoom(w http.ResponseWriter, status string) {
 	writeTestJSON(w, http.StatusOK, map[string]any{
 		"status_code": 200,

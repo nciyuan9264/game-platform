@@ -562,6 +562,55 @@ func selectFirstAction(
 				},
 			),
 		}, true
+	case "onitama":
+		moves, _ := roomData["legalMoves"].([]any)
+		if len(moves) == 0 {
+			return legalAction{}, false
+		}
+		first, _ := moves[0].(map[string]any)
+		cardID := stringValue(first, "cardID")
+		pieceID := stringValue(first, "pieceID")
+		to, toOK := first["to"].(map[string]any)
+		if !toOK {
+			return legalAction{}, false
+		}
+		row := numericValue(to["row"])
+		column := numericValue(to["column"])
+		if cardID == "" || pieceID == "" ||
+			row < 0 || row >= 5 ||
+			column < 0 || column >= 5 {
+			return legalAction{}, false
+		}
+		return legalAction{
+			Command: gameCommand(
+				gameType,
+				matchID,
+				commandID,
+				"game_move_piece",
+				"movePiece",
+				map[string]any{
+					"cardID":  cardID,
+					"pieceID": pieceID,
+					"to": map[string]any{
+						"row": row, "column": column,
+					},
+				},
+			),
+			ConflictCommand: gameCommand(
+				gameType,
+				matchID,
+				commandID,
+				"game_move_piece",
+				"movePiece",
+				map[string]any{
+					"cardID":  cardID,
+					"pieceID": pieceID,
+					"to": map[string]any{
+						"row": -1, "column": -1,
+					},
+				},
+			),
+		}, true
 	default:
 		return legalAction{}, false
 	}

@@ -51,6 +51,23 @@ game-release register \
 Registration is a production operation. It is not part of build verification
 or ordinary source delivery.
 
+## First Onitama Registration
+
+After an `onitama-v1` RoomHost slot advertises ready, register the catalog
+entry once:
+
+```bash
+game-release register \
+  --game onitama \
+  --version onitama-v1 \
+  --default-max-players 2 \
+  --replay-schema-version 1 \
+  --artifact <onitama-image-sha>
+```
+
+Run this only during the production rollout, after center services support the
+Onitama DTOs and before the frontend entry is published.
+
 ## Compatible Runtime Fix
 
 Keep `EngineVersion` unchanged only when state encoding, deterministic

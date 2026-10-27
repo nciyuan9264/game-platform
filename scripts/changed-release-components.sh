@@ -21,6 +21,7 @@ mark_all_games() {
   games[fugitive]=1
   games[warchest]=1
   games[quoridor]=1
+  games[onitama]=1
 }
 
 mark_all_centers() {
@@ -77,6 +78,9 @@ for path in "${files[@]}"; do
       ;;
     internal/plugins/quoridor/*|cmd/roomhost-quoridor/*)
       games[quoridor]=1
+      ;;
+    internal/plugins/onitama/*|cmd/roomhost-onitama/*)
+      games[onitama]=1
       ;;
     internal/game/*|internal/roomhost/*|internal/roomhostapp/*|internal/gamelog/*)
       mark_all_games
