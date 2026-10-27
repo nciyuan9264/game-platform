@@ -68,7 +68,7 @@ require 'PROFILE_REFRESH_INTERVAL:[[:space:]]*[0-9]+(ms|s|m)' 'gateway profile r
 require '^[[:space:]]{2}gateway:[[:space:]]*$' 'one realtime gateway instance is required'
 require 'game-platform-gateway' 'realtime gateway global-network alias is required'
 
-for game in acquire davinci splendor yinsh othello fugitive warchest quoridor; do
+for game in acquire davinci splendor yinsh othello fugitive warchest quoridor hex; do
   for slot in a b; do
     service="roomhost-${game}-${slot}"
     require "^[[:space:]]{2}${service}:[[:space:]]*$" "${service} slot is required"
@@ -92,7 +92,9 @@ require_source '\$\{WARCHEST_ROOMHOST_A_IMAGE:\?' 'War Chest A must use a comple
 require_source '\$\{WARCHEST_ROOMHOST_B_IMAGE:\?' 'War Chest B must use a complete independent image reference'
 require_source '\$\{QUORIDOR_ROOMHOST_A_IMAGE:\?' 'Quoridor A must use a complete independent image reference'
 require_source '\$\{QUORIDOR_ROOMHOST_B_IMAGE:\?' 'Quoridor B must use a complete independent image reference'
-for prefix in ACQUIRE DAVINCI SPLENDOR YINSH OTHELLO FUGITIVE WARCHEST QUORIDOR; do
+require_source '\$\{HEX_ROOMHOST_A_IMAGE:\?' 'Hex A must use a complete independent image reference'
+require_source '\$\{HEX_ROOMHOST_B_IMAGE:\?' 'Hex B must use a complete independent image reference'
+for prefix in ACQUIRE DAVINCI SPLENDOR YINSH OTHELLO FUGITIVE WARCHEST QUORIDOR HEX; do
   for slot in A B; do
     require_source \
       "\\\$\\{${prefix}_ROOMHOST_${slot}_VERSION:\\?" \

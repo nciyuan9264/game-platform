@@ -562,6 +562,43 @@ func selectFirstAction(
 				},
 			),
 		}, true
+	case "hex":
+		moves, _ := roomData["legalMoves"].([]any)
+		if len(moves) == 0 {
+			return legalAction{}, false
+		}
+		first, _ := moves[0].(map[string]any)
+		row := numericValue(first["row"])
+		column := numericValue(first["column"])
+		if row < 0 || row >= 11 || column < 0 || column >= 11 {
+			return legalAction{}, false
+		}
+		return legalAction{
+			Command: gameCommand(
+				gameType,
+				matchID,
+				commandID,
+				"game_place_stone",
+				"placeStone",
+				map[string]any{
+					"cell": map[string]any{
+						"row": row, "column": column,
+					},
+				},
+			),
+			ConflictCommand: gameCommand(
+				gameType,
+				matchID,
+				commandID,
+				"game_place_stone",
+				"placeStone",
+				map[string]any{
+					"cell": map[string]any{
+						"row": -1, "column": -1,
+					},
+				},
+			),
+		}, true
 	default:
 		return legalAction{}, false
 	}

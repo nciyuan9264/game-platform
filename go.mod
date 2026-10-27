@@ -67,7 +67,7 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/nats-io/nkeys v0.4.7 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
-	github.com/nciyuan9264/game-platform-client v0.0.0-20261026071756-34c9771070bc
+	github.com/nciyuan9264/game-platform-client v0.0.0-20261027094450-ae4e7e4df740
 	github.com/nciyuan9264/pam-protocol v0.0.0-20261014034435-cf6227e097a6
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/stretchr/testify v1.10.0 // indirect

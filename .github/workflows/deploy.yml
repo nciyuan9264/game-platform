@@ -19,6 +19,7 @@ on:
           - fugitive
           - warchest
           - quoridor
+          - hex
       compatibility_ack:
         description: Reason an engine implementation change is version-compatible
         type: string
@@ -64,7 +65,7 @@ jobs:
               center='["control-plane","gateway","migrate-schema","platform-rpc"]'
               games='[]'
               ;;
-            acquire|davinci|splendor|yinsh|othello|fugitive|warchest|quoridor)
+            acquire|davinci|splendor|yinsh|othello|fugitive|warchest|quoridor|hex)
               center='[]'
               games="$(jq -cn --arg game "${COMPONENT_OVERRIDE}" '[$game]')"
               ;;
@@ -235,6 +236,10 @@ jobs:
             export QUORIDOR_ROOMHOST_B_IMAGE="${QUORIDOR_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-quoridor:${IMAGE_TAG}}"
             export QUORIDOR_ROOMHOST_A_VERSION="${QUORIDOR_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
             export QUORIDOR_ROOMHOST_B_VERSION="${QUORIDOR_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
+            export HEX_ROOMHOST_A_IMAGE="${HEX_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-hex:${IMAGE_TAG}}"
+            export HEX_ROOMHOST_B_IMAGE="${HEX_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-hex:${IMAGE_TAG}}"
+            export HEX_ROOMHOST_A_VERSION="${HEX_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
+            export HEX_ROOMHOST_B_VERSION="${HEX_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
             printf '%s' "${TCR_PASSWORD}" | docker login "${TCR_LOGIN_SERVER}" \
               --username "${TCR_USERNAME}" --password-stdin
             chmod +x scripts/validate-prod-config.sh
@@ -347,6 +352,10 @@ jobs:
             export QUORIDOR_ROOMHOST_B_IMAGE="${QUORIDOR_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-quoridor:${IMAGE_TAG}}"
             export QUORIDOR_ROOMHOST_A_VERSION="${QUORIDOR_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
             export QUORIDOR_ROOMHOST_B_VERSION="${QUORIDOR_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
+            export HEX_ROOMHOST_A_IMAGE="${HEX_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-hex:${IMAGE_TAG}}"
+            export HEX_ROOMHOST_B_IMAGE="${HEX_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-hex:${IMAGE_TAG}}"
+            export HEX_ROOMHOST_A_VERSION="${HEX_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
+            export HEX_ROOMHOST_B_VERSION="${HEX_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
             printf '%s' "${TCR_PASSWORD}" | docker login "${TCR_LOGIN_SERVER}" \
               --username "${TCR_USERNAME}" --password-stdin
             chmod +x scripts/deploy-game-slot.sh scripts/validate-prod-config.sh

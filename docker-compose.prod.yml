@@ -257,6 +257,24 @@ services:
       PUBLIC_ADDR: roomhost-quoridor-b:9000
       SERVICE_VERSION: ${QUORIDOR_ROOMHOST_B_VERSION:?set Quoridor RoomHost B artifact version}
 
+  roomhost-hex-a:
+    <<: *roomhost-service
+    image: ${HEX_ROOMHOST_A_IMAGE:?set Hex RoomHost A image}
+    environment:
+      <<: *runtime-env
+      NODE_ID: roomhost-hex-a
+      PUBLIC_ADDR: roomhost-hex-a:9000
+      SERVICE_VERSION: ${HEX_ROOMHOST_A_VERSION:?set Hex RoomHost A artifact version}
+
+  roomhost-hex-b:
+    <<: *roomhost-service
+    image: ${HEX_ROOMHOST_B_IMAGE:?set Hex RoomHost B image}
+    environment:
+      <<: *runtime-env
+      NODE_ID: roomhost-hex-b
+      PUBLIC_ADDR: roomhost-hex-b:9000
+      SERVICE_VERSION: ${HEX_ROOMHOST_B_VERSION:?set Hex RoomHost B artifact version}
+
 networks:
   global-network:
     external: true

@@ -398,6 +398,57 @@ func TestClientCommandPayload(t *testing.T) {
 		}
 	})
 
+	t.Run("hex place swap and resign payloads", func(t *testing.T) {
+		got, err := clientCommandPayload(
+			contracts.GameHex,
+			"game_place_stone",
+			map[string]any{
+				"hex": map[string]any{
+					"placeStone": map[string]any{
+						"cell": map[string]any{
+							"row": float64(5), "column": float64(5),
+						},
+					},
+				},
+			},
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		payload, ok := got.(map[string]any)
+		cell, cellOK := payload["cell"].(map[string]any)
+		if !ok || !cellOK ||
+			cell["row"] != float64(5) ||
+			cell["column"] != float64(5) {
+			t.Fatalf("place payload = %#v", got)
+		}
+		for commandType, variant := range map[string]string{
+			"game_swap":   "swap",
+			"game_resign": "resign",
+		} {
+			got, err = clientCommandPayload(
+				contracts.GameHex,
+				commandType,
+				map[string]any{
+					"hex": map[string]any{variant: map[string]any{}},
+				},
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, ok := got.(map[string]any); !ok {
+				t.Fatalf("%s payload = %#v", commandType, got)
+			}
+		}
+		if _, err := clientCommandPayload(
+			contracts.GameHex,
+			"game_place_stone",
+			map[string]any{"hex": map[string]any{}},
+		); err == nil {
+			t.Fatal("missing hex union variant was accepted")
+		}
+	})
+
 	t.Run("wrong union group", func(t *testing.T) {
 		if _, err := clientCommandPayload(contracts.GameAcquire, "game_place_tile", map[string]any{
 			"davinci": map[string]any{},
