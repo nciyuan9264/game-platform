@@ -15,6 +15,7 @@ const (
 	GameWarChest   = "warchest"
 	GameQuoridor   = "quoridor"
 	GameLoveLetter = "loveletter"
+	GameForSale    = "forsale"
 
 	MaxOwnedRooms         = 5
 	RoomStatusCreating    = "creating"
