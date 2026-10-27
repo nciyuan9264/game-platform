@@ -193,27 +193,35 @@ wait_for_candidate() {
 persist_image_reference() {
   local variable="$1"
   local value="$2"
+  local lock_file="${ENV_FILE}.lock"
   local temporary
-  temporary="$(mktemp "${ENV_FILE}.XXXXXX")"
-  if [[ -f "$ENV_FILE" ]]; then
-    awk -v key="$variable" -v value="$value" '
-      BEGIN { found = 0 }
-      index($0, key "=") == 1 {
-        print key "=" value
-        found = 1
-        next
-      }
-      { print }
-      END {
-        if (!found) {
+
+  (
+    flock 200
+    temporary="$(mktemp "${ENV_FILE}.XXXXXX")"
+    trap '[[ -n "${temporary:-}" && -f "$temporary" ]] && rm -f "$temporary"' EXIT
+    if [[ -f "$ENV_FILE" ]]; then
+      awk -v key="$variable" -v value="$value" '
+        BEGIN { found = 0 }
+        index($0, key "=") == 1 {
           print key "=" value
+          found = 1
+          next
         }
-      }
-    ' "$ENV_FILE" >"$temporary"
-  else
-    printf '%s=%s\n' "$variable" "$value" >"$temporary"
-  fi
-  mv "$temporary" "$ENV_FILE"
+        { print }
+        END {
+          if (!found) {
+            print key "=" value
+          }
+        }
+      ' "$ENV_FILE" >"$temporary"
+    else
+      printf '%s=%s\n' "$variable" "$value" >"$temporary"
+    fi
+    mv "$temporary" "$ENV_FILE"
+    temporary=''
+    trap - EXIT
+  ) 200>"$lock_file"
 }
 
 status_json="$(release_status)"
