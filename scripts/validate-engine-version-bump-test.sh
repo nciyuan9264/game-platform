@@ -100,4 +100,19 @@ git commit -qm new-quoridor
 new_quoridor="$(git rev-parse HEAD)"
 "$SCRIPT" "$new_quoridor_base" "$new_quoridor" >/dev/null
 
+new_loveletter_base="$new_quoridor"
+mkdir -p internal/plugins/loveletter/testdata
+cat >internal/plugins/loveletter/plugin.go <<'EOF'
+package loveletter
+const (
+	EngineVersion = "loveletter-v1"
+	ReplaySchemaVersion = 1
+)
+EOF
+printf '{"schemaVersion":1}\n' >internal/plugins/loveletter/testdata/replay_frame_golden.json
+git add .
+git commit -qm new-loveletter
+new_loveletter="$(git rev-parse HEAD)"
+"$SCRIPT" "$new_loveletter_base" "$new_loveletter" >/dev/null
+
 printf 'engine version validation tests passed\n'

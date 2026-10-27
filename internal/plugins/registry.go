@@ -5,6 +5,7 @@ import (
 	"github.com/nciyuan9264/game-platform/internal/plugins/acquire"
 	"github.com/nciyuan9264/game-platform/internal/plugins/davinci"
 	"github.com/nciyuan9264/game-platform/internal/plugins/fugitive"
+	"github.com/nciyuan9264/game-platform/internal/plugins/loveletter"
 	"github.com/nciyuan9264/game-platform/internal/plugins/othello"
 	"github.com/nciyuan9264/game-platform/internal/plugins/quoridor"
 	"github.com/nciyuan9264/game-platform/internal/plugins/splendor"
@@ -20,6 +21,7 @@ func Registry() *game.Registry {
 		yinsh.Definition(),
 		othello.Definition(),
 		fugitive.Definition(),
+		loveletter.Definition(),
 		warchest.Definition(),
 		quoridor.Definition(),
 	)

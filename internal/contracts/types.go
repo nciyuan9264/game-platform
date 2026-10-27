@@ -6,14 +6,15 @@ import (
 )
 
 const (
-	GameDaVinci  = "davinci"
-	GameAcquire  = "acquire"
-	GameSplendor = "splendor"
-	GameYinsh    = "yinsh"
-	GameOthello  = "othello"
-	GameFugitive = "fugitive"
-	GameWarChest = "warchest"
-	GameQuoridor = "quoridor"
+	GameDaVinci    = "davinci"
+	GameAcquire    = "acquire"
+	GameSplendor   = "splendor"
+	GameYinsh      = "yinsh"
+	GameOthello    = "othello"
+	GameFugitive   = "fugitive"
+	GameWarChest   = "warchest"
+	GameQuoridor   = "quoridor"
+	GameLoveLetter = "loveletter"
 
 	MaxOwnedRooms         = 5
 	RoomStatusCreating    = "creating"
