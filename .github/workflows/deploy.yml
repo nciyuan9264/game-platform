@@ -255,7 +255,17 @@ jobs:
                 sed 's/^migrate-schema$/schema-migrate/' |
                 tr '\n' ' '
             )"
-            docker compose -f docker-compose.prod.yml pull ${compose_services}
+            retry_pull() {
+              attempt=1
+              while ! "$@"; do
+                if [ "${attempt}" -ge 3 ]; then
+                  return 1
+                fi
+                sleep $((attempt * 5))
+                attempt=$((attempt + 1))
+              done
+            }
+            retry_pull docker compose -f docker-compose.prod.yml pull ${compose_services}
             if printf '%s\n' "${services}" | grep -Fxq migrate-schema; then
               docker compose -f docker-compose.prod.yml run --rm --no-deps schema-migrate
             fi
@@ -371,8 +381,18 @@ jobs:
             ./scripts/validate-prod-config.sh
             export GAME_RELEASE_IMAGE="${registry}/game-platform-game-release:${IMAGE_TAG}"
             target_image="${registry}/game-platform-roomhost-${GAME}:${IMAGE_TAG}"
-            docker pull "${GAME_RELEASE_IMAGE}"
-            docker pull "${target_image}"
+            retry_pull() {
+              attempt=1
+              while ! "$@"; do
+                if [ "${attempt}" -ge 3 ]; then
+                  return 1
+                fi
+                sleep $((attempt * 5))
+                attempt=$((attempt + 1))
+              done
+            }
+            retry_pull docker pull "${GAME_RELEASE_IMAGE}"
+            retry_pull docker pull "${target_image}"
             ./scripts/deploy-game-slot.sh "${GAME}" "${target_image}"
 
   notify:
