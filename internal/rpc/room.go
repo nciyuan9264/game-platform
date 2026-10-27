@@ -39,48 +39,9 @@ func (h *Handler) CreateRoom(ctx context.Context, req *platform.CreateRoomReq) (
 			errors.New("displayName must not exceed 18 characters"),
 		)
 	}
-	turnTimeoutSeconds := int(req.GetTurnTimeoutSeconds())
-	if !req.IsSetTurnTimeoutSeconds() &&
-		gameType == contracts.GameFugitive {
-		turnTimeoutSeconds = 60
-	}
-	if gameType == contracts.GameWarChest {
-		if req.IsSetTurnTimeoutSeconds() &&
-			turnTimeoutSeconds != 90 {
-			return nil, platformError(
-				"invalid_request",
-				errors.New("warchest turnTimeoutSeconds is fixed at 90"),
-			)
-		}
-		turnTimeoutSeconds = 90
-	}
-	if gameType == contracts.GameQuoridor {
-		if req.IsSetTurnTimeoutSeconds() &&
-			turnTimeoutSeconds != 60 {
-			return nil, platformError(
-				"invalid_request",
-				errors.New("quoridor turnTimeoutSeconds is fixed at 60"),
-			)
-		}
-		turnTimeoutSeconds = 60
-	}
-	if gameType == contracts.GameOnitama {
-		if req.IsSetTurnTimeoutSeconds() &&
-			turnTimeoutSeconds != 60 {
-			return nil, platformError(
-				"invalid_request",
-				errors.New("onitama turnTimeoutSeconds is fixed at 60"),
-			)
-		}
-		turnTimeoutSeconds = 60
-	}
-	if turnTimeoutSeconds != 0 &&
-		turnTimeoutSeconds != 60 &&
-		turnTimeoutSeconds != 90 {
-		return nil, platformError(
-			"invalid_request",
-			errors.New("turnTimeoutSeconds must be 0, 60, or 90"),
-		)
+	turnTimeoutSeconds, err := createRoomTurnTimeoutSeconds(gameType, req)
+	if err != nil {
+		return nil, err
 	}
 	var room contracts.RoomRecord
 	var createErr error
@@ -129,6 +90,79 @@ func (h *Handler) CreateRoom(ctx context.Context, req *platform.CreateRoomReq) (
 	}
 	h.resolveRoomProfiles(ctx, []*platform.RoomInfo{info})
 	return &platform.RoomResp{StatusCode: http.StatusOK, Message: "ok", Data: info}, nil
+}
+
+func createRoomTurnTimeoutSeconds(gameType string, req *platform.CreateRoomReq) (int, error) {
+	turnTimeoutSeconds := int(req.GetTurnTimeoutSeconds())
+	if gameType == contracts.GameFugitive {
+		if req.IsSetTurnTimeoutSeconds() &&
+			turnTimeoutSeconds != 120 {
+			return 0, platformError(
+				"invalid_request",
+				errors.New("fugitive turnTimeoutSeconds is fixed at 120"),
+			)
+		}
+		return 120, nil
+	}
+	if gameType == contracts.GameWarChest {
+		if req.IsSetTurnTimeoutSeconds() &&
+			turnTimeoutSeconds != 90 {
+			return 0, platformError(
+				"invalid_request",
+				errors.New("warchest turnTimeoutSeconds is fixed at 90"),
+			)
+		}
+		return 90, nil
+	}
+	if gameType == contracts.GameQuoridor {
+		if req.IsSetTurnTimeoutSeconds() &&
+			turnTimeoutSeconds != 60 {
+			return 0, platformError(
+				"invalid_request",
+				errors.New("quoridor turnTimeoutSeconds is fixed at 60"),
+			)
+		}
+		return 60, nil
+	}
+	if gameType == contracts.GameLoveLetter {
+		if req.IsSetTurnTimeoutSeconds() &&
+			turnTimeoutSeconds != 60 {
+			return 0, platformError(
+				"invalid_request",
+				errors.New("loveletter turnTimeoutSeconds is fixed at 60"),
+			)
+		}
+		return 60, nil
+	}
+	if gameType == contracts.GameSixNimmt {
+		if req.IsSetTurnTimeoutSeconds() &&
+			turnTimeoutSeconds != 60 {
+			return 0, platformError(
+				"invalid_request",
+				errors.New("sixnimmt turnTimeoutSeconds is fixed at 60"),
+			)
+		}
+		return 60, nil
+	}
+	if gameType == contracts.GameOnitama {
+		if req.IsSetTurnTimeoutSeconds() &&
+			turnTimeoutSeconds != 60 {
+			return 0, platformError(
+				"invalid_request",
+				errors.New("onitama turnTimeoutSeconds is fixed at 60"),
+			)
+		}
+		return 60, nil
+	}
+	if turnTimeoutSeconds != 0 &&
+		turnTimeoutSeconds != 60 &&
+		turnTimeoutSeconds != 90 {
+		return 0, platformError(
+			"invalid_request",
+			errors.New("turnTimeoutSeconds must be 0, 60, or 90"),
+		)
+	}
+	return turnTimeoutSeconds, nil
 }
 
 func (h *Handler) ListRooms(ctx context.Context, req *platform.ListRoomsReq) (*platform.RoomListResp, error) {

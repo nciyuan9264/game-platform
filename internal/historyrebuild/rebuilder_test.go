@@ -401,6 +401,22 @@ func TestRebuilderRejectsCommandLogGap(t *testing.T) {
 	}
 }
 
+func TestValidatedCommandsAllowsLogAheadOfDurableHead(t *testing.T) {
+	store, reader, _ := rebuildFixture()
+	store.match.LastAppliedSeq = 2
+	commands, err := validatedCommands(
+		store.room.RoomID,
+		store.match,
+		reader.records,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(commands) != 3 {
+		t.Fatalf("commands = %d", len(commands))
+	}
+}
+
 func TestRebuilderReportsExpiredCommandLog(t *testing.T) {
 	store, _, _ := rebuildFixture()
 	store.match.LastAppliedSeq = 0

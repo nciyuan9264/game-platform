@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "frameFields": [
+    "playersData",
+    "privateData",
+    "result",
+    "roomData",
+    "unusedCards"
+  ],
+  "roomDataFields": [
+    "activityLog",
+    "gameStatus",
+    "lastResolution",
+    "lockedPlayerIDs",
+    "pendingChoice",
+    "playerOrder",
+    "players",
+    "roundNo",
+    "roundResult",
+    "roundTransitionDeadline",
+    "rows",
+    "turnDeadline",
+    "turnNo",
+    "turnTimeoutMs"
+  ]
+}

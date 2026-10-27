@@ -257,6 +257,42 @@ services:
       PUBLIC_ADDR: roomhost-quoridor-b:9000
       SERVICE_VERSION: ${QUORIDOR_ROOMHOST_B_VERSION:?set Quoridor RoomHost B artifact version}
 
+  roomhost-loveletter-a:
+    <<: *roomhost-service
+    image: ${LOVELETTER_ROOMHOST_A_IMAGE:?set Love Letter RoomHost A image}
+    environment:
+      <<: *runtime-env
+      NODE_ID: roomhost-loveletter-a
+      PUBLIC_ADDR: roomhost-loveletter-a:9000
+      SERVICE_VERSION: ${LOVELETTER_ROOMHOST_A_VERSION:?set Love Letter RoomHost A artifact version}
+
+  roomhost-loveletter-b:
+    <<: *roomhost-service
+    image: ${LOVELETTER_ROOMHOST_B_IMAGE:?set Love Letter RoomHost B image}
+    environment:
+      <<: *runtime-env
+      NODE_ID: roomhost-loveletter-b
+      PUBLIC_ADDR: roomhost-loveletter-b:9000
+      SERVICE_VERSION: ${LOVELETTER_ROOMHOST_B_VERSION:?set Love Letter RoomHost B artifact version}
+
+  roomhost-sixnimmt-a:
+    <<: *roomhost-service
+    image: ${SIXNIMMT_ROOMHOST_A_IMAGE:?set Six Nimmt RoomHost A image}
+    environment:
+      <<: *runtime-env
+      NODE_ID: roomhost-sixnimmt-a
+      PUBLIC_ADDR: roomhost-sixnimmt-a:9000
+      SERVICE_VERSION: ${SIXNIMMT_ROOMHOST_A_VERSION:?set Six Nimmt RoomHost A artifact version}
+
+  roomhost-sixnimmt-b:
+    <<: *roomhost-service
+    image: ${SIXNIMMT_ROOMHOST_B_IMAGE:?set Six Nimmt RoomHost B image}
+    environment:
+      <<: *runtime-env
+      NODE_ID: roomhost-sixnimmt-b
+      PUBLIC_ADDR: roomhost-sixnimmt-b:9000
+      SERVICE_VERSION: ${SIXNIMMT_ROOMHOST_B_VERSION:?set Six Nimmt RoomHost B artifact version}
+
   roomhost-onitama-a:
     <<: *roomhost-service
     image: ${ONITAMA_ROOMHOST_A_IMAGE:?set Onitama RoomHost A image}

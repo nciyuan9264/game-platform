@@ -24,6 +24,8 @@ var supportedGames = []string{
 	"fugitive",
 	"warchest",
 	"quoridor",
+	"loveletter",
+	"sixnimmt",
 	"onitama",
 }
 

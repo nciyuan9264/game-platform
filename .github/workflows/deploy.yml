@@ -19,6 +19,8 @@ on:
           - fugitive
           - warchest
           - quoridor
+          - loveletter
+          - sixnimmt
           - onitama
       compatibility_ack:
         description: Reason an engine implementation change is version-compatible
@@ -65,7 +67,7 @@ jobs:
               center='["control-plane","gateway","migrate-schema","platform-rpc"]'
               games='[]'
               ;;
-            acquire|davinci|splendor|yinsh|othello|fugitive|warchest|quoridor|onitama)
+            acquire|davinci|splendor|yinsh|othello|fugitive|warchest|quoridor|loveletter|sixnimmt|onitama)
               center='[]'
               games="$(jq -cn --arg game "${COMPONENT_OVERRIDE}" '[$game]')"
               ;;
@@ -236,6 +238,14 @@ jobs:
             export QUORIDOR_ROOMHOST_B_IMAGE="${QUORIDOR_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-quoridor:${IMAGE_TAG}}"
             export QUORIDOR_ROOMHOST_A_VERSION="${QUORIDOR_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
             export QUORIDOR_ROOMHOST_B_VERSION="${QUORIDOR_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
+            export LOVELETTER_ROOMHOST_A_IMAGE="${LOVELETTER_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-loveletter:${IMAGE_TAG}}"
+            export LOVELETTER_ROOMHOST_B_IMAGE="${LOVELETTER_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-loveletter:${IMAGE_TAG}}"
+            export LOVELETTER_ROOMHOST_A_VERSION="${LOVELETTER_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
+            export LOVELETTER_ROOMHOST_B_VERSION="${LOVELETTER_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
+            export SIXNIMMT_ROOMHOST_A_IMAGE="${SIXNIMMT_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-sixnimmt:${IMAGE_TAG}}"
+            export SIXNIMMT_ROOMHOST_B_IMAGE="${SIXNIMMT_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-sixnimmt:${IMAGE_TAG}}"
+            export SIXNIMMT_ROOMHOST_A_VERSION="${SIXNIMMT_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
+            export SIXNIMMT_ROOMHOST_B_VERSION="${SIXNIMMT_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
             export ONITAMA_ROOMHOST_A_IMAGE="${ONITAMA_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-onitama:${IMAGE_TAG}}"
             export ONITAMA_ROOMHOST_B_IMAGE="${ONITAMA_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-onitama:${IMAGE_TAG}}"
             export ONITAMA_ROOMHOST_A_VERSION="${ONITAMA_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
@@ -352,6 +362,14 @@ jobs:
             export QUORIDOR_ROOMHOST_B_IMAGE="${QUORIDOR_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-quoridor:${IMAGE_TAG}}"
             export QUORIDOR_ROOMHOST_A_VERSION="${QUORIDOR_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
             export QUORIDOR_ROOMHOST_B_VERSION="${QUORIDOR_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
+            export LOVELETTER_ROOMHOST_A_IMAGE="${LOVELETTER_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-loveletter:${IMAGE_TAG}}"
+            export LOVELETTER_ROOMHOST_B_IMAGE="${LOVELETTER_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-loveletter:${IMAGE_TAG}}"
+            export LOVELETTER_ROOMHOST_A_VERSION="${LOVELETTER_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
+            export LOVELETTER_ROOMHOST_B_VERSION="${LOVELETTER_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
+            export SIXNIMMT_ROOMHOST_A_IMAGE="${SIXNIMMT_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-sixnimmt:${IMAGE_TAG}}"
+            export SIXNIMMT_ROOMHOST_B_IMAGE="${SIXNIMMT_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-sixnimmt:${IMAGE_TAG}}"
+            export SIXNIMMT_ROOMHOST_A_VERSION="${SIXNIMMT_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
+            export SIXNIMMT_ROOMHOST_B_VERSION="${SIXNIMMT_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
             export ONITAMA_ROOMHOST_A_IMAGE="${ONITAMA_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-onitama:${IMAGE_TAG}}"
             export ONITAMA_ROOMHOST_B_IMAGE="${ONITAMA_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-onitama:${IMAGE_TAG}}"
             export ONITAMA_ROOMHOST_A_VERSION="${ONITAMA_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"

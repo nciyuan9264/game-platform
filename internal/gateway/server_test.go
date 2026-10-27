@@ -398,6 +398,79 @@ func TestClientCommandPayload(t *testing.T) {
 		}
 	})
 
+	t.Run("loveletter card and empty payloads", func(t *testing.T) {
+		got, err := clientCommandPayload(
+			contracts.GameLoveLetter,
+			"game_play_card",
+			map[string]any{
+				"loveletter": map[string]any{
+					"playCard": map[string]any{
+						"cardID":         "r1-1-0",
+						"targetPlayerID": "player-2",
+						"guessRank":      float64(9),
+					},
+				},
+			},
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		payload, ok := got.(map[string]any)
+		if !ok ||
+			payload["cardID"] != "r1-1-0" ||
+			payload["guessRank"] != float64(9) {
+			t.Fatalf("play card payload = %#v", got)
+		}
+		got, err = clientCommandPayload(
+			contracts.GameLoveLetter,
+			"game_next_round",
+			map[string]any{
+				"loveletter": map[string]any{
+					"nextRound": map[string]any{},
+				},
+			},
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := got.(map[string]any); !ok {
+			t.Fatalf("next round payload = %#v", got)
+		}
+	})
+
+	t.Run("sixnimmt card row and empty payloads", func(t *testing.T) {
+		got, err := clientCommandPayload(
+			contracts.GameSixNimmt,
+			"game_lock_card",
+			map[string]any{
+				"sixnimmt": map[string]any{
+					"lockCard": map[string]any{"card": float64(55)},
+				},
+			},
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.(map[string]any)["card"] != float64(55) {
+			t.Fatalf("lock card payload = %#v", got)
+		}
+		got, err = clientCommandPayload(
+			contracts.GameSixNimmt,
+			"game_choose_row",
+			map[string]any{
+				"sixnimmt": map[string]any{
+					"chooseRow": map[string]any{"rowIndex": float64(2)},
+				},
+			},
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.(map[string]any)["rowIndex"] != float64(2) {
+			t.Fatalf("choose row payload = %#v", got)
+		}
+	})
+
 	t.Run("onitama move pass and invalid variants", func(t *testing.T) {
 		got, err := clientCommandPayload(
 			contracts.GameOnitama,

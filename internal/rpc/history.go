@@ -340,11 +340,6 @@ func (h *Handler) GetLeaderboard(ctx context.Context, req *platform.GetLeaderboa
 				Wins:    int32(valueOrZero(entry.Wins)),
 				WinRate: floatValueOrZero(entry.WinRate),
 			}
-		} else if gameType == contracts.GameOnitama {
-			metric.Onitama = &platform.OnitamaLeaderboardMetric{
-				Wins:    int32(valueOrZero(entry.Wins)),
-				WinRate: floatValueOrZero(entry.WinRate),
-			}
 		} else {
 			metric.Rank = &platform.RankLeaderboardMetric{AvgRank: floatValueOrZero(entry.AvgRank)}
 		}
@@ -382,6 +377,8 @@ func (h *Handler) replayGameType(ctx context.Context, value string) (string, err
 		gameType != contracts.GameOthello &&
 		gameType != contracts.GameWarChest &&
 		gameType != contracts.GameQuoridor &&
+		gameType != contracts.GameLoveLetter &&
+		gameType != contracts.GameSixNimmt &&
 		gameType != contracts.GameOnitama {
 		return "", platformError("replay_not_supported", errors.New("game replay is not supported"))
 	}
@@ -445,6 +442,16 @@ func (h *Handler) buildReplaySnapshot(
 	case contracts.GameQuoridor:
 		result.Quoridor = &platform.QuoridorReplaySnapshot{}
 		if err := json.Unmarshal(encoded, result.Quoridor); err != nil {
+			return nil, platformError("replay_error", err)
+		}
+	case contracts.GameLoveLetter:
+		result.Loveletter = &platform.LoveLetterReplaySnapshot{}
+		if err := json.Unmarshal(encoded, result.Loveletter); err != nil {
+			return nil, platformError("replay_error", err)
+		}
+	case contracts.GameSixNimmt:
+		result.Sixnimmt = &platform.SixNimmtReplaySnapshot{}
+		if err := json.Unmarshal(encoded, result.Sixnimmt); err != nil {
 			return nil, platformError("replay_error", err)
 		}
 	case contracts.GameOnitama:

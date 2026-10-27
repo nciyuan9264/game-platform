@@ -73,9 +73,16 @@ func runCanary(
 		result.Checks = append(result.Checks, verifier.VerifyClosed(ctx, observation)...)
 	}()
 
+	maxPlayers := 2
+	if gameType == "loveletter" {
+		maxPlayers = 6
+	}
+	if gameType == "sixnimmt" {
+		maxPlayers = 10
+	}
 	if !appendGameCheck(&result, "create private room", func() error {
 		var err error
-		room, err = api.createRoom(ctx, gameType, result.Request, 2)
+		room, err = api.createRoom(ctx, gameType, result.Request, maxPlayers)
 		if err != nil {
 			return err
 		}
@@ -91,7 +98,7 @@ func runCanary(
 	}
 
 	if !appendGameCheck(&result, "create request is idempotent", func() error {
-		repeated, err := api.createRoom(ctx, gameType, result.Request, 2)
+		repeated, err := api.createRoom(ctx, gameType, result.Request, maxPlayers)
 		if err != nil {
 			return err
 		}
@@ -105,7 +112,7 @@ func runCanary(
 	}
 
 	if !appendGameCheck(&result, "create request detects intent conflict", func() error {
-		_, err := api.createRoom(ctx, gameType, result.Request, 3)
+		_, err := api.createRoom(ctx, gameType, result.Request, maxPlayers-1)
 		if !isAPIError(err, http.StatusConflict, "idempotency_conflict") {
 			return fmt.Errorf("conflicting create error = %v", err)
 		}
@@ -341,7 +348,9 @@ func selectFirstAction(
 		return legalAction{}, false
 	}
 	roomData, _ := view["roomData"].(map[string]any)
-	if roomData == nil || stringValue(roomData, "currentPlayer") != playerID {
+	if roomData == nil ||
+		(gameType != "sixnimmt" &&
+			stringValue(roomData, "currentPlayer") != playerID) {
 		return legalAction{}, false
 	}
 	commandID := canaryCommandID(runID, gameType, "action")
@@ -609,6 +618,60 @@ func selectFirstAction(
 						"row": -1, "column": -1,
 					},
 				},
+			),
+		}, true
+	case "loveletter":
+		if stringValue(roomData, "gameStatus") != "draw" {
+			return legalAction{}, false
+		}
+		return legalAction{
+			Command: gameCommand(
+				gameType,
+				matchID,
+				commandID,
+				"game_draw_card",
+				"drawCard",
+				map[string]any{},
+			),
+			ConflictCommand: gameCommand(
+				gameType,
+				matchID,
+				commandID,
+				"game_play_card",
+				"playCard",
+				map[string]any{"cardID": "__intent_conflict__"},
+			),
+		}, true
+	case "sixnimmt":
+		privateData, _ := view["privateData"].(map[string]any)
+		rawCards, _ := privateData["legalCards"].([]any)
+		cards := make([]int, 0, len(rawCards))
+		for _, raw := range rawCards {
+			card := numericValue(raw)
+			if card >= 1 && card <= 104 {
+				cards = append(cards, card)
+			}
+		}
+		sort.Ints(cards)
+		if len(cards) == 0 {
+			return legalAction{}, false
+		}
+		return legalAction{
+			Command: gameCommand(
+				gameType,
+				matchID,
+				commandID,
+				"game_lock_card",
+				"lockCard",
+				map[string]any{"card": cards[0]},
+			),
+			ConflictCommand: gameCommand(
+				gameType,
+				matchID,
+				commandID,
+				"game_lock_card",
+				"lockCard",
+				map[string]any{"card": -1},
 			),
 		}, true
 	default:
