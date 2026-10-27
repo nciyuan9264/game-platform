@@ -386,7 +386,8 @@ func (h *Handler) replayGameType(ctx context.Context, value string) (string, err
 		gameType != contracts.GameLoveLetter &&
 		gameType != contracts.GameSixNimmt &&
 		gameType != contracts.GameForSale &&
-		gameType != contracts.GameOnitama {
+		gameType != contracts.GameOnitama &&
+		gameType != contracts.GameHive {
 		return "", platformError("replay_not_supported", errors.New("game replay is not supported"))
 	}
 	return gameType, nil
@@ -474,6 +475,11 @@ func (h *Handler) buildReplaySnapshot(
 	case contracts.GameOnitama:
 		result.Onitama = &platform.OnitamaReplaySnapshot{}
 		if err := json.Unmarshal(encoded, result.Onitama); err != nil {
+			return nil, platformError("replay_error", err)
+		}
+	case contracts.GameHive:
+		result.Hive = &platform.HiveReplaySnapshot{}
+		if err := json.Unmarshal(encoded, result.Hive); err != nil {
 			return nil, platformError("replay_error", err)
 		}
 	default:

@@ -24,6 +24,7 @@ mark_all_games() {
   games[hex]=1
   games[loveletter]=1
   games[sixnimmt]=1
+  games[hive]=1
   games[forsale]=1
   games[onitama]=1
 }
@@ -91,6 +92,9 @@ for path in "${files[@]}"; do
       ;;
     internal/plugins/sixnimmt/*|cmd/roomhost-sixnimmt/*)
       games[sixnimmt]=1
+      ;;
+    internal/plugins/hive/*|cmd/roomhost-hive/*)
+      games[hive]=1
       ;;
     internal/plugins/forsale/*|cmd/roomhost-forsale/*)
       games[forsale]=1

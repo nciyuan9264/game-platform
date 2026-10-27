@@ -174,6 +174,16 @@ func createRoomTurnTimeoutSeconds(gameType string, req *platform.CreateRoomReq) 
 		}
 		return 60, nil
 	}
+	if gameType == contracts.GameHive {
+		if req.IsSetTurnTimeoutSeconds() &&
+			turnTimeoutSeconds != 120 {
+			return 0, platformError(
+				"invalid_request",
+				errors.New("hive turnTimeoutSeconds is fixed at 120"),
+			)
+		}
+		return 120, nil
+	}
 	if turnTimeoutSeconds != 0 &&
 		turnTimeoutSeconds != 60 &&
 		turnTimeoutSeconds != 90 {

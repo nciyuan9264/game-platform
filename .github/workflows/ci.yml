@@ -90,6 +90,7 @@ jobs:
             roomhost-sixnimmt
             roomhost-forsale
             roomhost-onitama
+            roomhost-hive
             migrate-schema
             backfill-replay
             game-release
@@ -160,5 +161,9 @@ jobs:
           ONITAMA_ROOMHOST_B_IMAGE: registry.example.com/game-platform-roomhost-onitama:ci-b
           ONITAMA_ROOMHOST_A_VERSION: ci-a
           ONITAMA_ROOMHOST_B_VERSION: ci-b
+          HIVE_ROOMHOST_A_IMAGE: registry.example.com/game-platform-roomhost-hive:ci-a
+          HIVE_ROOMHOST_B_IMAGE: registry.example.com/game-platform-roomhost-hive:ci-b
+          HIVE_ROOMHOST_A_VERSION: ci-a
+          HIVE_ROOMHOST_B_VERSION: ci-b
         run: |
           ./scripts/validate-prod-config.sh

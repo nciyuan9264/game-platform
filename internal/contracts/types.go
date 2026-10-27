@@ -19,6 +19,7 @@ const (
 	GameSixNimmt   = "sixnimmt"
 	GameForSale    = "forsale"
 	GameOnitama    = "onitama"
+	GameHive       = "hive"
 
 	MaxOwnedRooms         = 5
 	RoomStatusCreating    = "creating"

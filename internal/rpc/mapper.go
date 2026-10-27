@@ -160,6 +160,13 @@ func roomMetrics(room contracts.RoomRecord) *platform.RoomMetrics {
 		return &platform.RoomMetrics{Onitama: &platform.OnitamaRoomMetrics{
 			TurnCount: current,
 		}}
+	case contracts.GameHive:
+		return &platform.RoomMetrics{Hive: &platform.HiveRoomMetrics{
+			TurnCount:        current,
+			PlacedPieceCount: total,
+			ProgressCurrent:  current,
+			ProgressTotal:    total,
+		}}
 	case contracts.GameSplendor:
 		return &platform.RoomMetrics{Splendor: &platform.SplendorRoomMetrics{
 			MaxScore: current, ProgressCurrent: current, ProgressTotal: total,

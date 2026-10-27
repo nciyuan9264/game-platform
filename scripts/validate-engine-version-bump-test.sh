@@ -145,7 +145,7 @@ git commit -qm new-sixnimmt
 new_sixnimmt="$(git rev-parse HEAD)"
 "$SCRIPT" "$new_sixnimmt_base" "$new_sixnimmt" >/dev/null
 
-new_forsale_base="$new_sixnimmt"
+new_hive_base="$new_sixnimmt"
 mkdir -p internal/plugins/forsale/testdata
 cat >internal/plugins/forsale/plugin.go <<'EOF'
 package forsale
@@ -158,7 +158,22 @@ printf '{"schemaVersion":1}\n' >internal/plugins/forsale/testdata/replay_frame_g
 git add .
 git commit -qm new-forsale
 new_forsale="$(git rev-parse HEAD)"
-"$SCRIPT" "$new_forsale_base" "$new_forsale" >/dev/null
+"$SCRIPT" "$new_hive_base" "$new_forsale" >/dev/null
+
+new_hive_base="$new_forsale"
+mkdir -p internal/plugins/hive/testdata
+cat >internal/plugins/hive/plugin.go <<'EOF'
+package hive
+const (
+	EngineVersion = "hive-v1"
+	ReplaySchemaVersion = 1
+)
+EOF
+printf '{"schemaVersion":1}\n' >internal/plugins/hive/testdata/replay_frame_golden.json
+git add .
+git commit -qm new-hive
+new_hive="$(git rev-parse HEAD)"
+"$SCRIPT" "$new_hive_base" "$new_hive" >/dev/null
 
 new_onitama_base="$new_forsale"
 mkdir -p internal/plugins/onitama/testdata

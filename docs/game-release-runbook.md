@@ -59,7 +59,7 @@ game-release register \
   --artifact <sixnimmt-image-sha>
 ```
 
-For For Sale:
+For Sale 首次注册使用固定 6 席与 replay schema 1：
 
 ```bash
 game-release register \
@@ -68,6 +68,17 @@ game-release register \
   --default-max-players 6 \
   --replay-schema-version 1 \
   --artifact <forsale-image-sha>
+```
+
+HIVE 首次注册使用固定双人席位与 replay schema 1：
+
+```bash
+game-release register \
+  --game hive \
+  --version hive-v1 \
+  --default-max-players 2 \
+  --replay-schema-version 1 \
+  --artifact <hive-image-sha>
 ```
 
 Registration is a production operation. It is not part of build verification

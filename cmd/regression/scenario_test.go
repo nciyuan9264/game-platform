@@ -330,6 +330,50 @@ func TestSelectFirstHexActionUsesFirstLegalCell(t *testing.T) {
 	}
 }
 
+func TestSelectFirstHiveActionUsesFirstLegalAction(t *testing.T) {
+	view, err := json.Marshal(map[string]any{
+		"playerId": "7",
+		"roomData": map[string]any{
+			"currentPlayer": "7",
+			"legalActions": []any{
+				map[string]any{
+					"kind":    "place",
+					"pieceID": "wA1",
+					"to":      map[string]any{"q": 0, "r": 0},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	action, ok := selectFirstAction(
+		"test-run",
+		"hive",
+		"room-1-r1",
+		"7",
+		realtimeEnvelope{
+			Type: "ROOM_SYNC",
+			View: map[string]json.RawMessage{"hive": view},
+		},
+	)
+	if !ok ||
+		action.Command.Type != "game_place_piece" ||
+		action.ConflictCommand.Type != "game_place_piece" ||
+		action.Command.CommandID != action.ConflictCommand.CommandID {
+		t.Fatalf("action = %+v/%v", action, ok)
+	}
+	hivePayload, payloadOK := action.Command.Payload["hive"].(map[string]any)
+	placePiece, placeOK := hivePayload["placePiece"].(map[string]any)
+	to, toOK := placePiece["to"].(map[string]any)
+	if !payloadOK || !placeOK || !toOK ||
+		placePiece["pieceID"] != "wA1" ||
+		numericValue(to["q"]) != 0 ||
+		numericValue(to["r"]) != 0 {
+		t.Fatalf("place payload = %+v", action.Command.Payload)
+	}
+}
+
 func TestSelectFirstSixNimmtActionLocksLowestLegalCard(t *testing.T) {
 	view, err := json.Marshal(map[string]any{
 		"playerId": "7",

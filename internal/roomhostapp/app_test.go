@@ -10,6 +10,7 @@ import (
 	"github.com/nciyuan9264/game-platform/internal/plugins/davinci"
 	"github.com/nciyuan9264/game-platform/internal/plugins/forsale"
 	"github.com/nciyuan9264/game-platform/internal/plugins/fugitive"
+	"github.com/nciyuan9264/game-platform/internal/plugins/hive"
 	"github.com/nciyuan9264/game-platform/internal/plugins/loveletter"
 	"github.com/nciyuan9264/game-platform/internal/plugins/onitama"
 	"github.com/nciyuan9264/game-platform/internal/plugins/othello"
@@ -53,6 +54,7 @@ func TestSelfTestCoversProductionDefinitions(t *testing.T) {
 		sixnimmt.Definition(),
 		forsale.Definition(),
 		onitama.Definition(),
+		hive.Definition(),
 	}
 	for _, definition := range definitions {
 		t.Run(definition.GameType, func(t *testing.T) {

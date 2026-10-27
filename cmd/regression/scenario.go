@@ -709,6 +709,56 @@ func selectFirstAction(
 				},
 			),
 		}, true
+	case "hive":
+		actions, _ := roomData["legalActions"].([]any)
+		if len(actions) == 0 {
+			return legalAction{}, false
+		}
+		first, _ := actions[0].(map[string]any)
+		kind := stringValue(first, "kind")
+		pieceID := stringValue(first, "pieceID")
+		to, _ := first["to"].(map[string]any)
+		if pieceID == "" || to == nil {
+			return legalAction{}, false
+		}
+		commandType := "game_place_piece"
+		variant := "placePiece"
+		if kind == "move" {
+			commandType = "game_move_piece"
+			variant = "movePiece"
+		} else if kind != "place" {
+			return legalAction{}, false
+		}
+		payload := map[string]any{
+			"pieceID": pieceID,
+			"to": map[string]any{
+				"q": numericValue(to["q"]),
+				"r": numericValue(to["r"]),
+			},
+		}
+		return legalAction{
+			Command: gameCommand(
+				gameType,
+				matchID,
+				commandID,
+				commandType,
+				variant,
+				payload,
+			),
+			ConflictCommand: gameCommand(
+				gameType,
+				matchID,
+				commandID,
+				commandType,
+				variant,
+				map[string]any{
+					"pieceID": pieceID,
+					"to": map[string]any{
+						"q": 999, "r": 999,
+					},
+				},
+			),
+		}, true
 	case "sixnimmt":
 		privateData, _ := view["privateData"].(map[string]any)
 		rawCards, _ := privateData["legalCards"].([]any)

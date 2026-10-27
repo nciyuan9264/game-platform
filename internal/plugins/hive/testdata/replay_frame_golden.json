@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "frameFields": [
+    "playersData",
+    "result",
+    "roomData"
+  ],
+  "roomDataFields": [
+    "blackPlayerID",
+    "currentPlayer",
+    "currentSide",
+    "firstPlayerID",
+    "gameStatus",
+    "lastAction",
+    "legalActions",
+    "moveLog",
+    "playerOrder",
+    "players",
+    "roundNo",
+    "stacks",
+    "turnDeadline",
+    "turnTimeoutMs",
+    "whitePlayerID"
+  ]
+}

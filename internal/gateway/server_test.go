@@ -585,6 +585,58 @@ func TestClientCommandPayload(t *testing.T) {
 		}
 	})
 
+	t.Run("hive place move and resign payloads", func(t *testing.T) {
+		for _, test := range []struct {
+			command string
+			variant string
+		}{
+			{"game_place_piece", "placePiece"},
+			{"game_move_piece", "movePiece"},
+		} {
+			got, err := clientCommandPayload(
+				contracts.GameHive,
+				test.command,
+				map[string]any{
+					"hive": map[string]any{
+						test.variant: map[string]any{
+							"pieceID": "wA1",
+							"to": map[string]any{
+								"q": float64(1),
+								"r": float64(-1),
+							},
+						},
+					},
+				},
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+			payload, ok := got.(map[string]any)
+			to, toOK := payload["to"].(map[string]any)
+			if !ok || !toOK ||
+				payload["pieceID"] != "wA1" ||
+				to["q"] != float64(1) ||
+				to["r"] != float64(-1) {
+				t.Fatalf("%s payload = %#v", test.command, got)
+			}
+		}
+		got, err := clientCommandPayload(
+			contracts.GameHive,
+			"game_resign",
+			map[string]any{
+				"hive": map[string]any{
+					"resign": map[string]any{},
+				},
+			},
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := got.(map[string]any); !ok {
+			t.Fatalf("resign payload = %#v", got)
+		}
+	})
+
 	t.Run("wrong union group", func(t *testing.T) {
 		if _, err := clientCommandPayload(contracts.GameAcquire, "game_place_tile", map[string]any{
 			"davinci": map[string]any{},
