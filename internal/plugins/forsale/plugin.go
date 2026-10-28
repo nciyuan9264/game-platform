@@ -14,7 +14,7 @@ import (
 
 const (
 	GameType            = "forsale"
-	EngineVersion       = "forsale-v1"
+	EngineVersion       = "forsale-v2"
 	ReplaySchemaVersion = 1
 	defaultMaxPlayers   = 6
 	maxNoHumanChecks    = 3
