@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/nciyuan9264/game-platform/internal/authclient"
 	"github.com/nciyuan9264/game-platform/internal/contracts"
+	"github.com/nciyuan9264/game-platform/internal/platform/token"
 	"github.com/nciyuan9264/game-platform/internal/rpcmeta"
 	"github.com/nciyuan9264/game-platform/internal/store"
 	platformcontrol "github.com/nciyuan9264/game-platform/kitex_gen/pam/platform/control/v1"
@@ -41,7 +42,7 @@ func (h *RPCHandler) CreateRoom(ctx context.Context, req *platformcontrol.Create
 	room, err := h.server.createRoomRecord(ctx, createRoomRequest{
 		GameType:           req.GetGameType(),
 		OwnerUserID:        ownerUserID,
-		OwnerPlayerID:      ownerIdentity.UserID,
+		OwnerPlayerID:      token.PlayerID(ownerIdentity),
 		MaxPlayers:         int(req.GetMaxPlayers()),
 		Visibility:         req.GetVisibility(),
 		DisplayName:        req.GetDisplayName(),

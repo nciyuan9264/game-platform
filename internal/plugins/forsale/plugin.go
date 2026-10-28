@@ -261,15 +261,15 @@ func (p *Plugin) ApplyCommand(
 			player.Online = false
 		}
 	case "match_ready":
-		err = setReady(staged, command.PlayerID, payload)
+		err = setReady(staged, command.PlayerID, command.UserID, payload)
 	case "match_add_ai":
-		err = addAI(staged, command.PlayerID, payload)
+		err = addAI(staged, command.PlayerID, command.UserID, payload)
 	case "match_remove_player":
-		removedPlayerID, err = removePlayer(staged, command.PlayerID, payload)
+		removedPlayerID, err = removePlayer(staged, command.PlayerID, command.UserID, payload)
 	case "room_update_settings":
-		err = updateVisibility(staged, command.PlayerID, payload)
+		err = updateVisibility(staged, command.PlayerID, command.UserID, payload)
 	case "match_begin":
-		err = beginMatch(staged, command.PlayerID)
+		err = beginMatch(staged, command.PlayerID, command.UserID)
 	case "game_ready":
 		err = gameReady(staged, command.PlayerID, command.SentAt)
 		refreshAutomation = err == nil
@@ -601,7 +601,7 @@ func connect(state *State, userID, playerID string) error {
 	}
 	state.Roster[playerID] = &Player{
 		UserID: userID, PlayerID: playerID, Online: true,
-		Ready:      playerID == state.OwnerID,
+		Ready:      ownerActor(state, playerID, userID),
 		SeatIndex:  firstFreeSeat(state),
 		Properties: []int{}, Cheques: []int{},
 	}
@@ -610,7 +610,7 @@ func connect(state *State, userID, playerID string) error {
 	return nil
 }
 
-func setReady(state *State, playerID string, payload []byte) error {
+func setReady(state *State, playerID, userID string, payload []byte) error {
 	if state.Status != StatusMatch {
 		return errors.New("preparation phase has ended")
 	}
@@ -624,15 +624,34 @@ func setReady(state *State, playerID string, payload []byte) error {
 	if err := decodePayload(payload, &value); err != nil || value.Ready == nil {
 		return errors.New("invalid ready payload")
 	}
-	if playerID == state.OwnerID && !*value.Ready {
+	if ownerActor(state, playerID, userID) && !*value.Ready {
 		return errors.New("owner is always ready")
 	}
 	player.Ready = *value.Ready
 	return nil
 }
 
-func addAI(state *State, actorID string, payload []byte) error {
-	if actorID != state.OwnerID || state.Status != StatusMatch {
+func ownerActor(state *State, actorID, actorUserID string) bool {
+	if actorID != "" && actorID == state.OwnerID {
+		return true
+	}
+	if actorUserID != "" && actorUserID == state.OwnerID {
+		return true
+	}
+	if actorUserID == "" {
+		return false
+	}
+	if owner := state.Roster[state.OwnerID]; owner != nil && owner.UserID == actorUserID {
+		return true
+	}
+	if actor := state.Roster[actorID]; actor != nil && actor.UserID != "" && actor.UserID == state.OwnerID {
+		return true
+	}
+	return false
+}
+
+func addAI(state *State, actorID, actorUserID string, payload []byte) error {
+	if !ownerActor(state, actorID, actorUserID) || state.Status != StatusMatch {
 		return errors.New("only the owner can add AI during preparation")
 	}
 	if len(state.Roster) >= state.MaxPlayers {
@@ -668,8 +687,8 @@ func addAI(state *State, actorID string, payload []byte) error {
 	return nil
 }
 
-func removePlayer(state *State, actorID string, payload []byte) (string, error) {
-	if actorID != state.OwnerID || state.Status != StatusMatch {
+func removePlayer(state *State, actorID, actorUserID string, payload []byte) (string, error) {
+	if !ownerActor(state, actorID, actorUserID) || state.Status != StatusMatch {
 		return "", errors.New("only the owner can remove players during preparation")
 	}
 	var value struct {
@@ -687,8 +706,8 @@ func removePlayer(state *State, actorID string, payload []byte) (string, error) 
 	return value.PlayerID, nil
 }
 
-func updateVisibility(state *State, actorID string, payload []byte) error {
-	if actorID != state.OwnerID || state.Status != StatusMatch {
+func updateVisibility(state *State, actorID, actorUserID string, payload []byte) error {
+	if !ownerActor(state, actorID, actorUserID) || state.Status != StatusMatch {
 		return errors.New("only the owner can update room settings")
 	}
 	var value struct {
@@ -703,8 +722,8 @@ func updateVisibility(state *State, actorID string, payload []byte) error {
 	return nil
 }
 
-func beginMatch(state *State, actorID string) error {
-	if actorID != state.OwnerID || state.Status != StatusMatch {
+func beginMatch(state *State, actorID, actorUserID string) error {
+	if !ownerActor(state, actorID, actorUserID) || state.Status != StatusMatch {
 		return errors.New("only the owner can start the match")
 	}
 	if len(state.PlayerOrder) < minPlayers || len(state.PlayerOrder) > maxPlayers {

@@ -61,6 +61,32 @@ func TestPluginPreparationAndPrivateViews(t *testing.T) {
 	}
 }
 
+func TestOwnerUserCanStartWithRuntimePlayerID(t *testing.T) {
+	plugin := &Plugin{}
+	stateRaw, err := plugin.InitRoom(context.Background(), game.RoomConfig{
+		RoomID: "room", OwnerUserID: "owner-user", OwnerPlayerID: "owner-user",
+		MaxPlayers: 6, RandomSeed: 309, RoundNo: 1,
+		Visibility: contracts.VisibilityPublic,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := stateRaw.(*State)
+	for _, command := range []contracts.RoomCommand{
+		{Type: "connect", UserID: "owner-user", PlayerID: "runtime-owner"},
+		{Type: "match_add_ai", UserID: "owner-user", PlayerID: "runtime-owner", Payload: map[string]any{"seatIndex": 1}},
+		{Type: "match_add_ai", UserID: "owner-user", PlayerID: "runtime-owner", Payload: map[string]any{"seatIndex": 2}},
+		{Type: "match_begin", UserID: "owner-user", PlayerID: "runtime-owner", SentAt: time.Unix(100, 0)},
+	} {
+		if _, err := plugin.ApplyCommand(context.Background(), state, command); err != nil {
+			t.Fatalf("%s: %v", command.Type, err)
+		}
+	}
+	if state.Status != StatusWaiting {
+		t.Fatalf("status = %q, want %q", state.Status, StatusWaiting)
+	}
+}
+
 func TestStateCodecRoundTrip(t *testing.T) {
 	plugin := &Plugin{}
 	state := preparedState(t, 5, 302)
