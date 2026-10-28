@@ -14,7 +14,7 @@ import (
 
 const (
 	GameType            = "cantstop"
-	EngineVersion       = "cantstop-v1"
+	EngineVersion       = "cantstop-v2"
 	ReplaySchemaVersion = 1
 	defaultMaxPlayers   = 4
 	maxNoHumanChecks    = 3
@@ -33,8 +33,8 @@ const (
 const (
 	turnTimeout     = 60 * time.Second
 	transitionDelay = 4 * time.Second
-	aiMinDelay      = 700 * time.Millisecond
-	aiMaxDelay      = 1400 * time.Millisecond
+	aiMinDelay      = 3 * time.Second
+	aiMaxDelay      = 5 * time.Second
 	aiTimeout       = 750 * time.Millisecond
 )
 

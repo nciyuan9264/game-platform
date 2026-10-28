@@ -119,6 +119,58 @@ func TestTimeoutAndAI(t *testing.T) {
 	}
 }
 
+func TestAIRequestsUseThreeToFiveSecondPacing(t *testing.T) {
+	if aiMinDelay != 3*time.Second || aiMaxDelay != 5*time.Second {
+		t.Fatalf("AI delay range = %s-%s", aiMinDelay, aiMaxDelay)
+	}
+	state := startPreparedMatch(t)
+	playerID := state.CurrentPlayer
+	state.Roster[playerID].AI = true
+	assertDelay := func(label string, request *game.AIRequest) {
+		t.Helper()
+		if request == nil {
+			t.Fatalf("%s AI request is nil", label)
+		}
+		if request.Delay < aiMinDelay || request.Delay > aiMaxDelay {
+			t.Fatalf("%s delay = %s", label, request.Delay)
+		}
+	}
+
+	assertDelay(StatusRoll, nextAIRequest(state))
+	plugin := &Plugin{}
+	result, err := plugin.ApplyCommand(
+		context.Background(),
+		state,
+		contracts.RoomCommand{Type: CommandRollDice, PlayerID: playerID},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.AIRequests) != 1 {
+		t.Fatalf("%s AI requests = %+v", StatusChoose, result.AIRequests)
+	}
+	assertDelay(StatusChoose, &result.AIRequests[0])
+
+	result, err = plugin.ApplyCommand(
+		context.Background(),
+		state,
+		contracts.RoomCommand{
+			Type:     CommandAdvance,
+			PlayerID: playerID,
+			Payload: map[string]any{
+				"actionID": state.PairingOptions[0].ActionID,
+			},
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.AIRequests) != 1 {
+		t.Fatalf("%s AI requests = %+v", StatusDecide, result.AIRequests)
+	}
+	assertDelay(StatusDecide, &result.AIRequests[0])
+}
+
 func startPreparedMatch(t *testing.T) *State {
 	t.Helper()
 	raw, err := (&Plugin{}).InitRoom(context.Background(), game.RoomConfig{
