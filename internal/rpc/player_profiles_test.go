@@ -36,8 +36,14 @@ func TestResolveRoomProfilesUsesRoomOwnerIdentityForLegacyPlayers(t *testing.T) 
 		OwnerUserID:   "7",
 		OwnerPlayerID: "7",
 		Players: []*platform.RoomPlayer{{
+			UserID:      stringPointer("legacy-owner"),
 			PlayerID:    "7",
 			DisplayName: "玩家 7",
+			Online:      true,
+		}, {
+			UserID:      stringPointer("legacy-guest"),
+			PlayerID:    "legacy-guest",
+			DisplayName: "Persisted Guest",
 			Online:      true,
 		}},
 	}
@@ -52,5 +58,33 @@ func TestResolveRoomProfilesUsesRoomOwnerIdentityForLegacyPlayers(t *testing.T) 
 	}
 	if len(directory.requested) != 1 || directory.requested[0] != "7" {
 		t.Fatalf("requested user IDs = %v", directory.requested)
+	}
+	if room.GetPlayers()[1].GetDisplayName() != "Persisted Guest" {
+		t.Fatalf("legacy guest profile = %+v", room.GetPlayers()[1])
+	}
+}
+
+func TestResolveRoomProfilesAddsMissingOwnerToUnstartedRoom(t *testing.T) {
+	directory := &fakeRoomProfileDirectory{
+		profiles: map[string]authclient.PublicProfile{
+			"7": {DisplayName: "Alice"},
+		},
+	}
+	handler := &Handler{profiles: playerprofile.NewResolver(directory)}
+	room := &platform.RoomInfo{
+		OwnerUserID:   "7",
+		OwnerPlayerID: "7",
+	}
+
+	handler.resolveRoomProfiles(context.Background(), []*platform.RoomInfo{room})
+
+	if len(room.GetPlayers()) != 1 || room.GetPlayerCount() != 1 {
+		t.Fatalf("players = %+v, player count = %d", room.GetPlayers(), room.GetPlayerCount())
+	}
+	owner := room.GetPlayers()[0]
+	if owner.GetUserID() != "7" ||
+		owner.GetPlayerID() != "7" ||
+		owner.GetDisplayName() != "Alice" {
+		t.Fatalf("owner profile = %+v", owner)
 	}
 }

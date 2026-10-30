@@ -21,7 +21,7 @@ import (
 
 const (
 	GameType          = "splendor"
-	EngineVersion     = "splendor-v7"
+	EngineVersion     = "splendor-v8"
 	defaultMaxPlayers = 4
 	maxNoHumanChecks  = 3
 )
@@ -126,13 +126,13 @@ func (p *Plugin) Roster(_ context.Context, state game.State) ([]game.RosterPlaye
 		if player == nil {
 			continue
 		}
-		displayName := ""
+		resolvedDisplayName := ""
 		if player.AI {
-			displayName = player.DisplayName
+			resolvedDisplayName = displayName(player)
 		}
 		result = append(result, game.RosterPlayer{
 			PlayerID:    player.PlayerID,
-			DisplayName: displayName,
+			DisplayName: resolvedDisplayName,
 			Online:      player.Online,
 			IsAI:        player.AI,
 			SeatIndex:   player.SeatIndex,
@@ -459,7 +459,7 @@ func addAI(state *domain.GameState, actorID string, payload []byte) error {
 		playerID += "_"
 	}
 	state.Roster[playerID] = &domain.Player{
-		PlayerID: playerID, DisplayName: "AI", AI: true, Ready: true, Online: true, SeatIndex: seatIndex,
+		PlayerID: playerID, DisplayName: playerID, AI: true, Ready: true, Online: true, SeatIndex: seatIndex,
 	}
 	state.PlayerOrder = append(state.PlayerOrder, playerID)
 	sortPlayerOrder(state)
@@ -731,6 +731,9 @@ func playerViews(state *domain.GameState, profiles map[string]game.PlayerProfile
 }
 
 func displayName(player *domain.Player) string {
+	if player.AI && (player.DisplayName == "" || player.DisplayName == "AI") {
+		return player.PlayerID
+	}
 	if player.DisplayName != "" {
 		return player.DisplayName
 	}

@@ -205,7 +205,6 @@ func (r *Rebuilder) Run(
 			ctx,
 			history.Game{
 				RoomID:               room.RoomID,
-				RoomDisplayName:      plan.initialProjection.RoomDisplayName,
 				GameType:             room.GameType,
 				EngineVersion:        match.EngineVersion,
 				ReplaySchemaVersion:  plan.initialProjection.ReplaySchemaVersion,
@@ -332,7 +331,6 @@ func (r *Rebuilder) buildPlan(
 		RandomSeed:         match.RandomSeed,
 		RoundNo:            match.RoundNo,
 		Visibility:         room.Visibility,
-		DisplayName:        match.DisplayName,
 		TurnTimeoutSeconds: match.TurnTimeoutSeconds,
 	})
 	if err != nil {
@@ -548,11 +546,11 @@ func materializePlayers(
 		displayName := player.DisplayName
 		var userID *int64
 		if player.IsAI {
-			if found && identity.DisplayName != "" {
+			if found && identity.DisplayName != "" && identity.DisplayName != "AI" {
 				displayName = identity.DisplayName
 			}
-			if displayName == "" {
-				displayName = "AI"
+			if displayName == "" || displayName == "AI" {
+				displayName = player.PlayerID
 			}
 		} else {
 			if !found || identity.IsAI {

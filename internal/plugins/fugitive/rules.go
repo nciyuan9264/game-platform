@@ -11,7 +11,6 @@ import (
 )
 
 const (
-	defaultRoomName    = "午夜追缉"
 	defaultTurnTimeout = 120
 	maxNoHumanChecks   = 3
 )
@@ -35,7 +34,6 @@ func ensureState(state *State) {
 	if state.OwnerRole != RoleMarshal {
 		state.OwnerRole = RoleFugitive
 	}
-	state.DisplayName = defaultRoomName
 	state.TurnTimeoutSeconds = defaultTurnTimeout
 	for _, player := range state.Roster {
 		if player != nil && player.Hand == nil {
@@ -181,7 +179,6 @@ func updateRoomSettings(
 		return errors.New("invalid visibility")
 	}
 	state.Visibility = value.Visibility
-	state.DisplayName = defaultRoomName
 	state.TurnTimeoutSeconds = defaultTurnTimeout
 	return nil
 }

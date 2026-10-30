@@ -75,9 +75,6 @@ func (h *Handler) roomInfo(ctx context.Context, room contracts.RoomRecord) (*pla
 		Players:            players,
 		Metrics:            roomMetrics(room),
 	}
-	if room.DisplayName != "" {
-		result.DisplayName = stringPointer(room.DisplayName)
-	}
 	timeout := int32(room.TurnTimeoutSeconds)
 	result.TurnTimeoutSeconds = &timeout
 	return result, nil
@@ -230,9 +227,6 @@ func mapHistoryGame(value history.Game) *platform.HistoryGame {
 	}
 	if value.EndReason != "" {
 		mapped.EndReason = stringPointer(value.EndReason)
-	}
-	if value.RoomDisplayName != "" {
-		mapped.RoomDisplayName = stringPointer(value.RoomDisplayName)
 	}
 	if value.Players != nil {
 		mapped.Players = mapHistoryPlayers(value.Players)

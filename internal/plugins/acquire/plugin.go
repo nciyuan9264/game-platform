@@ -20,7 +20,7 @@ import (
 
 const (
 	GameType         = "acquire"
-	EngineVersion    = "acquire-v4"
+	EngineVersion    = "acquire-v5"
 	maxNoHumanChecks = 3
 )
 
@@ -83,7 +83,7 @@ func (p *Plugin) Roster(ctx context.Context, state game.State) ([]game.RosterPla
 		}
 		displayName := ""
 		if connection.AI {
-			displayName = "AI"
+			displayName = playerID
 		}
 		players = append(players, game.RosterPlayer{
 			PlayerID:    playerID,

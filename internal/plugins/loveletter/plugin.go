@@ -14,11 +14,10 @@ import (
 
 const (
 	GameType            = "loveletter"
-	EngineVersion       = "loveletter-v1"
+	EngineVersion       = "loveletter-v2"
 	ReplaySchemaVersion = 1
 	defaultMaxPlayers   = 6
 	maxNoHumanChecks    = 3
-	defaultRoomName     = "掌心密信"
 )
 
 const (
@@ -85,7 +84,6 @@ func (p *Plugin) InitRoom(
 		Status:             StatusMatch,
 		MaxPlayers:         maxPlayers,
 		Visibility:         visibility,
-		DisplayName:        defaultRoomName,
 		TurnTimeoutSeconds: int(turnTimeout / time.Second),
 		RandomSeed:         cfg.RandomSeed,
 		MatchRoundNo:       matchRoundNo,
@@ -147,7 +145,6 @@ func (p *Plugin) RoomMetadata(
 	}
 	return game.RoomMetadata{
 		Visibility:         typed.Visibility,
-		DisplayName:        defaultRoomName,
 		TurnTimeoutSeconds: int(turnTimeout / time.Second),
 	}, nil
 }
@@ -905,9 +902,6 @@ func ensureState(state *State) {
 	}
 	if state.Visibility == "" {
 		state.Visibility = contracts.VisibilityPublic
-	}
-	if state.DisplayName == "" {
-		state.DisplayName = defaultRoomName
 	}
 	if state.TurnTimeoutSeconds <= 0 {
 		state.TurnTimeoutSeconds = int(turnTimeout / time.Second)

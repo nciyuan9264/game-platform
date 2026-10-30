@@ -90,7 +90,7 @@ type Engine struct{}
 
 func NewEngine() *Engine { return &Engine{} }
 
-const EngineVersion = "davinci-v7"
+const EngineVersion = "davinci-v8"
 
 func Definition() game.Definition {
 	plugin := NewPlugin()
@@ -138,7 +138,7 @@ func (p *Plugin) Roster(ctx context.Context, state game.State) ([]game.RosterPla
 		}
 		displayName := ""
 		if player.AI {
-			displayName = "AI"
+			displayName = playerID
 		}
 		players = append(players, game.RosterPlayer{
 			PlayerID:    playerID,

@@ -291,13 +291,18 @@ func TestRosterRemainsStableAcrossReconnectAndIncludesAI(t *testing.T) {
 		t.Fatalf("roster size = %d, want 2: %+v", len(roster), roster)
 	}
 	aiCount := 0
+	aiDisplayName := ""
 	for _, player := range roster {
 		if player.IsAI {
 			aiCount++
+			aiDisplayName = player.DisplayName
 		}
 	}
 	if aiCount != 1 {
 		t.Fatalf("AI count = %d, want 1: %+v", aiCount, roster)
+	}
+	if aiDisplayName != "ai_001" {
+		t.Fatalf("AI display name = %q, want ai_001: %+v", aiDisplayName, roster)
 	}
 }
 

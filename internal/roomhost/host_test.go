@@ -62,6 +62,20 @@ func (e *roomhostTestEngine) Roster(context.Context, game.State) ([]game.RosterP
 	return e.roster, nil
 }
 
+type profileCapturingEngine struct {
+	roomhostTestEngine
+	playerProfiles map[string]game.PlayerProfile
+}
+
+func (e *profileCapturingEngine) BuildPlayerView(
+	_ context.Context,
+	_ game.State,
+	req game.ViewRequest,
+) (any, error) {
+	e.playerProfiles = req.PlayerProfiles
+	return map[string]any{"playerID": req.PlayerID}, nil
+}
+
 type countingState struct {
 	Count int `json:"count"`
 }
@@ -370,6 +384,7 @@ func (s *fakeRoomhostStore) SaveOutboundMessage(_ context.Context, out contracts
 func (s *fakeRoomhostStore) SyncMatchRoster(_ context.Context, matchID string, players []contracts.MatchPlayerRecord) error {
 	s.rosterMatchID = matchID
 	s.rosterPlayers = append([]contracts.MatchPlayerRecord(nil), players...)
+	s.matchPlayers = append([]contracts.MatchPlayerRecord(nil), players...)
 	return nil
 }
 
@@ -825,7 +840,8 @@ func TestDavinciHistoryPlayersResolveIdentityFromMatchRoster(t *testing.T) {
 		human.DisplayName != "Alice" {
 		t.Fatalf("resolved human identity = %+v", human)
 	}
-	if ai.UserID != nil || ai.PlayerID != "AI_2" || !ai.IsAI {
+	if ai.UserID != nil || ai.PlayerID != "AI_2" ||
+		ai.DisplayName != "AI_2" || !ai.IsAI {
 		t.Fatalf("resolved AI identity = %+v", ai)
 	}
 }
@@ -880,6 +896,52 @@ func TestBroadcastDoesNotPublishWhenReliablePersistenceFails(t *testing.T) {
 	}
 	if len(router.delivered) != 0 {
 		t.Fatalf("delivered count = %d, want 0", len(router.delivered))
+	}
+}
+
+func TestBroadcastLoadsProfilesAfterRosterSync(t *testing.T) {
+	engine := &profileCapturingEngine{roomhostTestEngine: roomhostTestEngine{
+		gameType: "test-game",
+		version:  "test-v1",
+		roster: []game.RosterPlayer{
+			{PlayerID: "owner", DisplayName: "Owner", Online: true},
+			{PlayerID: "ai_001", DisplayName: "ai_001", Online: true, IsAI: true},
+		},
+	}}
+	st := &fakeRoomhostStore{
+		matchPlayers: []contracts.MatchPlayerRecord{
+			{UserID: "owner-user", PlayerID: "owner", DisplayName: "Owner", Online: true},
+			{PlayerID: "ai_001", DisplayName: "AI", Online: true, IsAI: true},
+		},
+		presences: []contracts.PresenceRecord{{
+			ConnectionRef: contracts.ConnectionRef{
+				GatewayNode: "gateway-1",
+				SessionID:   "session-1",
+			},
+			RoomID:   "room-1",
+			UserID:   "owner-user",
+			PlayerID: "owner",
+			Online:   true,
+		}},
+	}
+	host := NewHost("roomhost-1", st, nil, &fakeRoomhostRouter{}, nil)
+	actor := &RoomActor{
+		host:   host,
+		record: contracts.RoomRecord{RoomID: "room-1", GameType: "test-game", MaxPlayers: 2},
+		match:  contracts.MatchRecord{MatchID: "room-1-r1"},
+		definition: game.Definition{
+			GameType: "test-game",
+			Version:  "test-v1",
+			Engine:   engine,
+		},
+		state: map[string]any{},
+	}
+
+	if err := actor.broadcast(context.Background(), "trace-1"); err != nil {
+		t.Fatal(err)
+	}
+	if got := engine.playerProfiles["ai_001"].DisplayName; got != "ai_001" {
+		t.Fatalf("broadcast AI display name = %q, want ai_001", got)
 	}
 }
 
@@ -1187,7 +1249,11 @@ func TestStartMatchRestoresRosterAcrossGames(t *testing.T) {
 }
 
 func TestHostShutdownSnapshotsAndReleasesRooms(t *testing.T) {
-	st := &fakeRoomhostStore{}
+	st := &fakeRoomhostStore{matchPlayers: []contracts.MatchPlayerRecord{{
+		PlayerID:    "ai_001",
+		DisplayName: "AI",
+		IsAI:        true,
+	}}}
 	coord := &shutdownCoordinator{}
 	engine := &roomhostTestEngine{gameType: "test-game", version: "test-v1"}
 	host := NewHost("roomhost-1", st, coord, &fakeRoomhostRouter{}, nil)
@@ -1330,7 +1396,7 @@ func TestSyncRosterUsesLogicalPlayersInsteadOfPresenceSessions(t *testing.T) {
 		version:  "roster-v1",
 		roster: []game.RosterPlayer{
 			{PlayerID: "1", Online: true},
-			{PlayerID: "ai_001", DisplayName: "AI", Online: true, IsAI: true},
+			{PlayerID: "ai_001", Online: true, IsAI: true},
 		},
 	}
 	st := &fakeRoomhostStore{}
@@ -1362,6 +1428,9 @@ func TestSyncRosterUsesLogicalPlayersInsteadOfPresenceSessions(t *testing.T) {
 	}
 	if st.rosterMatchID != "room-1" || len(st.rosterPlayers) != 2 || !st.rosterPlayers[1].IsAI {
 		t.Fatalf("unexpected synced roster: match=%q players=%+v", st.rosterMatchID, st.rosterPlayers)
+	}
+	if got := st.rosterPlayers[1].DisplayName; got != "ai_001" {
+		t.Fatalf("AI display name = %q, want ai_001", got)
 	}
 }
 

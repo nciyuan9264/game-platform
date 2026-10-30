@@ -13,7 +13,6 @@ const (
 type Game struct {
 	ID                   int64           `json:"id"`
 	RoomID               string          `json:"roomID"`
-	RoomDisplayName      string          `json:"roomDisplayName,omitempty"`
 	GameType             string          `json:"gameType"`
 	EngineVersion        string          `json:"engineVersion"`
 	ReplaySchemaVersion  int             `json:"replaySchemaVersion"`

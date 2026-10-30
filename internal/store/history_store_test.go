@@ -19,22 +19,21 @@ func TestScanHistoryGameHandlesNullableLegacyStrings(t *testing.T) {
 	scanner := historyScannerFunc(func(dest ...any) error {
 		*dest[0].(*int64) = 1
 		*dest[1].(*string) = "room-1"
-		*dest[2].(*string) = "Board room"
-		*dest[3].(*string) = "acquire"
-		*dest[4].(*string) = "acquire-v2"
-		*dest[5].(*int) = 1
-		*dest[6].(*time.Time) = now
-		*dest[7].(*sql.NullTime) = sql.NullTime{Time: now, Valid: true}
-		*dest[8].(*int) = 60
-		*dest[9].(*sql.NullInt64) = sql.NullInt64{}
+		*dest[2].(*string) = "acquire"
+		*dest[3].(*string) = "acquire-v2"
+		*dest[4].(*int) = 1
+		*dest[5].(*time.Time) = now
+		*dest[6].(*sql.NullTime) = sql.NullTime{Time: now, Valid: true}
+		*dest[7].(*int) = 60
+		*dest[8].(*sql.NullInt64) = sql.NullInt64{}
+		*dest[9].(*sql.NullString) = sql.NullString{}
 		*dest[10].(*sql.NullString) = sql.NullString{}
-		*dest[11].(*sql.NullString) = sql.NullString{}
-		*dest[12].(*int) = 6
+		*dest[11].(*int) = 6
+		*dest[12].(*[]byte) = nil
 		*dest[13].(*[]byte) = nil
 		*dest[14].(*[]byte) = nil
-		*dest[15].(*[]byte) = nil
+		*dest[15].(*time.Time) = now
 		*dest[16].(*time.Time) = now
-		*dest[17].(*time.Time) = now
 		return nil
 	})
 

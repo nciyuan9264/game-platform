@@ -18,14 +18,13 @@ func (scan roomScannerFunc) Scan(dest ...any) error {
 
 func TestScanRoomIncludesVisibility(t *testing.T) {
 	record, err := scanRoom(roomScannerFunc(func(dest ...any) error {
-		if len(dest) != 21 {
-			t.Fatalf("scan destinations = %d, want 21", len(dest))
+		if len(dest) != 20 {
+			t.Fatalf("scan destinations = %d, want 20", len(dest))
 		}
 		*dest[0].(*string) = "room-1"
 		*dest[1].(*string) = "acquire"
 		*dest[2].(*string) = "private"
-		*dest[3].(*string) = "Midnight"
-		*dest[4].(*int) = 60
+		*dest[3].(*int) = 60
 		return nil
 	}))
 	if err != nil {

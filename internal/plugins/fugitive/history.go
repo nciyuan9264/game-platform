@@ -94,9 +94,8 @@ func (p *Plugin) ProjectHistory(
 			"reason":     typed.EndReason,
 			"searches":   typed.Searches,
 		},
-		WinnerPlayerID:  typed.WinnerID,
-		RoomDisplayName: typed.DisplayName,
-		Players:         players,
+		WinnerPlayerID: typed.WinnerID,
+		Players:        players,
 	}, nil
 }
 

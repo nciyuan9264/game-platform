@@ -5,17 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/nciyuan9264/game-platform/internal/contracts"
 )
 
 const (
-	defaultRoomName       = "战争之匣"
-	defaultTurnTimeout    = 90
-	maxRoomNameCharacters = 18
-	maxNoHumanChecks      = 3
+	defaultTurnTimeout = 90
+	maxNoHumanChecks   = 3
 )
 
 func connect(state *State, playerID string, now time.Time) error {
@@ -151,9 +148,8 @@ func updateRoomSettings(state *State, actorID string, payload []byte) error {
 		return errors.New("only the owner can update room settings")
 	}
 	var value struct {
-		Visibility         string  `json:"visibility"`
-		DisplayName        *string `json:"displayName"`
-		TurnTimeoutSeconds *int    `json:"turnTimeoutSeconds"`
+		Visibility         string `json:"visibility"`
+		TurnTimeoutSeconds *int   `json:"turnTimeoutSeconds"`
 	}
 	if err := decodePayload(payload, &value); err != nil {
 		return err
@@ -162,19 +158,11 @@ func updateRoomSettings(state *State, actorID string, payload []byte) error {
 		value.Visibility != contracts.VisibilityPrivate {
 		return errors.New("invalid visibility")
 	}
-	name := state.DisplayName
-	if value.DisplayName != nil {
-		name = strings.TrimSpace(*value.DisplayName)
-		if size := len([]rune(name)); size < 1 || size > maxRoomNameCharacters {
-			return errors.New("room name must contain 1 to 18 characters")
-		}
-	}
 	if value.TurnTimeoutSeconds != nil &&
 		*value.TurnTimeoutSeconds != defaultTurnTimeout {
 		return errors.New("warchest turn timeout is fixed at 90 seconds")
 	}
 	state.Visibility = value.Visibility
-	state.DisplayName = name
 	state.TurnTimeoutSeconds = defaultTurnTimeout
 	return nil
 }

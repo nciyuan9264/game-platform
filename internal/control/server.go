@@ -179,7 +179,6 @@ type createRoomRequest struct {
 	OwnerPlayerID      string `json:"ownerPlayerID"`
 	MaxPlayers         int    `json:"maxPlayers"`
 	Visibility         string `json:"visibility"`
-	DisplayName        string `json:"displayName,omitempty"`
 	TurnTimeoutSeconds int    `json:"turnTimeoutSeconds,omitempty"`
 	PlayerCount        int    `json:"playerCount,omitempty"`
 	RequestID          string `json:"requestID"`
@@ -212,7 +211,6 @@ func (s *Server) createRoomRecord(ctx context.Context, req createRoomRequest) (c
 		RoomID:             roomID,
 		GameType:           req.GameType,
 		Visibility:         req.Visibility,
-		DisplayName:        req.DisplayName,
 		TurnTimeoutSeconds: req.TurnTimeoutSeconds,
 		OwnerUserID:        req.OwnerUserID,
 		OwnerPlayerID:      req.OwnerPlayerID,
@@ -226,10 +224,9 @@ func (s *Server) createRoomRecord(ctx context.Context, req createRoomRequest) (c
 		UpdatedAt:          now,
 	}
 	requestHash := fmt.Sprintf("%x", sha256.Sum256([]byte(fmt.Sprintf(
-		"%s\x00%s\x00%s\x00%d\x00%s\x00%s\x00%d",
+		"%s\x00%s\x00%s\x00%d\x00%s\x00%d",
 		rec.GameType, rec.OwnerUserID, rec.OwnerPlayerID,
-		rec.MaxPlayers, rec.Visibility, rec.DisplayName,
-		rec.TurnTimeoutSeconds,
+		rec.MaxPlayers, rec.Visibility, rec.TurnTimeoutSeconds,
 	))))
 	rec, existing, err := s.store.ReserveRoomCreation(ctx, rec, req.RequestID, requestHash, contracts.MaxOwnedRooms)
 	if err != nil {

@@ -45,7 +45,6 @@ func (h *RPCHandler) CreateRoom(ctx context.Context, req *platformcontrol.Create
 		OwnerPlayerID:      token.PlayerID(ownerIdentity),
 		MaxPlayers:         int(req.GetMaxPlayers()),
 		Visibility:         req.GetVisibility(),
-		DisplayName:        req.GetDisplayName(),
 		TurnTimeoutSeconds: int(req.GetTurnTimeoutSeconds()),
 		RequestID:          req.GetRequestId(),
 	})
@@ -266,9 +265,6 @@ func toRPCRoom(room contracts.RoomRecord) *platformcontrol.RoomRecord {
 		Visibility:    &room.Visibility,
 		CreatedAtUnix: room.CreatedAt.Unix(),
 		UpdatedAtUnix: room.UpdatedAt.Unix(),
-	}
-	if room.DisplayName != "" {
-		out.DisplayName = &room.DisplayName
 	}
 	timeout := int32(room.TurnTimeoutSeconds)
 	out.TurnTimeoutSeconds = &timeout

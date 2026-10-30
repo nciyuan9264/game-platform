@@ -141,3 +141,74 @@ func TestAllGamePluginsSupportRoomVisibilitySettings(t *testing.T) {
 		})
 	}
 }
+
+func TestAllGamePluginsPersistDistinctAINames(t *testing.T) {
+	ctx := context.Background()
+	for _, definition := range Registry().Definitions() {
+		t.Run(definition.GameType, func(t *testing.T) {
+			state, err := definition.Engine.InitRoom(ctx, game.RoomConfig{
+				RoomID:        definition.GameType + "-ai-names",
+				GameType:      definition.GameType,
+				OwnerUserID:   "owner-user",
+				OwnerPlayerID: "owner",
+				MaxPlayers:    definition.DefaultMaxPlayers,
+				RandomSeed:    1,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := definition.Engine.ApplyCommand(ctx, state, contracts.RoomCommand{
+				Type:     "connect",
+				UserID:   "owner-user",
+				PlayerID: "owner",
+			}); err != nil {
+				t.Fatal(err)
+			}
+
+			expectedAI := 2
+			if definition.DefaultMaxPlayers < 3 {
+				expectedAI = 1
+			}
+			for range expectedAI {
+				if _, err := definition.Engine.ApplyCommand(ctx, state, contracts.RoomCommand{
+					Type:     "match_add_ai",
+					UserID:   "owner-user",
+					PlayerID: "owner",
+					Payload:  map[string]any{},
+				}); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			provider, ok := definition.Engine.(game.RosterProvider)
+			if !ok {
+				t.Fatalf("%s engine does not provide a roster", definition.GameType)
+			}
+			roster, err := provider.Roster(ctx, state)
+			if err != nil {
+				t.Fatal(err)
+			}
+			names := make(map[string]string, expectedAI)
+			for _, player := range roster {
+				if !player.IsAI {
+					continue
+				}
+				if player.DisplayName == "" || player.DisplayName == "AI" {
+					t.Fatalf("AI %q has placeholder display name %q", player.PlayerID, player.DisplayName)
+				}
+				if previousID := names[player.DisplayName]; previousID != "" {
+					t.Fatalf(
+						"AI players %q and %q share display name %q",
+						previousID,
+						player.PlayerID,
+						player.DisplayName,
+					)
+				}
+				names[player.DisplayName] = player.PlayerID
+			}
+			if len(names) != expectedAI {
+				t.Fatalf("AI names = %v, want %d distinct names", names, expectedAI)
+			}
+		})
+	}
+}

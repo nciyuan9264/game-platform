@@ -32,13 +32,6 @@ func (h *Handler) CreateRoom(ctx context.Context, req *platform.CreateRoomReq) (
 	if h.rooms == nil {
 		return nil, platformError("control_unavailable", errors.New("control plane is unavailable"))
 	}
-	displayName := strings.TrimSpace(req.GetDisplayName())
-	if len([]rune(displayName)) > 18 {
-		return nil, platformError(
-			"invalid_request",
-			errors.New("displayName must not exceed 18 characters"),
-		)
-	}
 	turnTimeoutSeconds, err := createRoomTurnTimeoutSeconds(gameType, req)
 	if err != nil {
 		return nil, err
@@ -54,7 +47,6 @@ func (h *Handler) CreateRoom(ctx context.Context, req *platform.CreateRoomReq) (
 			string,
 			int,
 			string,
-			string,
 			int,
 		) (contracts.RoomRecord, error)
 	}); ok {
@@ -66,7 +58,6 @@ func (h *Handler) CreateRoom(ctx context.Context, req *platform.CreateRoomReq) (
 			req.GetRequestId(),
 			int(req.GetMaxPlayers()),
 			visibility,
-			displayName,
 			turnTimeoutSeconds,
 		)
 	} else {

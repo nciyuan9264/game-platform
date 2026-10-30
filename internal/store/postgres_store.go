@@ -125,7 +125,6 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 		`ALTER TABLE rooms ADD COLUMN IF NOT EXISTS progress_current INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE rooms ADD COLUMN IF NOT EXISTS progress_total INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE rooms ADD COLUMN IF NOT EXISTS visibility TEXT NOT NULL DEFAULT 'public'`,
-		`ALTER TABLE rooms ADD COLUMN IF NOT EXISTS display_name TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE rooms ADD COLUMN IF NOT EXISTS turn_timeout_seconds INTEGER NOT NULL DEFAULT 60`,
 		`ALTER TABLE rooms ADD COLUMN IF NOT EXISTS last_applied_seq BIGINT NOT NULL DEFAULT 0`,
 		`ALTER TABLE rooms ADD COLUMN IF NOT EXISTS current_match_id TEXT NOT NULL DEFAULT ''`,
@@ -159,7 +158,6 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 			match_id TEXT PRIMARY KEY,
 			runtime_room_id TEXT NOT NULL,
 			game_type TEXT NOT NULL,
-			display_name TEXT NOT NULL DEFAULT '',
 			turn_timeout_seconds INTEGER NOT NULL DEFAULT 60,
 			status TEXT NOT NULL,
 			owner_user_id TEXT NOT NULL,
@@ -184,7 +182,6 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 		`ALTER TABLE matches ADD COLUMN IF NOT EXISTS round_no INTEGER NOT NULL DEFAULT 1`,
 		`ALTER TABLE matches ADD COLUMN IF NOT EXISTS last_applied_seq BIGINT NOT NULL DEFAULT 0`,
 		`ALTER TABLE matches ADD COLUMN IF NOT EXISTS random_seed TEXT NOT NULL DEFAULT '0'`,
-		`ALTER TABLE matches ADD COLUMN IF NOT EXISTS display_name TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE matches ADD COLUMN IF NOT EXISTS turn_timeout_seconds INTEGER NOT NULL DEFAULT 60`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_matches_room_round ON matches (runtime_room_id, round_no)`,
 		`CREATE INDEX IF NOT EXISTS idx_matches_game_type_started ON matches (game_type, started_at DESC)`,
@@ -282,7 +279,6 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 		`ALTER TABLE games ADD COLUMN IF NOT EXISTS initial_replay_payload BYTEA`,
 		`ALTER TABLE games ADD COLUMN IF NOT EXISTS legacy_source TEXT`,
 		`ALTER TABLE games ADD COLUMN IF NOT EXISTS legacy_game_id BIGINT`,
-		`ALTER TABLE games ADD COLUMN IF NOT EXISTS room_display_name TEXT NOT NULL DEFAULT ''`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_games_legacy_identity ON games (legacy_source, legacy_game_id) WHERE legacy_source IS NOT NULL`,
 		`CREATE INDEX IF NOT EXISTS idx_games_room_open ON games (room_id, game_type, ended_at)`,
 		`CREATE TABLE IF NOT EXISTS game_players (
@@ -362,13 +358,12 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 		`UPDATE game_operation_events SET match_id = room_id WHERE match_id = ''`,
 		`CREATE INDEX IF NOT EXISTS idx_game_operation_events_room_seq ON game_operation_events (room_id, seq, event_id)`,
 		`INSERT INTO matches (
-			match_id, runtime_room_id, game_type, display_name, turn_timeout_seconds, status, owner_user_id, owner_player_id,
+			match_id, runtime_room_id, game_type, turn_timeout_seconds, status, owner_user_id, owner_player_id,
 			runtime_owner_node, epoch, max_players, player_count, engine_version,
 			started_at, updated_at, ended_at, duration_seconds, end_reason
 		)
 		SELECT
-				room_id, room_id, game_type, display_name,
-				turn_timeout_seconds,
+				room_id, room_id, game_type, turn_timeout_seconds,
 				CASE
 					WHEN status = 'closed' THEN 'ended'
 					WHEN last_applied_seq > 0 THEN 'running'
@@ -551,14 +546,13 @@ func (s *PostgresStore) SetRoom(ctx context.Context, r contracts.RoomRecord) err
 	// Existing visibility is updated only through the owner-fenced projection.
 	result, err := tx.ExecContext(ctx, `
 		INSERT INTO rooms (
-			room_id, game_type, visibility, display_name, turn_timeout_seconds,
+			room_id, game_type, visibility, turn_timeout_seconds,
 			owner_user_id, owner_player_id, owner_node,
 				epoch, status, max_players, player_count, progress_current, progress_total, last_applied_seq, engine_version,
 			current_match_id, next_round_no, created_at, updated_at, lease_expires_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
 		ON CONFLICT (room_id) DO UPDATE SET
 			game_type = EXCLUDED.game_type,
-			display_name = EXCLUDED.display_name,
 			turn_timeout_seconds = EXCLUDED.turn_timeout_seconds,
 			owner_user_id = EXCLUDED.owner_user_id,
 			owner_player_id = EXCLUDED.owner_player_id,
@@ -583,7 +577,7 @@ func (s *PostgresStore) SetRoom(ctx context.Context, r contracts.RoomRecord) err
 				rooms.status <> 'closed'
 				OR EXCLUDED.status = 'closed'
 			)`,
-		r.RoomID, r.GameType, r.Visibility, r.DisplayName, r.TurnTimeoutSeconds,
+		r.RoomID, r.GameType, r.Visibility, r.TurnTimeoutSeconds,
 		r.OwnerUserID, r.OwnerPlayerID, r.OwnerNode,
 		r.Epoch, r.Status, r.MaxPlayers, r.PlayerCount, r.ProgressCurrent,
 		r.ProgressTotal, r.LastAppliedSeq, r.EngineVersion,
@@ -646,7 +640,7 @@ func (s *PostgresStore) ReserveRoomCreation(ctx context.Context, rec contracts.R
 			return contracts.RoomRecord{}, false, ErrIdempotencyConflict
 		}
 		row := tx.QueryRowContext(ctx, `
-			SELECT room_id, game_type, visibility, display_name, turn_timeout_seconds,
+			SELECT room_id, game_type, visibility, turn_timeout_seconds,
 				owner_user_id, owner_player_id, owner_node,
 				epoch, status, max_players, player_count, progress_current, progress_total, last_applied_seq, engine_version,
 				current_match_id, next_round_no, created_at, updated_at, lease_expires_at
@@ -678,14 +672,13 @@ func (s *PostgresStore) ReserveRoomCreation(ctx context.Context, rec contracts.R
 	rec.UpdatedAt = now
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO rooms (
-			room_id, game_type, visibility, display_name, turn_timeout_seconds,
+			room_id, game_type, visibility, turn_timeout_seconds,
 			owner_user_id, owner_player_id, owner_node,
 			epoch, status, max_players, player_count, progress_current, progress_total,
 				last_applied_seq, engine_version, current_match_id, next_round_no,
 				created_at, updated_at, lease_expires_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`,
-		rec.RoomID, rec.GameType, rec.Visibility, rec.DisplayName,
-		rec.TurnTimeoutSeconds, rec.OwnerUserID, rec.OwnerPlayerID, rec.OwnerNode,
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)`,
+		rec.RoomID, rec.GameType, rec.Visibility, rec.TurnTimeoutSeconds, rec.OwnerUserID, rec.OwnerPlayerID, rec.OwnerNode,
 		rec.Epoch, rec.Status, rec.MaxPlayers, rec.PlayerCount,
 		rec.ProgressCurrent, rec.ProgressTotal, rec.LastAppliedSeq,
 		rec.EngineVersion, rec.CurrentMatchID, rec.NextRoundNo,
@@ -743,7 +736,7 @@ func (s *PostgresStore) DeleteRoomCreation(ctx context.Context, roomID string) e
 
 func (s *PostgresStore) GetRoom(ctx context.Context, roomID string) (contracts.RoomRecord, error) {
 	row := s.db.QueryRowContext(ctx, `
-		SELECT room_id, game_type, visibility, display_name, turn_timeout_seconds, owner_user_id, owner_player_id, owner_node,
+		SELECT room_id, game_type, visibility, turn_timeout_seconds, owner_user_id, owner_player_id, owner_node,
 			epoch, status, max_players, player_count, progress_current, progress_total, last_applied_seq, engine_version,
 			current_match_id, next_round_no, created_at, updated_at, lease_expires_at
 		FROM rooms
@@ -805,7 +798,6 @@ func (s *PostgresStore) SetRoomMetadataIfOwner(
 	ctx context.Context,
 	roomID,
 	visibility,
-	displayName,
 	ownerNode string,
 	turnTimeoutSeconds int,
 	epoch int64,
@@ -817,22 +809,20 @@ func (s *PostgresStore) SetRoomMetadataIfOwner(
 	result, err := s.db.ExecContext(ctx, `
 		UPDATE rooms AS r
 		SET visibility = $2,
-			display_name = $3,
-			turn_timeout_seconds = $4,
+			turn_timeout_seconds = $3,
 			updated_at = clock_timestamp()
 		WHERE room_id = $1
-		  AND owner_node = $5
-		  AND epoch = $6
+		  AND owner_node = $4
+		  AND epoch = $5
 		  AND EXISTS (
 			SELECT 1 FROM room_owner_generations g
 			WHERE g.room_id = r.room_id
-			  AND g.owner_node = $5
-			  AND g.epoch = $6
+			  AND g.owner_node = $4
+			  AND g.epoch = $5
 			  AND g.state = 'ready'
 		  )`,
 		roomID,
 		visibility,
-		displayName,
 		turnTimeoutSeconds,
 		ownerNode,
 		epoch,
@@ -877,14 +867,14 @@ func (s *PostgresStore) ListRooms(ctx context.Context, gameType string) ([]contr
 	)
 	if gameType == "" {
 		rows, err = s.db.QueryContext(ctx, `
-			SELECT room_id, game_type, visibility, display_name, turn_timeout_seconds, owner_user_id, owner_player_id, owner_node,
+			SELECT room_id, game_type, visibility, turn_timeout_seconds, owner_user_id, owner_player_id, owner_node,
 				epoch, status, max_players, player_count, progress_current, progress_total, last_applied_seq, engine_version,
 				current_match_id, next_round_no, created_at, updated_at, lease_expires_at
 			FROM rooms
 			ORDER BY created_at DESC`)
 	} else {
 		rows, err = s.db.QueryContext(ctx, `
-			SELECT room_id, game_type, visibility, display_name, turn_timeout_seconds, owner_user_id, owner_player_id, owner_node,
+			SELECT room_id, game_type, visibility, turn_timeout_seconds, owner_user_id, owner_player_id, owner_node,
 				epoch, status, max_players, player_count, progress_current, progress_total, last_applied_seq, engine_version,
 				current_match_id, next_round_no, created_at, updated_at, lease_expires_at
 			FROM rooms
@@ -967,7 +957,7 @@ func (s *PostgresStore) ListExpiredRooms(ctx context.Context, now time.Time, lim
 		limit = 100
 	}
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT room_id, game_type, visibility, display_name, turn_timeout_seconds, owner_user_id, owner_player_id, owner_node,
+		SELECT room_id, game_type, visibility, turn_timeout_seconds, owner_user_id, owner_player_id, owner_node,
 			epoch, status, max_players, player_count, progress_current, progress_total, last_applied_seq, engine_version,
 			current_match_id, next_round_no, created_at, updated_at, lease_expires_at
 		FROM rooms
@@ -1000,7 +990,7 @@ func (s *PostgresStore) ReserveRoomOwner(ctx context.Context, roomID string, exp
 	defer tx.Rollback()
 
 	rec, err := scanRoom(tx.QueryRowContext(ctx, `
-		SELECT room_id, game_type, visibility, display_name, turn_timeout_seconds, owner_user_id, owner_player_id, owner_node,
+		SELECT room_id, game_type, visibility, turn_timeout_seconds, owner_user_id, owner_player_id, owner_node,
 			epoch, status, max_players, player_count, progress_current, progress_total, last_applied_seq, engine_version,
 			current_match_id, next_round_no, created_at, updated_at, lease_expires_at
 		FROM rooms
@@ -1202,7 +1192,7 @@ func (s *PostgresStore) ReserveNextMatch(ctx context.Context, roomID, requestID 
 		WHERE room_id = $1 AND request_id = $2`, roomID, requestID).Scan(&existingMatchID)
 	if err == nil {
 		match, err := scanMatch(tx.QueryRowContext(ctx, `
-			SELECT match_id, runtime_room_id, game_type, display_name, turn_timeout_seconds, status, owner_user_id, owner_player_id,
+			SELECT match_id, runtime_room_id, game_type, turn_timeout_seconds, status, owner_user_id, owner_player_id,
 				runtime_owner_node, epoch, max_players, player_count, engine_version,
 				round_no, last_applied_seq, random_seed,
 				started_at, updated_at, ended_at, duration_seconds,
@@ -1212,7 +1202,7 @@ func (s *PostgresStore) ReserveNextMatch(ctx context.Context, roomID, requestID 
 			return contracts.RoomRecord{}, contracts.MatchRecord{}, false, err
 		}
 		room, err := scanRoom(tx.QueryRowContext(ctx, `
-			SELECT room_id, game_type, visibility, display_name, turn_timeout_seconds, owner_user_id, owner_player_id, owner_node,
+			SELECT room_id, game_type, visibility, turn_timeout_seconds, owner_user_id, owner_player_id, owner_node,
 				epoch, status, max_players, player_count, progress_current, progress_total, last_applied_seq, engine_version,
 				current_match_id, next_round_no, created_at, updated_at, lease_expires_at
 			FROM rooms WHERE room_id = $1`, roomID))
@@ -1223,7 +1213,7 @@ func (s *PostgresStore) ReserveNextMatch(ctx context.Context, roomID, requestID 
 	}
 
 	room, err := scanRoom(tx.QueryRowContext(ctx, `
-		SELECT room_id, game_type, visibility, display_name, turn_timeout_seconds, owner_user_id, owner_player_id, owner_node,
+		SELECT room_id, game_type, visibility, turn_timeout_seconds, owner_user_id, owner_player_id, owner_node,
 			epoch, status, max_players, player_count, progress_current, progress_total, last_applied_seq, engine_version,
 			current_match_id, next_round_no, created_at, updated_at, lease_expires_at
 		FROM rooms WHERE room_id = $1 FOR UPDATE`, roomID))
@@ -1252,7 +1242,6 @@ func (s *PostgresStore) ReserveNextMatch(ctx context.Context, roomID, requestID 
 		MatchID:            matchID,
 		RuntimeRoomID:      room.RoomID,
 		GameType:           room.GameType,
-		DisplayName:        room.DisplayName,
 		TurnTimeoutSeconds: room.TurnTimeoutSeconds,
 		Status:             contracts.MatchStatusPreparing,
 		OwnerUserID:        room.OwnerUserID,
@@ -1268,12 +1257,11 @@ func (s *PostgresStore) ReserveNextMatch(ctx context.Context, roomID, requestID 
 	}
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO matches (
-			match_id, runtime_room_id, game_type, display_name, turn_timeout_seconds, status, owner_user_id, owner_player_id,
+			match_id, runtime_room_id, game_type, turn_timeout_seconds, status, owner_user_id, owner_player_id,
 			runtime_owner_node, epoch, max_players, player_count, engine_version,
 			round_no, last_applied_seq, random_seed, started_at, updated_at
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
-		match.MatchID, match.RuntimeRoomID, match.GameType,
-		match.DisplayName, match.TurnTimeoutSeconds, match.Status,
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
+		match.MatchID, match.RuntimeRoomID, match.GameType, match.TurnTimeoutSeconds, match.Status,
 		match.OwnerUserID, match.OwnerPlayerID, match.RuntimeOwnerNode,
 		match.Epoch, match.MaxPlayers, 0, match.EngineVersion,
 		match.RoundNo, 0, strconv.FormatUint(match.RandomSeed, 10),
@@ -1417,7 +1405,7 @@ func (s *PostgresStore) ListMatches(ctx context.Context, gameType, status, userI
 		limit = 200
 	}
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT match_id, runtime_room_id, game_type, display_name, turn_timeout_seconds, status, owner_user_id, owner_player_id,
+		SELECT match_id, runtime_room_id, game_type, turn_timeout_seconds, status, owner_user_id, owner_player_id,
 			runtime_owner_node, epoch, max_players, player_count, engine_version,
 			round_no, last_applied_seq, random_seed,
 			started_at, updated_at, ended_at, duration_seconds,
@@ -1458,7 +1446,7 @@ func (s *PostgresStore) ListMatches(ctx context.Context, gameType, status, userI
 
 func (s *PostgresStore) GetMatch(ctx context.Context, matchID string) (contracts.MatchRecord, error) {
 	row := s.db.QueryRowContext(ctx, `
-		SELECT match_id, runtime_room_id, game_type, display_name, turn_timeout_seconds, status, owner_user_id, owner_player_id,
+		SELECT match_id, runtime_room_id, game_type, turn_timeout_seconds, status, owner_user_id, owner_player_id,
 			runtime_owner_node, epoch, max_players, player_count, engine_version,
 			round_no, last_applied_seq, random_seed,
 			started_at, updated_at, ended_at, duration_seconds,
@@ -1482,7 +1470,7 @@ func (s *PostgresStore) LatestMatchForRoom(
 	roomID string,
 ) (contracts.MatchRecord, error) {
 	row := s.db.QueryRowContext(ctx, `
-		SELECT match_id, runtime_room_id, game_type, display_name, turn_timeout_seconds, status, owner_user_id, owner_player_id,
+		SELECT match_id, runtime_room_id, game_type, turn_timeout_seconds, status, owner_user_id, owner_player_id,
 			runtime_owner_node, epoch, max_players, player_count, engine_version,
 			round_no, last_applied_seq, random_seed,
 			started_at, updated_at, ended_at, duration_seconds,
@@ -1682,7 +1670,7 @@ func (s *PostgresStore) UpdateRoom(ctx context.Context, roomID string, fn func(*
 	defer tx.Rollback()
 
 	row := tx.QueryRowContext(ctx, `
-		SELECT room_id, game_type, visibility, display_name, turn_timeout_seconds, owner_user_id, owner_player_id, owner_node,
+		SELECT room_id, game_type, visibility, turn_timeout_seconds, owner_user_id, owner_player_id, owner_node,
 			epoch, status, max_players, player_count, progress_current, progress_total, last_applied_seq, engine_version,
 			current_match_id, next_round_no, created_at, updated_at, lease_expires_at
 		FROM rooms
@@ -2319,7 +2307,6 @@ func scanMatch(row roomScanner) (contracts.MatchRecord, error) {
 		&rec.MatchID,
 		&rec.RuntimeRoomID,
 		&rec.GameType,
-		&rec.DisplayName,
 		&rec.TurnTimeoutSeconds,
 		&rec.Status,
 		&rec.OwnerUserID,
@@ -2398,7 +2385,6 @@ func scanRoom(row roomScanner) (contracts.RoomRecord, error) {
 		&rec.RoomID,
 		&rec.GameType,
 		&rec.Visibility,
-		&rec.DisplayName,
 		&rec.TurnTimeoutSeconds,
 		&rec.OwnerUserID,
 		&rec.OwnerPlayerID,

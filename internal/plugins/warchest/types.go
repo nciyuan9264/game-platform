@@ -176,7 +176,6 @@ type State struct {
 	Status             string                `json:"status"`
 	MaxPlayers         int                   `json:"maxPlayers"`
 	Visibility         string                `json:"visibility"`
-	DisplayName        string                `json:"displayName"`
 	TurnTimeoutSeconds int                   `json:"turnTimeoutSeconds"`
 	RandomSeed         uint64                `json:"randomSeed"`
 	RandomCounter      uint64                `json:"randomCounter"`

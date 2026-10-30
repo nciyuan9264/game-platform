@@ -131,7 +131,6 @@ type RoomRecord struct {
 	RoomID                 string    `json:"roomID"`
 	GameType               string    `json:"gameType"`
 	Visibility             string    `json:"visibility"`
-	DisplayName            string    `json:"displayName,omitempty"`
 	TurnTimeoutSeconds     int       `json:"turnTimeoutSeconds,omitempty"`
 	OwnerUserID            string    `json:"ownerUserID"`
 	OwnerPlayerID          string    `json:"ownerPlayerID"`
@@ -235,7 +234,6 @@ type MatchRecord struct {
 	MatchID            string              `json:"matchID"`
 	RuntimeRoomID      string              `json:"runtimeRoomID"`
 	GameType           string              `json:"gameType"`
-	DisplayName        string              `json:"displayName,omitempty"`
 	TurnTimeoutSeconds int                 `json:"turnTimeoutSeconds,omitempty"`
 	Status             string              `json:"status"`
 	OwnerUserID        string              `json:"ownerUserID"`

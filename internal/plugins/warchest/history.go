@@ -76,7 +76,6 @@ func (p *Plugin) ProjectHistory(
 		StateBlob:           stateBlob,
 		FinalResult:         resultView(typed),
 		WinnerPlayerID:      typed.WinnerID,
-		RoomDisplayName:     typed.DisplayName,
 		Players:             players,
 	}, nil
 }

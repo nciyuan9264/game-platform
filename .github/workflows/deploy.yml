@@ -37,6 +37,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: game-platform-production-deploy
+  cancel-in-progress: false
+
 jobs:
   detect:
     if: >-
@@ -440,16 +444,52 @@ jobs:
             retry_pull docker pull "${target_image}"
             ./scripts/deploy-game-slot.sh "${GAME}" "${target_image}"
 
-  notify:
+  cleanup-images:
     needs:
       - detect
+      - build-center
+      - build-games
+      - build-release-tool
       - deploy-center
       - deploy-games
     if: >-
       always() &&
       needs.detect.result == 'success' &&
+      (needs.build-center.result == 'success' || needs.build-center.result == 'skipped') &&
+      (needs.build-games.result == 'success' || needs.build-games.result == 'skipped') &&
+      (needs.build-release-tool.result == 'success' || needs.build-release-tool.result == 'skipped') &&
       (needs.deploy-center.result == 'success' || needs.deploy-center.result == 'skipped') &&
       (needs.deploy-games.result == 'success' || needs.deploy-games.result == 'skipped')
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Prune unused server images
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -eu
+            prune_log="$(mktemp)"
+            trap 'rm -f "${prune_log}"' EXIT
+            flock --wait 300 /var/lock/docker-image-prune.lock \
+              docker image prune --all --force --filter "until=24h" \
+              >"${prune_log}"
+            tail -n 1 "${prune_log}"
+            docker system df
+
+  notify:
+    needs:
+      - detect
+      - deploy-center
+      - deploy-games
+      - cleanup-images
+    if: >-
+      always() &&
+      needs.detect.result == 'success' &&
+      (needs.deploy-center.result == 'success' || needs.deploy-center.result == 'skipped') &&
+      (needs.deploy-games.result == 'success' || needs.deploy-games.result == 'skipped') &&
+      needs.cleanup-images.result == 'success'
     runs-on: ubuntu-24.04
     steps:
       - name: Notify Feishu

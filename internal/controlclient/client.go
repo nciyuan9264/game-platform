@@ -78,7 +78,6 @@ func (c *Client) CreateRoomWithVisibility(
 		requestID,
 		maxPlayers,
 		visibility,
-		"",
 		0,
 	)
 }
@@ -90,8 +89,7 @@ func (c *Client) CreateRoomWithSettings(
 	ownerPlayerID,
 	requestID string,
 	maxPlayers int,
-	visibility,
-	displayName string,
+	visibility string,
 	turnTimeoutSeconds int,
 ) (contracts.RoomRecord, error) {
 	req := &platformcontrol.CreateRoomReq{
@@ -108,9 +106,6 @@ func (c *Client) CreateRoomWithSettings(
 	}
 	if visibility != "" {
 		req.Visibility = &visibility
-	}
-	if displayName != "" {
-		req.DisplayName = &displayName
 	}
 	value := int32(turnTimeoutSeconds)
 	req.TurnTimeoutSeconds = &value
@@ -184,7 +179,6 @@ func fromRPCRoom(room *platformcontrol.RoomRecord) contracts.RoomRecord {
 		CurrentMatchID:     room.GetCurrentMatchId(),
 		NextRoundNo:        int(room.GetNextRoundNo()),
 		Visibility:         room.GetVisibility(),
-		DisplayName:        room.GetDisplayName(),
 		TurnTimeoutSeconds: int(room.GetTurnTimeoutSeconds()),
 		CreatedAt:          time.Unix(room.GetCreatedAtUnix(), 0).UTC(),
 		UpdatedAt:          time.Unix(room.GetUpdatedAtUnix(), 0).UTC(),

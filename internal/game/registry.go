@@ -27,7 +27,6 @@ type RoomConfig struct {
 	RandomSeed         uint64
 	RoundNo            int
 	Visibility         string
-	DisplayName        string
 	TurnTimeoutSeconds int
 }
 
@@ -162,7 +161,6 @@ type NextMatchPreparer interface {
 
 type RoomMetadata struct {
 	Visibility         string
-	DisplayName        string
 	TurnTimeoutSeconds int
 }
 
@@ -235,7 +233,6 @@ type HistoryProjection struct {
 	FinalResult         any
 	WinnerUserID        string
 	WinnerPlayerID      string
-	RoomDisplayName     string
 	Players             []HistoryPlayer
 }
 

@@ -27,13 +27,12 @@ func (s *PostgresStore) StartHistoryGame(ctx context.Context, gameRecord history
 	var gameID int64
 	err = tx.QueryRowContext(ctx, `
 		INSERT INTO games (
-			room_id, room_display_name, game_type, engine_version, replay_schema_version,
+			room_id, game_type, engine_version, replay_schema_version,
 			started_at, max_players, initial_state, initial_replay_payload,
 			created_at, updated_at
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$10)
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$9)
 		RETURNING id`,
-		gameRecord.RoomID, gameRecord.RoomDisplayName,
-		gameRecord.GameType, gameRecord.EngineVersion,
+		gameRecord.RoomID, gameRecord.GameType, gameRecord.EngineVersion,
 		gameRecord.ReplaySchemaVersion, gameRecord.StartedAt,
 		gameRecord.MaxPlayers, nullableJSON(gameRecord.InitialState),
 		nullableBytes(gameRecord.InitialReplayPayload), now,
@@ -247,7 +246,7 @@ func (s *PostgresStore) ListHistoryGames(ctx context.Context, userID int64, game
 		offset = 0
 	}
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT DISTINCT g.id, g.room_id, g.room_display_name, g.game_type, g.engine_version,
+		SELECT DISTINCT g.id, g.room_id, g.game_type, g.engine_version,
 			g.replay_schema_version, g.started_at, g.ended_at,
 			g.duration_seconds, g.winner_user_id, g.winner_player_id, g.end_reason,
 			g.max_players, NULL::jsonb, NULL::bytea, NULL::jsonb,
@@ -300,7 +299,7 @@ func (s *PostgresStore) CountHistoryGames(ctx context.Context, userID int64, gam
 
 func (s *PostgresStore) GetHistoryGame(ctx context.Context, gameID int64, gameType string, includeEvents bool) (history.Game, []history.Player, []history.Event, error) {
 	row := s.db.QueryRowContext(ctx, `
-		SELECT id, room_id, room_display_name, game_type, engine_version, replay_schema_version,
+		SELECT id, room_id, game_type, engine_version, replay_schema_version,
 			started_at, ended_at, duration_seconds,
 			winner_user_id, winner_player_id, end_reason, max_players,
 			initial_state, initial_replay_payload, final_result, created_at, updated_at
@@ -319,7 +318,7 @@ func (s *PostgresStore) GetHistoryGame(ctx context.Context, gameID int64, gameTy
 
 func (s *PostgresStore) GetCompletedHistoryGameForUser(ctx context.Context, gameID, userID int64, gameType string, includeEvents bool) (history.Game, []history.Player, []history.Event, error) {
 	row := s.db.QueryRowContext(ctx, `
-		SELECT g.id, g.room_id, g.room_display_name, g.game_type, g.engine_version,
+		SELECT g.id, g.room_id, g.game_type, g.engine_version,
 			g.replay_schema_version, g.started_at, g.ended_at, g.duration_seconds,
 			g.winner_user_id, g.winner_player_id, g.end_reason, g.max_players,
 			g.initial_state, g.initial_replay_payload, g.final_result,
@@ -867,7 +866,7 @@ func scanHistoryGame(scanner historyGameScanner) (history.Game, error) {
 	var initialState, initialReplayPayload, finalResult []byte
 	err := scanner.Scan(
 		&gameRecord.ID, &gameRecord.RoomID,
-		&gameRecord.RoomDisplayName, &gameRecord.GameType,
+		&gameRecord.GameType,
 		&gameRecord.EngineVersion, &gameRecord.ReplaySchemaVersion, &gameRecord.StartedAt,
 		&endedAt, &gameRecord.DurationSeconds, &winnerUserID, &winnerPlayerID,
 		&endReason, &gameRecord.MaxPlayers, &initialState, &initialReplayPayload,

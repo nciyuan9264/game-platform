@@ -14,11 +14,10 @@ import (
 
 const (
 	GameType            = "cantstop"
-	EngineVersion       = "cantstop-v2"
+	EngineVersion       = "cantstop-v3"
 	ReplaySchemaVersion = 1
 	defaultMaxPlayers   = 4
 	maxNoHumanChecks    = 3
-	defaultRoomName     = "再高一点"
 )
 
 const (
@@ -82,17 +81,12 @@ func (p *Plugin) InitRoom(
 	if roundNo <= 0 {
 		roundNo = 1
 	}
-	displayName := cfg.DisplayName
-	if displayName == "" {
-		displayName = defaultRoomName
-	}
 	return &State{
 		RoomID:             cfg.RoomID,
 		OwnerID:            cfg.OwnerPlayerID,
 		Status:             StatusMatch,
 		MaxPlayers:         maximum,
 		Visibility:         visibility,
-		DisplayName:        displayName,
 		TurnTimeoutSeconds: int(turnTimeout / time.Second),
 		RandomSeed:         cfg.RandomSeed,
 		MatchRoundNo:       roundNo,
@@ -156,7 +150,6 @@ func (p *Plugin) RoomMetadata(
 	}
 	return game.RoomMetadata{
 		Visibility:         typed.Visibility,
-		DisplayName:        typed.DisplayName,
 		TurnTimeoutSeconds: int(turnTimeout / time.Second),
 	}, nil
 }
@@ -864,9 +857,6 @@ func ensureState(state *State) {
 	}
 	if state.Visibility == "" {
 		state.Visibility = contracts.VisibilityPublic
-	}
-	if state.DisplayName == "" {
-		state.DisplayName = defaultRoomName
 	}
 	if state.TurnTimeoutSeconds <= 0 {
 		state.TurnTimeoutSeconds = int(turnTimeout / time.Second)

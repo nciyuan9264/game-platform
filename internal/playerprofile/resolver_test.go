@@ -57,7 +57,7 @@ func TestResolverUsesCurrentProfilesAndExplicitFallbacks(t *testing.T) {
 	}
 	if profiles["ai_001"].DisplayName != "HAL" ||
 		profiles["ai_001"].Avatar != "hal-avatar" ||
-		profiles["ai_002"].DisplayName != "AI" {
+		profiles["ai_002"].DisplayName != "ai_002" {
 		t.Fatalf("AI profiles = %+v, %+v", profiles["ai_001"], profiles["ai_002"])
 	}
 	if len(directory.batches) != 1 || len(directory.batches[0]) != 3 {
@@ -76,6 +76,32 @@ func TestResolverFallsBackToPersistedNamesWhenAuthFails(t *testing.T) {
 
 	if displayNames["7"] != "Persisted Alice" || displayNames["9"] != "玩家 9" {
 		t.Fatalf("fallback display names = %v", displayNames)
+	}
+}
+
+func TestResolverSkipsInvalidLegacyUserIDsWithoutPoisoningValidProfiles(t *testing.T) {
+	directory := &fakePublicProfiles{profiles: map[string]authclient.PublicProfile{
+		"7": {DisplayName: "Current Alice"},
+	}}
+	resolver := NewResolver(directory)
+
+	profiles := resolver.ResolveProfiles(context.Background(), []Player{
+		{
+			UserID:      "legacy-bob",
+			PlayerID:    "legacy-bob",
+			DisplayName: "Persisted Bob",
+		},
+		{UserID: "7", PlayerID: "7"},
+	})
+
+	if len(directory.batches) != 1 ||
+		len(directory.batches[0]) != 1 ||
+		directory.batches[0][0] != "7" {
+		t.Fatalf("Auth batches = %v", directory.batches)
+	}
+	if profiles["legacy-bob"].DisplayName != "Persisted Bob" ||
+		profiles["7"].DisplayName != "Current Alice" {
+		t.Fatalf("resolved profiles = %v", profiles)
 	}
 }
 

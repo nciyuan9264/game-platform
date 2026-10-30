@@ -242,12 +242,11 @@ func (fakePlugin) ProjectHistory(
 			"playersData": map[string]any{"human-runtime": map[string]any{}},
 			"result":      map[string]any{"winnerID": winner},
 		},
-		InitialState:    blob,
-		StateBlob:       blob,
-		FinalResult:     map[string]any{"winnerID": winner},
-		WinnerPlayerID:  winner,
-		RoomDisplayName: "Recovered Room",
-		Players:         players,
+		InitialState:   blob,
+		StateBlob:      blob,
+		FinalResult:    map[string]any{"winnerID": winner},
+		WinnerPlayerID: winner,
+		Players:        players,
 	}, nil
 }
 
@@ -272,7 +271,6 @@ func rebuildFixture() (*fakeStore, fakeCommandReader, time.Time) {
 		RoomID:         "room-1",
 		GameType:       "test-game",
 		Visibility:     contracts.VisibilityPrivate,
-		DisplayName:    "Recovered Room",
 		OwnerUserID:    "101",
 		OwnerPlayerID:  "human-runtime",
 		CurrentMatchID: "match-1",
@@ -281,7 +279,6 @@ func rebuildFixture() (*fakeStore, fakeCommandReader, time.Time) {
 		MatchID:            "match-1",
 		RuntimeRoomID:      room.RoomID,
 		GameType:           room.GameType,
-		DisplayName:        room.DisplayName,
 		TurnTimeoutSeconds: 60,
 		EngineVersion:      "test-v1",
 		MaxPlayers:         2,
@@ -424,5 +421,18 @@ func TestRebuilderReportsExpiredCommandLog(t *testing.T) {
 	_, err := rebuilder.Run(context.Background(), Config{RoomID: "room-1"})
 	if !errors.Is(err, ErrCommandLogUnavailable) {
 		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestMaterializePlayersReplacesLegacyAIPlaceholderWithPlayerID(t *testing.T) {
+	players, err := materializePlayers(
+		[]game.HistoryPlayer{{PlayerID: "ai_2", DisplayName: "AI", IsAI: true}},
+		[]contracts.MatchPlayerRecord{{PlayerID: "ai_2", DisplayName: "AI", IsAI: true}},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(players) != 1 || players[0].DisplayName != "ai_2" {
+		t.Fatalf("players = %+v", players)
 	}
 }

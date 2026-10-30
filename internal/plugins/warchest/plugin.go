@@ -13,7 +13,7 @@ import (
 
 const (
 	GameType            = "warchest"
-	EngineVersion       = "warchest-v1"
+	EngineVersion       = "warchest-v2"
 	ReplaySchemaVersion = 1
 	defaultMaxPlayers   = 2
 )
@@ -67,17 +67,12 @@ func (p *Plugin) InitRoom(
 	if roundNo <= 0 {
 		roundNo = 1
 	}
-	displayName := cfg.DisplayName
-	if displayName == "" {
-		displayName = defaultRoomName
-	}
 	return &State{
 		RoomID:             cfg.RoomID,
 		OwnerID:            cfg.OwnerPlayerID,
 		Status:             StatusMatch,
 		MaxPlayers:         maxPlayers,
 		Visibility:         visibility,
-		DisplayName:        displayName,
 		TurnTimeoutSeconds: defaultTurnTimeout,
 		RandomSeed:         cfg.RandomSeed,
 		MatchRoundNo:       roundNo,
@@ -160,7 +155,6 @@ func (p *Plugin) RoomMetadata(
 	}
 	return game.RoomMetadata{
 		Visibility:         typed.Visibility,
-		DisplayName:        typed.DisplayName,
 		TurnTimeoutSeconds: defaultTurnTimeout,
 	}, nil
 }

@@ -3,6 +3,7 @@ package playerprofile
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/nciyuan9264/game-platform/internal/authclient"
@@ -60,8 +61,8 @@ func (r *Resolver) ResolveProfiles(ctx context.Context, players []Player) map[st
 		if player.IsAI {
 			continue
 		}
-		userID := strings.TrimSpace(player.UserID)
-		if userID == "" {
+		userID, valid := canonicalUserID(player.UserID)
+		if !valid {
 			continue
 		}
 		playerIDsByUserID[userID] = append(playerIDsByUserID[userID], player.PlayerID)
@@ -99,11 +100,23 @@ func (r *Resolver) ResolveProfiles(ctx context.Context, players []Player) map[st
 	return resolved
 }
 
+func canonicalUserID(value string) (string, bool) {
+	parsed, err := strconv.ParseUint(strings.TrimSpace(value), 10, 64)
+	if err != nil || parsed == 0 {
+		return "", false
+	}
+	return strconv.FormatUint(parsed, 10), true
+}
+
 func fallbackDisplayName(player Player) string {
-	if displayName := strings.TrimSpace(player.DisplayName); displayName != "" {
+	displayName := strings.TrimSpace(player.DisplayName)
+	if displayName != "" && (!player.IsAI || displayName != "AI") {
 		return displayName
 	}
 	if player.IsAI {
+		if playerID := strings.TrimSpace(player.PlayerID); playerID != "" {
+			return playerID
+		}
 		return "AI"
 	}
 	identity := strings.TrimSpace(player.UserID)

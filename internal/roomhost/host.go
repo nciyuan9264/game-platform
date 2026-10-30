@@ -526,7 +526,6 @@ func (h *Host) newRoomActor(ctx context.Context, rec contracts.RoomRecord) (*Roo
 		RandomSeed:         match.RandomSeed,
 		RoundNo:            match.RoundNo,
 		Visibility:         rec.Visibility,
-		DisplayName:        rec.DisplayName,
 		TurnTimeoutSeconds: rec.TurnTimeoutSeconds,
 	})
 	if err != nil {
@@ -1118,7 +1117,6 @@ func (r *RoomActor) StartMatch(ctx context.Context, matchID string) error {
 		RandomSeed:         match.RandomSeed,
 		RoundNo:            match.RoundNo,
 		Visibility:         r.record.Visibility,
-		DisplayName:        r.record.DisplayName,
 		TurnTimeoutSeconds: r.record.TurnTimeoutSeconds,
 	})
 	if err != nil {
@@ -1533,11 +1531,7 @@ func (r *RoomActor) syncRoomMetadataLocked(ctx context.Context) error {
 	if metadata.Visibility == "" {
 		metadata.Visibility = r.record.Visibility
 	}
-	if metadata.DisplayName == "" {
-		metadata.DisplayName = r.record.DisplayName
-	}
 	if metadata.Visibility == r.record.Visibility &&
-		metadata.DisplayName == r.record.DisplayName &&
 		metadata.TurnTimeoutSeconds == r.record.TurnTimeoutSeconds {
 		r.metadataDirty = false
 		return nil
@@ -1549,7 +1543,6 @@ func (r *RoomActor) syncRoomMetadataLocked(ctx context.Context) error {
 			string,
 			string,
 			string,
-			string,
 			int,
 			int64,
 		) error
@@ -1558,7 +1551,6 @@ func (r *RoomActor) syncRoomMetadataLocked(ctx context.Context) error {
 			ctx,
 			r.record.RoomID,
 			metadata.Visibility,
-			metadata.DisplayName,
 			r.host.nodeID,
 			metadata.TurnTimeoutSeconds,
 			r.record.Epoch,
@@ -1577,7 +1569,6 @@ func (r *RoomActor) syncRoomMetadataLocked(ctx context.Context) error {
 		return persistErr
 	}
 	r.record.Visibility = metadata.Visibility
-	r.record.DisplayName = metadata.DisplayName
 	r.record.TurnTimeoutSeconds = metadata.TurnTimeoutSeconds
 	r.metadataDirty = false
 	r.outboundDirty = true
@@ -1974,7 +1965,6 @@ func (r *RoomActor) reconcileHistoryLocked(ctx context.Context) error {
 		RandomSeed:         randomSeed,
 		RoundNo:            r.match.RoundNo,
 		Visibility:         r.record.Visibility,
-		DisplayName:        r.record.DisplayName,
 		TurnTimeoutSeconds: r.record.TurnTimeoutSeconds,
 	})
 	if err != nil {
@@ -2111,7 +2101,6 @@ func (r *RoomActor) ensureHistoryLocked(
 	}
 	gameID, err = r.host.store.StartHistoryGame(ctx, history.Game{
 		RoomID:               r.record.RoomID,
-		RoomDisplayName:      projection.RoomDisplayName,
 		GameType:             r.record.GameType,
 		EngineVersion:        r.definition.Version,
 		ReplaySchemaVersion:  projection.ReplaySchemaVersion,
@@ -2225,11 +2214,11 @@ func (r *RoomActor) historyPlayersLocked(
 		displayName := player.DisplayName
 		identity, found := rosterByPlayerID[player.PlayerID]
 		if player.IsAI {
-			if found && identity.DisplayName != "" {
+			if found && identity.DisplayName != "" && identity.DisplayName != "AI" {
 				displayName = identity.DisplayName
 			}
-			if displayName == "" {
-				displayName = "AI"
+			if displayName == "" || displayName == "AI" {
+				displayName = player.PlayerID
 			}
 		} else {
 			if !found || identity.IsAI {
@@ -2555,13 +2544,13 @@ func (r *RoomActor) broadcast(ctx context.Context, traceID string) error {
 		return err
 	}
 	var outboundErr error
-	playerProfiles, err := r.loadPlayerProfiles(ctx)
-	if err != nil {
-		observability.Warn("load player profiles for broadcast failed", "roomID", r.record.RoomID, "error", err)
-	}
 	if err := r.syncRosterLocked(ctx, presences); err != nil {
 		observability.Warn("sync match roster failed", "roomID", r.record.RoomID, "error", err)
 		outboundErr = errors.Join(outboundErr, err)
+	}
+	playerProfiles, err := r.loadPlayerProfiles(ctx)
+	if err != nil {
+		observability.Warn("load player profiles for broadcast failed", "roomID", r.record.RoomID, "error", err)
 	}
 	if err := r.syncProgressLocked(ctx); err != nil {
 		observability.Warn("sync room progress failed", "roomID", r.record.RoomID, "error", err)
@@ -2707,11 +2696,11 @@ func (r *RoomActor) syncRosterLocked(ctx context.Context, presences []contracts.
 		userID := ""
 		displayName := player.DisplayName
 		if player.IsAI {
-			if displayName == "" {
+			if displayName == "" || displayName == "AI" {
 				displayName = persisted.DisplayName
 			}
-			if displayName == "" {
-				displayName = "AI"
+			if displayName == "" || displayName == "AI" {
+				displayName = player.PlayerID
 			}
 		} else {
 			userID = persisted.UserID

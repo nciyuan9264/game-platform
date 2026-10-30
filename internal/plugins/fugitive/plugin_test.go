@@ -48,7 +48,6 @@ func TestRoomSettingsKeepFixedFugitiveRules(t *testing.T) {
 			MaxPlayers:         2,
 			RandomSeed:         42,
 			Visibility:         contracts.VisibilityPublic,
-			DisplayName:        "custom",
 			TurnTimeoutSeconds: 60,
 		},
 	)
@@ -64,9 +63,6 @@ func TestRoomSettingsKeepFixedFugitiveRules(t *testing.T) {
 	})
 	if state.Visibility != contracts.VisibilityPrivate {
 		t.Fatalf("visibility = %q", state.Visibility)
-	}
-	if state.DisplayName != defaultRoomName {
-		t.Fatalf("display name = %q", state.DisplayName)
 	}
 	if state.TurnTimeoutSeconds != defaultTurnTimeout {
 		t.Fatalf("turn timeout = %d", state.TurnTimeoutSeconds)
@@ -334,7 +330,6 @@ func searchState() *State {
 		Status:             StatusMarshalSearch,
 		MaxPlayers:         2,
 		Visibility:         contracts.VisibilityPrivate,
-		DisplayName:        defaultRoomName,
 		TurnTimeoutSeconds: 60,
 		RandomSeed:         9,
 		RoundNo:            4,

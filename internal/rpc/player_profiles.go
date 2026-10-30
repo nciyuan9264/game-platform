@@ -15,12 +15,12 @@ func (h *Handler) resolveRoomProfiles(ctx context.Context, rooms []*platform.Roo
 		if room == nil {
 			continue
 		}
+		ensureRoomOwnerPlayer(room)
 		for _, player := range room.GetPlayers() {
 			if player == nil {
 				continue
 			}
 			if player.GetPlayerID() == room.GetOwnerPlayerID() &&
-				player.GetUserID() == "" &&
 				room.GetOwnerUserID() != "" &&
 				!player.GetAi() {
 				player.UserID = stringPointer(room.GetOwnerUserID())
@@ -52,6 +52,30 @@ func (h *Handler) resolveRoomProfiles(ctx context.Context, rooms []*platform.Roo
 			}
 		}
 	}
+}
+
+func ensureRoomOwnerPlayer(room *platform.RoomInfo) {
+	if room == nil || room.GetOwnerPlayerID() == "" {
+		return
+	}
+	for _, player := range room.GetPlayers() {
+		if player != nil && player.GetPlayerID() == room.GetOwnerPlayerID() {
+			return
+		}
+	}
+	owner := &platform.RoomPlayer{
+		PlayerID:    room.GetOwnerPlayerID(),
+		DisplayName: "",
+		SeatIndex:   0,
+		Online:      false,
+		Ai:          false,
+		Ready:       false,
+	}
+	if room.GetOwnerUserID() != "" {
+		owner.UserID = stringPointer(room.GetOwnerUserID())
+	}
+	room.Players = append([]*platform.RoomPlayer{owner}, room.GetPlayers()...)
+	room.PlayerCount = int32(len(room.GetPlayers()))
 }
 
 func (h *Handler) resolveHistoryPlayers(ctx context.Context, players []history.Player) {

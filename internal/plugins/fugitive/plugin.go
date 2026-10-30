@@ -13,7 +13,7 @@ import (
 
 const (
 	GameType            = "fugitive"
-	EngineVersion       = "fugitive-v2"
+	EngineVersion       = "fugitive-v3"
 	ReplaySchemaVersion = 1
 	defaultMaxPlayers   = 2
 )
@@ -80,7 +80,6 @@ func (p *Plugin) InitRoom(
 		Status:             StatusMatch,
 		MaxPlayers:         maxPlayers,
 		Visibility:         visibility,
-		DisplayName:        defaultRoomName,
 		TurnTimeoutSeconds: defaultTurnTimeout,
 		RandomSeed:         cfg.RandomSeed,
 		MatchRoundNo:       roundNo,
@@ -143,7 +142,6 @@ func (p *Plugin) RoomMetadata(
 	}
 	return game.RoomMetadata{
 		Visibility:         typed.Visibility,
-		DisplayName:        typed.DisplayName,
 		TurnTimeoutSeconds: typed.TurnTimeoutSeconds,
 	}, nil
 }
