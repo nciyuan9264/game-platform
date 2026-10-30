@@ -2,6 +2,7 @@ package plugins
 
 import (
 	"context"
+	"regexp"
 	"testing"
 
 	"github.com/nciyuan9264/game-platform/internal/contracts"
@@ -142,10 +143,39 @@ func TestAllGamePluginsSupportRoomVisibilitySettings(t *testing.T) {
 	}
 }
 
-func TestAllGamePluginsPersistDistinctAINames(t *testing.T) {
+func TestAllGamePluginsFollowAIIdentityContract(t *testing.T) {
 	ctx := context.Background()
+	canonicalID := regexp.MustCompile(`^ai_[0-9]{3}$`)
+	namePools := map[string][]string{
+		contracts.GameAcquire:    {"摩根", "诺兰", "薇拉", "里德", "艾弗里"},
+		contracts.GameCantStop:   {"小满", "阿橙", "松子", "米拉"},
+		contracts.GameDaVinci:    {"谜钥"},
+		contracts.GameForSale:    {"小满", "阿橙", "松子", "米拉", "可可"},
+		contracts.GameFugitive:   {"灰狐"},
+		contracts.GameHex:        {"青岸"},
+		contracts.GameHive:       {"行舟"},
+		contracts.GameLoveLetter: {"艾琳", "奥利弗", "莉娅", "诺亚", "苏菲", "米娅"},
+		contracts.GameOnitama:    {"弈心"},
+		contracts.GameOthello:    {"墨白"},
+		contracts.GameQuoridor:   {"行舟"},
+		contracts.GameSixNimmt: {
+			"阿麦", "栗子", "小野", "北北", "松果",
+			"团团", "南风", "阿丘", "豆子", "小满",
+		},
+		contracts.GameSplendor: {"琥珀", "翡翠", "青金"},
+		contracts.GameWarChest: {"渡鸦"},
+		contracts.GameYinsh:    {"墨白"},
+	}
 	for _, definition := range Registry().Definitions() {
 		t.Run(definition.GameType, func(t *testing.T) {
+			names := namePools[definition.GameType]
+			if len(names) < definition.DefaultMaxPlayers-1 {
+				t.Fatalf(
+					"name pool has %d entries, want at least %d",
+					len(names),
+					definition.DefaultMaxPlayers-1,
+				)
+			}
 			state, err := definition.Engine.InitRoom(ctx, game.RoomConfig{
 				RoomID:        definition.GameType + "-ai-names",
 				GameType:      definition.GameType,
@@ -165,49 +195,80 @@ func TestAllGamePluginsPersistDistinctAINames(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			expectedAI := 2
-			if definition.DefaultMaxPlayers < 3 {
-				expectedAI = 1
-			}
-			for range expectedAI {
-				if _, err := definition.Engine.ApplyCommand(ctx, state, contracts.RoomCommand{
-					Type:     "match_add_ai",
-					UserID:   "owner-user",
-					PlayerID: "owner",
-					Payload:  map[string]any{},
-				}); err != nil {
-					t.Fatal(err)
-				}
-			}
-
 			provider, ok := definition.Engine.(game.RosterProvider)
 			if !ok {
 				t.Fatalf("%s engine does not provide a roster", definition.GameType)
 			}
-			roster, err := provider.Roster(ctx, state)
-			if err != nil {
-				t.Fatal(err)
+			apply := func(commandType string, payload map[string]any) {
+				t.Helper()
+				if _, err := definition.Engine.ApplyCommand(ctx, state, contracts.RoomCommand{
+					Type:     commandType,
+					UserID:   "owner-user",
+					PlayerID: "owner",
+					Payload:  payload,
+				}); err != nil {
+					t.Fatalf("%s: %v", commandType, err)
+				}
 			}
-			names := make(map[string]string, expectedAI)
-			for _, player := range roster {
-				if !player.IsAI {
-					continue
+			aiRoster := func() map[string]game.RosterPlayer {
+				t.Helper()
+				roster, err := provider.Roster(ctx, state)
+				if err != nil {
+					t.Fatal(err)
 				}
-				if player.DisplayName == "" || player.DisplayName == "AI" {
-					t.Fatalf("AI %q has placeholder display name %q", player.PlayerID, player.DisplayName)
+				result := map[string]game.RosterPlayer{}
+				for _, player := range roster {
+					if player.IsAI {
+						result[player.PlayerID] = player
+					}
 				}
-				if previousID := names[player.DisplayName]; previousID != "" {
-					t.Fatalf(
-						"AI players %q and %q share display name %q",
-						previousID,
-						player.PlayerID,
-						player.DisplayName,
-					)
-				}
-				names[player.DisplayName] = player.PlayerID
+				return result
 			}
-			if len(names) != expectedAI {
-				t.Fatalf("AI names = %v, want %d distinct names", names, expectedAI)
+			assertAI := func(playerID, displayName string, seatIndex int) {
+				t.Helper()
+				player, ok := aiRoster()[playerID]
+				if !ok {
+					t.Fatalf("AI %s is missing", playerID)
+				}
+				if !canonicalID.MatchString(player.PlayerID) {
+					t.Fatalf("AI player ID = %q, want canonical three-digit ID", player.PlayerID)
+				}
+				if player.DisplayName != displayName ||
+					player.DisplayName == player.PlayerID ||
+					player.DisplayName == "AI" {
+					t.Fatalf("AI %s display name = %q, want %q", playerID, player.DisplayName, displayName)
+				}
+				if player.SeatIndex != seatIndex {
+					t.Fatalf("AI %s seat = %d, want %d", playerID, player.SeatIndex, seatIndex)
+				}
+			}
+
+			lastSeat := definition.DefaultMaxPlayers - 1
+			apply("match_add_ai", map[string]any{"seatIndex": lastSeat})
+			assertAI("ai_001", names[0], lastSeat)
+
+			if definition.DefaultMaxPlayers == 2 {
+				apply("match_remove_player", map[string]any{"playerID": "ai_001"})
+				apply("match_add_ai", map[string]any{"seatIndex": lastSeat})
+				assertAI("ai_001", names[0], lastSeat)
+				return
+			}
+
+			apply("match_add_ai", map[string]any{"seatIndex": 1})
+			assertAI("ai_002", names[1], 1)
+
+			apply("match_remove_player", map[string]any{"playerID": "ai_002"})
+			apply("match_add_ai", map[string]any{"seatIndex": 2})
+			assertAI("ai_002", names[1], 2)
+
+			apply("match_remove_player", map[string]any{"playerID": "ai_001"})
+			apply("match_add_ai", map[string]any{"seatIndex": lastSeat})
+			assertAI("ai_001", names[0], lastSeat)
+
+			finalRoster := aiRoster()
+			if len(finalRoster) != 2 ||
+				finalRoster["ai_001"].DisplayName == finalRoster["ai_002"].DisplayName {
+				t.Fatalf("final AI roster does not have unique stable identities: %+v", finalRoster)
 			}
 		})
 	}

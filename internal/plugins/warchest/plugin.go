@@ -13,10 +13,12 @@ import (
 
 const (
 	GameType            = "warchest"
-	EngineVersion       = "warchest-v2"
+	EngineVersion       = "warchest-v3"
 	ReplaySchemaVersion = 1
 	defaultMaxPlayers   = 2
 )
+
+var aiNames = []string{"渡鸦"}
 
 const (
 	CommandSetSetupMode = "game_set_setup_mode"

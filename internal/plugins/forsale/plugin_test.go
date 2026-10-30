@@ -47,7 +47,7 @@ func TestPluginPreparationAndPrivateViews(t *testing.T) {
 	if _, ok := playerData["1"].(map[string]any)["coins"]; !ok {
 		t.Fatal("self coins are hidden")
 	}
-	if _, ok := playerData["ai_2"].(map[string]any)["coins"]; ok {
+	if _, ok := playerData["ai_001"].(map[string]any)["coins"]; ok {
 		t.Fatal("opponent coins leaked")
 	}
 	spectatorRaw, err := plugin.BuildSpectatorView(context.Background(), state, 7)

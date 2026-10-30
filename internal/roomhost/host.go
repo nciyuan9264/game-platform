@@ -1241,11 +1241,14 @@ func (r *RoomActor) restoreNextMatchRoster(
 				r.record.OwnerUserID,
 				r.record.OwnerPlayerID,
 				"match_add_ai",
-				map[string]any{"seatIndex": player.SeatIndex},
+				map[string]any{
+					"seatIndex":       player.SeatIndex,
+					"restorePlayerID": player.PlayerID,
+				},
 				commandTime,
 			)
 			if _, err := r.definition.Engine.ApplyCommand(gamelog.WithSink(ctx, gamelog.NopSink{}), state, cmd); err != nil {
-				return fmt.Errorf("restore AI at seat %d: %w", player.SeatIndex, err)
+				return fmt.Errorf("restore AI %s at seat %d: %w", player.PlayerID, player.SeatIndex, err)
 			}
 			continue
 		}

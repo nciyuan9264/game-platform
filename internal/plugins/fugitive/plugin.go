@@ -13,10 +13,12 @@ import (
 
 const (
 	GameType            = "fugitive"
-	EngineVersion       = "fugitive-v3"
+	EngineVersion       = "fugitive-v4"
 	ReplaySchemaVersion = 1
 	defaultMaxPlayers   = 2
 )
+
+var aiNames = []string{"灰狐"}
 
 const (
 	CommandSelectRole     = "match_select_role"

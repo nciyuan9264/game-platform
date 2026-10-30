@@ -14,7 +14,7 @@ import (
 func TestRoundAlternatesSidesAndTransitMarkStarts(t *testing.T) {
 	first := startPreparedMatch(t, 9264, 1)
 	if first.BluePlayerID != "owner" ||
-		first.RedPlayerID != "ai_2" ||
+		first.RedPlayerID != "ai_001" ||
 		len(first.DrawnCardIDs) != 5 {
 		t.Fatalf("round one = %+v", first)
 	}
@@ -24,7 +24,7 @@ func TestRoundAlternatesSidesAndTransitMarkStarts(t *testing.T) {
 		t.Fatalf("first player = %+v, transit = %+v", first, transit)
 	}
 	second := startPreparedMatch(t, 9264, 2)
-	if second.BluePlayerID != "ai_2" ||
+	if second.BluePlayerID != "ai_001" ||
 		second.RedPlayerID != "owner" {
 		t.Fatalf("round two = %+v", second)
 	}
@@ -168,7 +168,7 @@ func TestTimeoutAIAndCodecAreRecoverable(t *testing.T) {
 		t.Fatalf("timeout action = %+v", state.LastAction)
 	}
 	if state.Status == StatusPlaying &&
-		state.CurrentPlayer == "ai_2" {
+		state.CurrentPlayer == "ai_001" {
 		if len(result.AIRequests) != 1 ||
 			result.AIRequests[0].Timeout != aiTimeout {
 			t.Fatalf("AI request = %+v", result.AIRequests)

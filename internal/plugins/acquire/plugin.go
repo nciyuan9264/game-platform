@@ -20,11 +20,13 @@ import (
 
 const (
 	GameType         = "acquire"
-	EngineVersion    = "acquire-v5"
+	EngineVersion    = "acquire-v6"
 	maxNoHumanChecks = 3
 )
 
 const ReplaySchemaVersion = 2
+
+var aiNames = []string{"摩根", "诺兰", "薇拉", "里德", "艾弗里"}
 
 var timeoutByStatus = map[domain.RoomStatus]time.Duration{
 	domain.RoomStatusSetTile:          30 * time.Second,
@@ -84,6 +86,9 @@ func (p *Plugin) Roster(ctx context.Context, state game.State) ([]game.RosterPla
 		displayName := ""
 		if connection.AI {
 			displayName = playerID
+			if name, ok := game.AIName(playerID, aiNames); ok {
+				displayName = name
+			}
 		}
 		players = append(players, game.RosterPlayer{
 			PlayerID:    playerID,
@@ -263,11 +268,9 @@ func (p *Plugin) ApplyCommand(ctx context.Context, state game.State, cmd contrac
 	case "match_begin":
 		err = beginMatch(room, cmd.PlayerID)
 	case "match_add_ai":
-		var request struct {
-			SeatIndex *int `json:"seatIndex"`
-		}
-		if err = json.Unmarshal(payload, &request); err == nil {
-			err = addAI(room, cmd.PlayerID, request.SeatIndex)
+		var request game.AddAIRequest
+		if request, err = game.DecodeAddAIRequest(payload); err == nil {
+			err = addAI(room, cmd.PlayerID, request)
 		}
 	case "match_remove_player":
 		var target struct {
@@ -772,7 +775,7 @@ func setReady(room *domain.Room, playerID string, payload []byte) error {
 	return nil
 }
 
-func addAI(room *domain.Room, actor string, requestedSeat *int) error {
+func addAI(room *domain.Room, actor string, request game.AddAIRequest) error {
 	if actor != room.State.OwnerID {
 		return errors.New("只有房主可以添加 AI")
 	}
@@ -782,13 +785,20 @@ func addAI(room *domain.Room, actor string, requestedSeat *int) error {
 	if len(room.Connections) >= room.State.MaxPlayers {
 		return errors.New("房间已满")
 	}
-	playerID := acquireai.NextAIPlayerID(room)
+	identity, err := game.ResolveAIIdentity(
+		request.RestorePlayerID,
+		func(playerID string) bool { return room.Connections[playerID] != nil },
+		aiNames,
+	)
+	if err != nil {
+		return err
+	}
 	seatIndex := firstAvailableAcquireSeat(room)
-	if requestedSeat != nil {
-		seatIndex = *requestedSeat
+	if request.SeatIndex != nil {
+		seatIndex = *request.SeatIndex
 	}
 	return addAcquirePlayer(room, &roomcore.PlayerConn{
-		PlayerID:  playerID,
+		PlayerID:  identity.PlayerID,
 		Online:    true,
 		Ready:     true,
 		AI:        true,

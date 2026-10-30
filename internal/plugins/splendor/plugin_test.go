@@ -45,7 +45,7 @@ func TestPluginLifecycleAndHistory(t *testing.T) {
 		}
 	}
 	apply("7", "game_ready", nil)
-	apply("ai_2", "game_ready", nil)
+	apply("ai_001", "game_ready", nil)
 	if state.RoomStatus != domain.RoomStatusPlaying || state.CurrentPlayer == "" {
 		t.Fatalf("state = %+v", state)
 	}
@@ -107,10 +107,10 @@ func TestSplendorAIStaysReadyForSingleHumanStart(t *testing.T) {
 	apply("connect")
 	apply("match_add_ai")
 	apply("match_begin")
-	if state.Roster["owner"].Ready || !state.Roster["ai_2"].Ready {
+	if state.Roster["owner"].Ready || !state.Roster["ai_001"].Ready {
 		t.Fatalf("waiting readiness = owner:%v ai:%v",
 			state.Roster["owner"].Ready,
-			state.Roster["ai_2"].Ready,
+			state.Roster["ai_001"].Ready,
 		)
 	}
 	apply("game_ready")
@@ -134,7 +134,7 @@ func TestPluginSnapshotDoesNotExposeHiddenCards(t *testing.T) {
 		{PlayerID: "7", Type: "match_add_ai", Payload: map[string]any{"seatIndex": 1}},
 		{PlayerID: "7", Type: "match_begin"},
 		{PlayerID: "7", Type: "game_ready"},
-		{PlayerID: "ai_2", Type: "game_ready"},
+		{PlayerID: "ai_001", Type: "game_ready"},
 	} {
 		command.SentAt = time.Now().UTC()
 		if _, err := plugin.ApplyCommand(ctx, state, command); err != nil {
@@ -198,7 +198,7 @@ func TestSplendorMetadataAndRecoverableTurnDeadline(t *testing.T) {
 		{PlayerID: "owner", Type: "match_add_ai", Payload: map[string]any{"seatIndex": 1}},
 		{PlayerID: "owner", Type: "match_begin"},
 		{PlayerID: "owner", Type: "game_ready"},
-		{PlayerID: "ai_2", Type: "game_ready", SentAt: sentAt},
+		{PlayerID: "ai_001", Type: "game_ready", SentAt: sentAt},
 	}
 	for _, command := range commands {
 		if _, err := plugin.ApplyCommand(ctx, state, command); err != nil {

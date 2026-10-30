@@ -14,7 +14,7 @@ import (
 
 const (
 	GameType            = "cantstop"
-	EngineVersion       = "cantstop-v3"
+	EngineVersion       = "cantstop-v4"
 	ReplaySchemaVersion = 1
 	defaultMaxPlayers   = 4
 	maxNoHumanChecks    = 3
@@ -625,7 +625,7 @@ func playerViews(
 		}
 		if displayName == "" {
 			if player.AI {
-				displayName = aiName(player.SeatIndex)
+				displayName = aiName(playerID)
 			} else {
 				displayName = fmt.Sprintf("玩家 %s", playerID)
 			}
@@ -707,27 +707,27 @@ func addAI(state *State, actorID string, payload []byte) error {
 		return errors.New("room is full")
 	}
 	seat := firstFreeSeat(state)
-	var value struct {
-		SeatIndex *int `json:"seatIndex"`
+	request, err := game.DecodeAddAIRequest(payload)
+	if err != nil {
+		return errors.New("invalid seat")
 	}
-	if len(payload) > 0 && string(payload) != "null" {
-		if err := json.Unmarshal(payload, &value); err != nil {
-			return errors.New("invalid seat")
-		}
-	}
-	if value.SeatIndex != nil {
-		seat = *value.SeatIndex
+	if request.SeatIndex != nil {
+		seat = *request.SeatIndex
 		if seat < 0 || seat >= state.MaxPlayers || seatOccupied(state, seat) {
 			return errors.New("seat is unavailable")
 		}
 	}
-	playerID := fmt.Sprintf("ai_%d", seat+1)
-	for state.Roster[playerID] != nil {
-		playerID += "_"
+	identity, err := game.ResolveAIIdentity(
+		request.RestorePlayerID,
+		func(playerID string) bool { return state.Roster[playerID] != nil },
+		aiNames,
+	)
+	if err != nil {
+		return err
 	}
-	state.Roster[playerID] = &Player{
-		PlayerID:    playerID,
-		DisplayName: aiName(seat),
+	state.Roster[identity.PlayerID] = &Player{
+		PlayerID:    identity.PlayerID,
+		DisplayName: identity.DisplayName,
 		Online:      true,
 		Ready:       true,
 		GameReady:   true,
@@ -735,7 +735,7 @@ func addAI(state *State, actorID string, payload []byte) error {
 		SeatIndex:   seat,
 		Saved:       map[int]int{},
 	}
-	state.PlayerOrder = append(state.PlayerOrder, playerID)
+	state.PlayerOrder = append(state.PlayerOrder, identity.PlayerID)
 	sortPlayerOrder(state)
 	return nil
 }
@@ -1191,9 +1191,9 @@ func cloneResult(value *Result) any {
 	}
 }
 
-func aiName(seat int) string {
-	if seat >= 0 && seat < len(aiNames) {
-		return aiNames[seat]
+func aiName(playerID string) string {
+	if name, ok := game.AIName(playerID, aiNames); ok {
+		return name
 	}
-	return fmt.Sprintf("AI %d", seat+1)
+	return playerID
 }

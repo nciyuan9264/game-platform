@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/nciyuan9264/game-platform/internal/contracts"
+	"github.com/nciyuan9264/game-platform/internal/game"
 )
 
 func validateState(state *State) error {
@@ -175,13 +176,14 @@ func clonePendingChoice(value *PendingChoice) any {
 	}
 }
 
-func aiName(seat int) string {
-	names := []string{
-		"阿麦", "栗子", "小野", "北北", "松果",
-		"团团", "南风", "阿丘", "豆子", "小满",
+var aiNames = []string{
+	"阿麦", "栗子", "小野", "北北", "松果",
+	"团团", "南风", "阿丘", "豆子", "小满",
+}
+
+func aiName(playerID string) string {
+	if name, ok := game.AIName(playerID, aiNames); ok {
+		return name
 	}
-	if seat >= 0 && seat < len(names) {
-		return names[seat]
-	}
-	return fmt.Sprintf("AI %d", seat+1)
+	return playerID
 }

@@ -173,7 +173,7 @@ func TestHistoryAndReplayExposeAllHandsAfterTheMatch(t *testing.T) {
 		WinnerIDs: []string{"owner"},
 		Favors:    map[string]int{"owner": state.Goal},
 		FinalRank: map[string]int{
-			"owner": 1, "ai_2": 2, "ai_3": 2, "ai_4": 2,
+			"owner": 1, "ai_001": 2, "ai_002": 2, "ai_003": 2,
 		},
 		RoundNo: state.RoundNo,
 		Reason:  "favor",

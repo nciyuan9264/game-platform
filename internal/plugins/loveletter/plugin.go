@@ -14,11 +14,13 @@ import (
 
 const (
 	GameType            = "loveletter"
-	EngineVersion       = "loveletter-v2"
+	EngineVersion       = "loveletter-v3"
 	ReplaySchemaVersion = 1
 	defaultMaxPlayers   = 6
 	maxNoHumanChecks    = 3
 )
+
+var aiNames = []string{"艾琳", "奥利弗", "莉娅", "诺亚", "苏菲", "米娅"}
 
 const (
 	CommandDrawCard         = "game_draw_card"
@@ -671,7 +673,7 @@ func playerViews(
 		}
 		if displayName == "" {
 			if player.AI {
-				displayName = aiName(player.SeatIndex)
+				displayName = aiName(playerID)
 			} else {
 				displayName = fmt.Sprintf("玩家 %s", playerID)
 			}
@@ -745,29 +747,29 @@ func addAI(state *State, actorID string, payload []byte) error {
 		return errors.New("room is full")
 	}
 	seatIndex := firstFreeSeat(state)
-	var value struct {
-		SeatIndex *int `json:"seatIndex"`
+	request, err := game.DecodeAddAIRequest(payload)
+	if err != nil {
+		return errors.New("invalid seat")
 	}
-	if len(payload) > 0 && string(payload) != "null" {
-		if err := json.Unmarshal(payload, &value); err != nil {
-			return errors.New("invalid seat")
-		}
-	}
-	if value.SeatIndex != nil {
-		seatIndex = *value.SeatIndex
+	if request.SeatIndex != nil {
+		seatIndex = *request.SeatIndex
 		if seatIndex < 0 ||
 			seatIndex >= state.MaxPlayers ||
 			seatOccupied(state, seatIndex) {
 			return errors.New("seat is unavailable")
 		}
 	}
-	playerID := fmt.Sprintf("ai_%d", seatIndex+1)
-	for state.Roster[playerID] != nil {
-		playerID += "_"
+	identity, err := game.ResolveAIIdentity(
+		request.RestorePlayerID,
+		func(playerID string) bool { return state.Roster[playerID] != nil },
+		aiNames,
+	)
+	if err != nil {
+		return err
 	}
-	state.Roster[playerID] = &Player{
-		PlayerID:    playerID,
-		DisplayName: aiName(seatIndex),
+	state.Roster[identity.PlayerID] = &Player{
+		PlayerID:    identity.PlayerID,
+		DisplayName: identity.DisplayName,
 		Online:      true,
 		Ready:       true,
 		GameReady:   true,
@@ -777,7 +779,7 @@ func addAI(state *State, actorID string, payload []byte) error {
 		Discards:    []Card{},
 		KnownCards:  map[string]KnownCard{},
 	}
-	state.PlayerOrder = append(state.PlayerOrder, playerID)
+	state.PlayerOrder = append(state.PlayerOrder, identity.PlayerID)
 	sortPlayerOrder(state)
 	return nil
 }
@@ -1037,7 +1039,9 @@ func boolInt(value bool) int {
 	return 0
 }
 
-func aiName(seat int) string {
-	names := []string{"艾琳", "奥利弗", "莉娅", "诺亚", "苏菲", "米娅"}
-	return names[seat%len(names)]
+func aiName(playerID string) string {
+	if name, ok := game.AIName(playerID, aiNames); ok {
+		return name
+	}
+	return playerID
 }

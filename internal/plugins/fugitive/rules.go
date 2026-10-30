@@ -3,11 +3,11 @@ package fugitive
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"sort"
 	"time"
 
 	"github.com/nciyuan9264/game-platform/internal/contracts"
+	"github.com/nciyuan9264/game-platform/internal/game"
 )
 
 const (
@@ -97,29 +97,29 @@ func addAI(state *State, actorID string, payload []byte) error {
 		return errors.New("room is full")
 	}
 	seatIndex := firstFreeSeat(state)
-	var value struct {
-		SeatIndex *int `json:"seatIndex"`
+	request, err := game.DecodeAddAIRequest(payload)
+	if err != nil {
+		return errors.New("invalid seat")
 	}
-	if len(payload) > 0 && string(payload) != "null" {
-		if err := json.Unmarshal(payload, &value); err != nil {
-			return errors.New("invalid seat")
-		}
-	}
-	if value.SeatIndex != nil {
-		seatIndex = *value.SeatIndex
+	if request.SeatIndex != nil {
+		seatIndex = *request.SeatIndex
 		if seatIndex < 0 ||
 			seatIndex >= state.MaxPlayers ||
 			seatOccupied(state, seatIndex) {
 			return errors.New("seat is unavailable")
 		}
 	}
-	playerID := fmt.Sprintf("ai_%d", seatIndex+1)
-	for state.Roster[playerID] != nil {
-		playerID += "_"
+	identity, err := game.ResolveAIIdentity(
+		request.RestorePlayerID,
+		func(playerID string) bool { return state.Roster[playerID] != nil },
+		aiNames,
+	)
+	if err != nil {
+		return err
 	}
-	state.Roster[playerID] = &Player{
-		PlayerID:    playerID,
-		DisplayName: "灰狐",
+	state.Roster[identity.PlayerID] = &Player{
+		PlayerID:    identity.PlayerID,
+		DisplayName: identity.DisplayName,
 		Online:      true,
 		Ready:       true,
 		GameReady:   true,
@@ -127,7 +127,7 @@ func addAI(state *State, actorID string, payload []byte) error {
 		SeatIndex:   seatIndex,
 		Hand:        []Card{},
 	}
-	state.PlayerOrder = append(state.PlayerOrder, playerID)
+	state.PlayerOrder = append(state.PlayerOrder, identity.PlayerID)
 	sortPlayerOrder(state)
 	assignRoles(state)
 	return nil

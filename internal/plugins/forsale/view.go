@@ -184,7 +184,10 @@ func playerViews(
 		}
 		if displayName == "" {
 			if player.AI {
-				displayName = aiNames[player.SeatIndex%len(aiNames)]
+				displayName = playerID
+				if name, ok := game.AIName(playerID, aiNames); ok {
+					displayName = name
+				}
 			} else {
 				displayName = fmt.Sprintf("玩家 %s", playerID)
 			}

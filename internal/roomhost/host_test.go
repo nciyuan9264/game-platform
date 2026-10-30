@@ -1248,6 +1248,139 @@ func TestStartMatchRestoresRosterAcrossGames(t *testing.T) {
 	}
 }
 
+func TestStartMatchPreservesSparseAndReversedAIIdentities(t *testing.T) {
+	scenarios := []struct {
+		name      string
+		removeIDs []string
+	}{
+		{name: "reversed seats"},
+		{name: "sparse ordinal", removeIDs: []string{"ai_001"}},
+	}
+	for _, scenario := range scenarios {
+		t.Run(scenario.name, func(t *testing.T) {
+			const (
+				roomID = "room-ai-identity"
+				owner  = "owner"
+			)
+			definition := acquiregame.Definition()
+			oldState, err := definition.Engine.InitRoom(context.Background(), game.RoomConfig{
+				RoomID: roomID, GameType: definition.GameType,
+				OwnerUserID: owner, OwnerPlayerID: owner,
+				MaxPlayers: 6, RandomSeed: 1,
+				Visibility: contracts.VisibilityPrivate,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			apply := func(command contracts.RoomCommand) {
+				t.Helper()
+				if _, applyErr := definition.Engine.ApplyCommand(
+					gamelog.WithSink(context.Background(), gamelog.NopSink{}),
+					oldState,
+					command,
+				); applyErr != nil {
+					t.Fatalf("%s: %v", command.Type, applyErr)
+				}
+			}
+			apply(contracts.RoomCommand{Type: "connect", PlayerID: owner})
+			apply(contracts.RoomCommand{
+				Type: "match_add_ai", PlayerID: owner,
+				Payload: map[string]any{"seatIndex": 4},
+			})
+			apply(contracts.RoomCommand{
+				Type: "match_add_ai", PlayerID: owner,
+				Payload: map[string]any{"seatIndex": 1},
+			})
+			for _, playerID := range scenario.removeIDs {
+				apply(contracts.RoomCommand{
+					Type: "match_remove_player", PlayerID: owner,
+					Payload: map[string]any{"playerID": playerID},
+				})
+			}
+
+			provider := definition.Engine.(game.RosterProvider)
+			previous, err := provider.Roster(context.Background(), oldState)
+			if err != nil {
+				t.Fatal(err)
+			}
+			expectedAI := map[string]game.RosterPlayer{}
+			for _, player := range previous {
+				if player.IsAI {
+					expectedAI[player.PlayerID] = player
+				}
+			}
+
+			record := contracts.RoomRecord{
+				RoomID: roomID, GameType: definition.GameType,
+				OwnerUserID: owner, OwnerPlayerID: owner,
+				OwnerNode: "roomhost-1", Epoch: 1,
+				Status: contracts.RoomStatusOpen, Visibility: contracts.VisibilityPrivate,
+				MaxPlayers: 6, EngineVersion: definition.Version, CurrentMatchID: roomID + "-r1",
+			}
+			st := &fakeRoomhostStore{
+				room: record,
+				presences: []contracts.PresenceRecord{{
+					RoomID: roomID, UserID: owner, PlayerID: owner, Online: true,
+					ConnectionRef: contracts.ConnectionRef{
+						GatewayNode: "gateway-1", SessionID: "owner-session",
+					},
+				}},
+				match: contracts.MatchRecord{
+					MatchID: roomID + "-r2", RuntimeRoomID: roomID,
+					Status: contracts.MatchStatusPreparing, EngineVersion: definition.Version,
+					RandomSeed: 2, RoundNo: 2,
+				},
+			}
+			host := NewHost(
+				"roomhost-1",
+				st,
+				fakeRoomhostCoordinator{},
+				&fakeRoomhostRouter{},
+				game.NewRegistry(definition),
+			)
+			actor := &RoomActor{
+				host: host, record: record, definition: definition, state: oldState,
+				match: contracts.MatchRecord{
+					MatchID: roomID + "-r1", RuntimeRoomID: roomID,
+					Status: contracts.MatchStatusEnded, EngineVersion: definition.Version, RandomSeed: 1,
+				},
+				processed: map[string]contracts.CommandAck{},
+			}
+			actor.ctx, actor.cancel = context.WithCancel(context.Background())
+			t.Cleanup(actor.cancel)
+
+			if err := actor.StartMatch(context.Background(), roomID+"-r2"); err != nil {
+				t.Fatal(err)
+			}
+			restored, err := provider.Roster(context.Background(), actor.state)
+			if err != nil {
+				t.Fatal(err)
+			}
+			restoredAI := map[string]game.RosterPlayer{}
+			for _, player := range restored {
+				if player.IsAI {
+					restoredAI[player.PlayerID] = player
+				}
+			}
+			if len(restoredAI) != len(expectedAI) {
+				t.Fatalf("restored AI roster = %+v, want %+v", restoredAI, expectedAI)
+			}
+			for playerID, expected := range expectedAI {
+				actual, ok := restoredAI[playerID]
+				if !ok {
+					t.Fatalf("restored AI %s is missing: %+v", playerID, restoredAI)
+				}
+				if actual.SeatIndex != expected.SeatIndex ||
+					actual.DisplayName != expected.DisplayName ||
+					!actual.Ready ||
+					!actual.Online {
+					t.Fatalf("restored AI %s = %+v, want identity %+v", playerID, actual, expected)
+				}
+			}
+		})
+	}
+}
+
 func TestHostShutdownSnapshotsAndReleasesRooms(t *testing.T) {
 	st := &fakeRoomhostStore{matchPlayers: []contracts.MatchPlayerRecord{{
 		PlayerID:    "ai_001",

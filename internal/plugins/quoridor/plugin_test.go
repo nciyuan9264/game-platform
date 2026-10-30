@@ -14,21 +14,21 @@ import (
 func TestRoundAssignmentUsesSeedAndAlternatesBothPolicies(t *testing.T) {
 	first := startPreparedMatch(t, 40, 1)
 	if first.SouthPlayerID != "owner" ||
-		first.NorthPlayerID != "ai_2" ||
+		first.NorthPlayerID != "ai_001" ||
 		first.FirstPlayerID != "owner" ||
 		first.CurrentPlayer != "owner" {
 		t.Fatalf("round one assignment = %+v", first)
 	}
 	second := startPreparedMatch(t, 40, 2)
-	if second.SouthPlayerID != "ai_2" ||
+	if second.SouthPlayerID != "ai_001" ||
 		second.NorthPlayerID != "owner" ||
-		second.FirstPlayerID != "ai_2" ||
-		second.CurrentPlayer != "ai_2" {
+		second.FirstPlayerID != "ai_001" ||
+		second.CurrentPlayer != "ai_001" {
 		t.Fatalf("round two assignment = %+v", second)
 	}
 	independent := startPreparedMatch(t, 42, 1)
 	if independent.SouthPlayerID != "owner" ||
-		independent.FirstPlayerID != "ai_2" {
+		independent.FirstPlayerID != "ai_001" {
 		t.Fatalf("independent bits assignment = %+v", independent)
 	}
 }
@@ -73,7 +73,7 @@ func TestViewsExposeActionsOnlyToCurrentPlayer(t *testing.T) {
 	nonCurrentAny, err := plugin.BuildPlayerView(
 		context.Background(),
 		state,
-		game.ViewRequest{PlayerID: "ai_2"},
+		game.ViewRequest{PlayerID: "ai_001"},
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -108,7 +108,7 @@ func TestRejectedCommandDoesNotMutateState(t *testing.T) {
 	for _, command := range []contracts.RoomCommand{
 		{
 			Type:     CommandMovePawn,
-			PlayerID: "ai_2",
+			PlayerID: "ai_001",
 			Payload: map[string]any{
 				"to": map[string]any{"row": 7, "column": 4},
 			},
@@ -195,7 +195,7 @@ func TestHumanTimeoutAndAIRequestAreRecoverable(t *testing.T) {
 		t.Fatalf("timeout action = %+v", state.LastAction)
 	}
 	if len(result.AIRequests) != 1 ||
-		result.AIRequests[0].PlayerID != "ai_2" ||
+		result.AIRequests[0].PlayerID != "ai_001" ||
 		result.AIRequests[0].Delay < aiMinDelay ||
 		result.AIRequests[0].Delay > aiMaxDelay ||
 		result.AIRequests[0].Timeout != aiTimeout {
@@ -218,7 +218,7 @@ func TestHumanTimeoutAndAIRequestAreRecoverable(t *testing.T) {
 	}
 	if state.LastAction == nil ||
 		!state.LastAction.Automatic ||
-		state.LastAction.PlayerID != "ai_2" {
+		state.LastAction.PlayerID != "ai_001" {
 		t.Fatalf("AI action = %+v", state.LastAction)
 	}
 }

@@ -14,7 +14,7 @@ import (
 
 const (
 	GameType            = "forsale"
-	EngineVersion       = "forsale-v2"
+	EngineVersion       = "forsale-v3"
 	ReplaySchemaVersion = 1
 	defaultMaxPlayers   = 6
 	maxNoHumanChecks    = 3
@@ -658,31 +658,30 @@ func addAI(state *State, actorID, actorUserID string, payload []byte) error {
 		return errors.New("room is full")
 	}
 	seat := firstFreeSeat(state)
-	var value struct {
-		SeatIndex *int `json:"seatIndex"`
+	request, err := game.DecodeAddAIRequest(payload)
+	if err != nil {
+		return errors.New("invalid seat")
 	}
-	if len(payload) > 0 && string(payload) != "null" {
-		if err := json.Unmarshal(payload, &value); err != nil {
-			return errors.New("invalid seat")
-		}
-	}
-	if value.SeatIndex != nil {
-		seat = *value.SeatIndex
+	if request.SeatIndex != nil {
+		seat = *request.SeatIndex
 		if seat < 0 || seat >= state.MaxPlayers || seatOccupied(state, seat) {
 			return errors.New("seat is unavailable")
 		}
 	}
-	playerID := fmt.Sprintf("ai_%d", seat+1)
-	for state.Roster[playerID] != nil {
-		playerID += "_"
+	identity, err := game.ResolveAIIdentity(
+		request.RestorePlayerID,
+		func(playerID string) bool { return state.Roster[playerID] != nil },
+		aiNames,
+	)
+	if err != nil {
+		return err
 	}
-	name := aiNames[seat%len(aiNames)]
-	state.Roster[playerID] = &Player{
-		PlayerID: playerID, DisplayName: name, Online: true,
+	state.Roster[identity.PlayerID] = &Player{
+		PlayerID: identity.PlayerID, DisplayName: identity.DisplayName, Online: true,
 		Ready: true, GameReady: true, AI: true, SeatIndex: seat,
 		Properties: []int{}, Cheques: []int{},
 	}
-	state.PlayerOrder = append(state.PlayerOrder, playerID)
+	state.PlayerOrder = append(state.PlayerOrder, identity.PlayerID)
 	sortPlayerOrder(state)
 	return nil
 }

@@ -12,14 +12,14 @@ import (
 func TestRoundAlternatesColorsAndBuildsAuthoritativeView(t *testing.T) {
 	first := startPreparedMatch(t, 1)
 	if first.BlackPlayerID != "owner" ||
-		first.WhitePlayerID != "ai_2" ||
+		first.WhitePlayerID != "ai_001" ||
 		first.CurrentPlayer != "owner" {
 		t.Fatalf("round one colors = %+v", first)
 	}
 	second := startPreparedMatch(t, 2)
-	if second.BlackPlayerID != "ai_2" ||
+	if second.BlackPlayerID != "ai_001" ||
 		second.WhitePlayerID != "owner" ||
-		second.CurrentPlayer != "ai_2" {
+		second.CurrentPlayer != "ai_001" {
 		t.Fatalf("round two colors = %+v", second)
 	}
 
@@ -108,7 +108,7 @@ func TestHumanTimeoutAndAIRequestAreRecoverable(t *testing.T) {
 		t.Fatalf("timeout action = %+v", state.LastAction)
 	}
 	if len(result.AIRequests) != 1 ||
-		result.AIRequests[0].PlayerID != "ai_2" ||
+		result.AIRequests[0].PlayerID != "ai_001" ||
 		result.AIRequests[0].Delay < aiMinDelay ||
 		result.AIRequests[0].Delay > aiMaxDelay {
 		t.Fatalf("AI request = %+v", result.AIRequests)
@@ -130,7 +130,7 @@ func TestHumanTimeoutAndAIRequestAreRecoverable(t *testing.T) {
 	}
 	if state.LastAction == nil ||
 		!state.LastAction.Automatic ||
-		state.LastAction.PlayerID != "ai_2" {
+		state.LastAction.PlayerID != "ai_001" {
 		t.Fatalf("AI action = %+v", state.LastAction)
 	}
 

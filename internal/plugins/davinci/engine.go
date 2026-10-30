@@ -90,7 +90,9 @@ type Engine struct{}
 
 func NewEngine() *Engine { return &Engine{} }
 
-const EngineVersion = "davinci-v8"
+const EngineVersion = "davinci-v9"
+
+var aiNames = []string{"谜钥"}
 
 func Definition() game.Definition {
 	plugin := NewPlugin()
@@ -139,6 +141,9 @@ func (p *Plugin) Roster(ctx context.Context, state game.State) ([]game.RosterPla
 		displayName := ""
 		if player.AI {
 			displayName = playerID
+			if name, ok := game.AIName(playerID, aiNames); ok {
+				displayName = name
+			}
 		}
 		players = append(players, game.RosterPlayer{
 			PlayerID:    playerID,
@@ -415,8 +420,15 @@ func (e *Engine) ApplyCommand(ctx context.Context, state *State, cmd contracts.R
 		}
 		return Result{}, e.ready(state, cmd.PlayerID, ready)
 	case CommandAddAI:
-		seatIndex, hasSeat := payloadInt(cmd.Payload, "seatIndex")
-		return Result{}, e.addAI(state, cmd.PlayerID, optionalInt(seatIndex, hasSeat))
+		payload, err := json.Marshal(cmd.Payload)
+		if err != nil {
+			return Result{}, err
+		}
+		request, err := game.DecodeAddAIRequest(payload)
+		if err != nil {
+			return Result{}, err
+		}
+		return Result{}, e.addAI(state, cmd.PlayerID, request)
 	case CommandRemove:
 		targetPlayerID, ok := payloadString(cmd.Payload, "playerID")
 		if !ok {
@@ -511,7 +523,7 @@ func (e *Engine) ready(state *State, playerID string, ready bool) error {
 	return errors.New("player not found")
 }
 
-func (e *Engine) addAI(state *State, actor string, requestedSeat *int) error {
+func (e *Engine) addAI(state *State, actor string, request game.AddAIRequest) error {
 	if actor != state.OwnerID {
 		return errors.New("only the room owner can add AI players")
 	}
@@ -522,21 +534,28 @@ func (e *Engine) addAI(state *State, actor string, requestedSeat *int) error {
 		return errors.New("room full")
 	}
 	seatIndex := firstAvailableSeat(state)
-	if requestedSeat != nil {
-		if *requestedSeat < 0 || *requestedSeat >= state.MaxPlayers || seatOccupied(state, *requestedSeat) {
+	if request.SeatIndex != nil {
+		if *request.SeatIndex < 0 || *request.SeatIndex >= state.MaxPlayers || seatOccupied(state, *request.SeatIndex) {
 			return errors.New("invalid or occupied seat")
 		}
-		seatIndex = *requestedSeat
+		seatIndex = *request.SeatIndex
 	}
-	id := fmt.Sprintf("AI_%d", len(state.Players)+1)
-	state.Players[id] = &Player{
-		PlayerID:  id,
+	identity, err := game.ResolveAIIdentity(
+		request.RestorePlayerID,
+		func(playerID string) bool { return state.Players[playerID] != nil },
+		aiNames,
+	)
+	if err != nil {
+		return err
+	}
+	state.Players[identity.PlayerID] = &Player{
+		PlayerID:  identity.PlayerID,
 		Online:    true,
 		Ready:     true,
 		AI:        true,
 		SeatIndex: seatIndex,
 	}
-	state.PlayerSeq = append(state.PlayerSeq, id)
+	state.PlayerSeq = append(state.PlayerSeq, identity.PlayerID)
 	sortPlayersBySeat(state)
 	return nil
 }
@@ -996,6 +1015,11 @@ func (e *Engine) BuildMatchSync(state *State, req game.ViewRequest) contracts.Ma
 	players := map[string]contracts.RoomPlayer{}
 	for id, p := range state.Players {
 		profile := req.PlayerProfile(id)
+		if p.AI {
+			if name, ok := game.AIName(id, aiNames); ok {
+				profile.DisplayName = name
+			}
+		}
 		players[id] = contracts.RoomPlayer{
 			UserID:      profile.UserID,
 			PlayerID:    id,
@@ -1020,6 +1044,11 @@ func (e *Engine) BuildRoomSync(state *State, req game.ViewRequest) contracts.Roo
 	}
 	for id, p := range state.Players {
 		profile := req.PlayerProfile(id)
+		if p.AI {
+			if name, ok := game.AIName(id, aiNames); ok {
+				profile.DisplayName = name
+			}
+		}
 		players[id] = contracts.RoomPlayer{
 			UserID:      profile.UserID,
 			PlayerID:    id,
@@ -1250,13 +1279,6 @@ func turnDeadlineValue(deadline time.Time) any {
 		return nil
 	}
 	return deadline.UTC().Format(time.RFC3339Nano)
-}
-
-func optionalInt(value int, ok bool) *int {
-	if !ok {
-		return nil
-	}
-	return &value
 }
 
 func normalizeSeats(state *State) {

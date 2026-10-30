@@ -14,14 +14,14 @@ import (
 func TestRoundAssignmentAlternatesWhiteSeat(t *testing.T) {
 	first := startPreparedMatch(t, 40, 1)
 	if first.WhitePlayerID != "owner" ||
-		first.BlackPlayerID != "ai_2" ||
+		first.BlackPlayerID != "ai_001" ||
 		first.FirstPlayerID != "owner" {
 		t.Fatalf("round one = %+v", first)
 	}
 	second := startPreparedMatch(t, 40, 2)
-	if second.WhitePlayerID != "ai_2" ||
+	if second.WhitePlayerID != "ai_001" ||
 		second.BlackPlayerID != "owner" ||
-		second.FirstPlayerID != "ai_2" {
+		second.FirstPlayerID != "ai_001" {
 		t.Fatalf("round two = %+v", second)
 	}
 }
@@ -51,7 +51,7 @@ func TestViewsExposeLegalActionsOnlyToCurrentPlayer(t *testing.T) {
 	nonCurrentAny, err := plugin.BuildPlayerView(
 		context.Background(),
 		state,
-		game.ViewRequest{PlayerID: "ai_2"},
+		game.ViewRequest{PlayerID: "ai_001"},
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -83,7 +83,7 @@ func TestRejectedCommandsDoNotMutateState(t *testing.T) {
 	commands := []contracts.RoomCommand{
 		{
 			Type:     CommandPlacePiece,
-			PlayerID: "ai_2",
+			PlayerID: "ai_001",
 			Payload: map[string]any{
 				"pieceID": "bA1",
 				"to":      Hex{},
@@ -170,7 +170,7 @@ func TestHumanTimeoutAndAIRequest(t *testing.T) {
 		t.Fatalf("timeout action = %+v", state.LastAction)
 	}
 	if len(result.AIRequests) != 1 ||
-		result.AIRequests[0].PlayerID != "ai_2" {
+		result.AIRequests[0].PlayerID != "ai_001" {
 		t.Fatalf("AI request = %+v", result.AIRequests)
 	}
 }

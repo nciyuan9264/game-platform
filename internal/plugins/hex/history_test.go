@@ -41,7 +41,7 @@ func TestSwapHistoryUsesFinalSides(t *testing.T) {
 	if err := placeStone(state, "owner", Cell{Row: 5, Column: 5}, false); err != nil {
 		t.Fatal(err)
 	}
-	if err := swapSides(state, "ai_2", true); err != nil {
+	if err := swapSides(state, "ai_001", true); err != nil {
 		t.Fatal(err)
 	}
 	if err := resign(state, "owner"); err != nil {
@@ -51,7 +51,7 @@ func TestSwapHistoryUsesFinalSides(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !projection.Finished || projection.WinnerPlayerID != "ai_2" ||
+	if !projection.Finished || projection.WinnerPlayerID != "ai_001" ||
 		projection.Players[0].GameRole != string(SideTeal) ||
 		projection.Players[1].GameRole != string(SideRed) {
 		t.Fatalf("projection = %+v", projection)

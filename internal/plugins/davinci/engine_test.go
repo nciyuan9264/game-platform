@@ -270,7 +270,7 @@ func TestDavinciRequestedSeatRemovePlayerAndRoster(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if state.Players["AI_3"] == nil || state.Players["AI_3"].SeatIndex != 3 {
+	if state.Players["ai_001"] == nil || state.Players["ai_001"].SeatIndex != 3 {
 		t.Fatalf("requested AI seat not retained: %+v", state.Players)
 	}
 	if _, err := engine.ApplyCommand(context.Background(), state, contracts.RoomCommand{

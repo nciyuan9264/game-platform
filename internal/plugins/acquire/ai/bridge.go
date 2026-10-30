@@ -12,7 +12,3 @@ func DecideCommand(room *domain.Room, playerID string) (string, []byte, bool) {
 func CloneRoom(room *domain.Room) *domain.Room {
 	return cloneRoomForAISimulation(room)
 }
-
-func NextAIPlayerID(room *domain.Room) string {
-	return genAIPlayerID(room)
-}

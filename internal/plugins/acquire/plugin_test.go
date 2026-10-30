@@ -301,8 +301,8 @@ func TestRosterRemainsStableAcrossReconnectAndIncludesAI(t *testing.T) {
 	if aiCount != 1 {
 		t.Fatalf("AI count = %d, want 1: %+v", aiCount, roster)
 	}
-	if aiDisplayName != "ai_001" {
-		t.Fatalf("AI display name = %q, want ai_001: %+v", aiDisplayName, roster)
+	if aiDisplayName != "摩根" {
+		t.Fatalf("AI display name = %q, want 摩根: %+v", aiDisplayName, roster)
 	}
 }
 

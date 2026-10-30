@@ -17,7 +17,7 @@ func TestRoundAssignmentAndViews(t *testing.T) {
 		t.Fatalf("round one assignment = %+v", first)
 	}
 	second := startPreparedMatch(t, 40, 2)
-	if second.RedPlayerID != "ai_2" || second.CurrentPlayer != "ai_2" {
+	if second.RedPlayerID != "ai_001" || second.CurrentPlayer != "ai_001" {
 		t.Fatalf("round two assignment = %+v", second)
 	}
 
@@ -55,7 +55,7 @@ func TestRejectedCommandsAreAtomic(t *testing.T) {
 	}
 	for _, command := range []contracts.RoomCommand{
 		{
-			Type: CommandPlaceStone, PlayerID: "ai_2",
+			Type: CommandPlaceStone, PlayerID: "ai_001",
 			Payload: map[string]any{"cell": Cell{Row: 5, Column: 5}},
 		},
 		{
