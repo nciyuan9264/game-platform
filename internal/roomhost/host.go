@@ -48,6 +48,7 @@ type storeClient interface {
 	MarkRoomOwnerReady(context.Context, string, string, int64, time.Time) error
 	RenewRoomOwnerProjection(context.Context, string, string, int64, time.Time) error
 	GetSession(context.Context, string) (contracts.SessionRecord, error)
+	IsPlayerSessionCurrent(context.Context, string, string, contracts.ConnectionRef) (bool, bool, error)
 	ListPresence(context.Context, string) ([]contracts.PresenceRecord, error)
 	LatestSnapshot(context.Context, string) (contracts.SnapshotRecord, error)
 	SaveSnapshot(context.Context, contracts.SnapshotRecord) error
@@ -384,6 +385,20 @@ func (h *Host) validateGatewayCommand(ctx context.Context, cmd contracts.RoomCom
 	if cmd.UserID == "" || cmd.PlayerID != cmd.UserID ||
 		session.UserID == "" || session.PlayerID != session.UserID {
 		return errors.New("human player ID must equal authenticated user ID")
+	}
+	if cmd.Type != "connect" && cmd.Type != "disconnect" {
+		current, found, err := h.store.IsPlayerSessionCurrent(
+			ctx,
+			cmd.RoomID,
+			cmd.PlayerID,
+			cmd.ConnectionRef,
+		)
+		if err != nil {
+			return fmt.Errorf("validate active player session: %w", err)
+		}
+		if !found || !current {
+			return errors.New("gateway session is not the active player controller")
+		}
 	}
 	return nil
 }

@@ -120,6 +120,54 @@ func (s *Store) SetSession(ctx context.Context, rec contracts.SessionRecord, ttl
 	return s.Redis.SetSession(ctx, rec, ttl)
 }
 
+func (s *Store) ClaimPlayerSession(
+	ctx context.Context,
+	roomID,
+	playerID string,
+	ref contracts.ConnectionRef,
+	ttl time.Duration,
+) (contracts.ConnectionRef, error) {
+	return s.Redis.ClaimPlayerSession(ctx, roomID, playerID, ref, ttl)
+}
+
+func (s *Store) RefreshPlayerSession(
+	ctx context.Context,
+	roomID,
+	playerID string,
+	ref contracts.ConnectionRef,
+	ttl time.Duration,
+) (bool, error) {
+	return s.Redis.RefreshPlayerSession(ctx, roomID, playerID, ref, ttl)
+}
+
+func (s *Store) IsPlayerSessionCurrent(
+	ctx context.Context,
+	roomID,
+	playerID string,
+	ref contracts.ConnectionRef,
+) (current bool, found bool, err error) {
+	return s.Redis.IsPlayerSessionCurrent(ctx, roomID, playerID, ref)
+}
+
+func (s *Store) ReleasePlayerSession(
+	ctx context.Context,
+	roomID,
+	playerID string,
+	ref contracts.ConnectionRef,
+) (bool, error) {
+	return s.Redis.ReleasePlayerSession(ctx, roomID, playerID, ref)
+}
+
+func (s *Store) ClaimPlayerDisconnect(
+	ctx context.Context,
+	roomID,
+	playerID string,
+	ref contracts.ConnectionRef,
+	ttl time.Duration,
+) (bool, error) {
+	return s.Redis.ClaimPlayerDisconnect(ctx, roomID, playerID, ref, ttl)
+}
+
 func (s *Store) GetSession(ctx context.Context, sessionID string) (contracts.SessionRecord, error) {
 	return s.Redis.GetSession(ctx, sessionID)
 }

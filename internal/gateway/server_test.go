@@ -89,6 +89,87 @@ func TestDisconnectMatchesCurrentRoute(t *testing.T) {
 	}
 }
 
+func TestHasOnlinePlayerPresenceIsScopedByRoomAndPlayer(t *testing.T) {
+	presences := []contracts.PresenceRecord{
+		{RoomID: "room-1", PlayerID: "player-1", Online: false},
+		{RoomID: "room-1", PlayerID: "player-2", Online: true},
+		{RoomID: "room-2", PlayerID: "player-1", Online: true},
+	}
+	if hasOnlinePlayerPresence(presences, "room-1", "player-1") {
+		t.Fatal("presence from another room or player was treated as the same player")
+	}
+	presences = append(presences, contracts.PresenceRecord{
+		RoomID: "room-1", PlayerID: "player-1", Online: true,
+	})
+	if !hasOnlinePlayerPresence(presences, "room-1", "player-1") {
+		t.Fatal("online presence for the same room and player was not found")
+	}
+}
+
+func TestHasOnlinePlayerPresenceProtectsAggregateDisconnect(t *testing.T) {
+	online := []contracts.PresenceRecord{{
+		RoomID: "room-1", PlayerID: "player-1", Online: true,
+	}}
+	if !hasOnlinePlayerPresence(online, "room-1", "player-1") {
+		t.Fatal("player was disconnected while another presence was online")
+	}
+	if hasOnlinePlayerPresence(nil, "room-1", "player-1") {
+		t.Fatal("last active session did not disconnect the player")
+	}
+}
+
+func TestIdentityConflictErrorIsSharedAcrossAllGames(t *testing.T) {
+	gameTypes := []string{
+		contracts.GameAcquire,
+		contracts.GameCantStop,
+		contracts.GameDaVinci,
+		contracts.GameForSale,
+		contracts.GameFugitive,
+		contracts.GameHex,
+		contracts.GameHive,
+		contracts.GameLoveLetter,
+		contracts.GameOnitama,
+		contracts.GameOthello,
+		contracts.GameQuoridor,
+		contracts.GameSixNimmt,
+		contracts.GameSplendor,
+		contracts.GameWarChest,
+		contracts.GameYinsh,
+	}
+	for _, gameType := range gameTypes {
+		t.Run(gameType, func(t *testing.T) {
+			rec := contracts.RoomRecord{
+				RoomID:         "room-1",
+				CurrentMatchID: "match-1",
+				GameType:       gameType,
+				LastAppliedSeq: 42,
+			}
+			message := identityConflictError(rec)
+			if message.Code != identityConflictCode ||
+				message.Message != identityConflictMessage ||
+				message.Type != contracts.MessageTypeError ||
+				message.RoomID != rec.RoomID ||
+				message.MatchID != rec.CurrentMatchID ||
+				message.Seq != rec.LastAppliedSeq {
+				t.Fatalf("identity conflict message = %+v", message)
+			}
+			previous := contracts.ConnectionRef{GatewayNode: "gateway-a", SessionID: "session-a"}
+			replacement := playerSessionReplacementMessage(rec, contracts.SessionRecord{
+				ConnectionRef: contracts.ConnectionRef{GatewayNode: "gateway-b", SessionID: "session-b"},
+				UserID:        "7",
+				PlayerID:      "7",
+			}, previous)
+			if replacement.TargetConn != previous || !replacement.CloseAfter {
+				t.Fatalf("replacement delivery = %+v", replacement)
+			}
+			payload, ok := replacement.Payload.(contracts.ErrorMessage)
+			if !ok || payload.Code != identityConflictCode {
+				t.Fatalf("replacement payload = %#v", replacement.Payload)
+			}
+		})
+	}
+}
+
 func TestReadyRouteOverridesPostgresProjection(t *testing.T) {
 	server := &Server{owners: fakeOwnerResolver{owner: coordination.RoomOwner{
 		RoomID:    "room-1",
@@ -128,6 +209,8 @@ func TestClientCommandTypeAllowed(t *testing.T) {
 		want        bool
 	}{
 		{commandType: "game_ready", want: true},
+		{commandType: "connect", want: false},
+		{commandType: "disconnect", want: false},
 		{commandType: "runtime_room_close", want: false},
 		{commandType: "runtime_room_create", want: false},
 		{commandType: "runtime_unknown", want: false},

@@ -32,6 +32,36 @@ local ttl = redis.call("PTTL", KEYS[1])
 return {current, ttl}
 `)
 
+var claimPlayerSessionScript = redis.NewScript(`
+local previous = redis.call("GET", KEYS[1])
+redis.call("SET", KEYS[1], ARGV[1], "PX", ARGV[2])
+return previous or ""
+`)
+
+var refreshPlayerSessionScript = redis.NewScript(`
+if redis.call("GET", KEYS[1]) == ARGV[1] then
+	redis.call("PEXPIRE", KEYS[1], ARGV[2])
+	return 1
+end
+return 0
+`)
+
+var releasePlayerSessionScript = redis.NewScript(`
+if redis.call("GET", KEYS[1]) == ARGV[1] then
+	return redis.call("DEL", KEYS[1])
+end
+return 0
+`)
+
+var claimPlayerDisconnectScript = redis.NewScript(`
+local current = redis.call("GET", KEYS[1])
+if not current or current == ARGV[1] then
+	redis.call("SET", KEYS[1], ARGV[2], "PX", ARGV[3])
+	return 1
+end
+return 0
+`)
+
 func NewRedisStore(addr string, db int) *RedisStore {
 	return NewRedisStoreWithPassword(addr, "", db)
 }
@@ -144,6 +174,150 @@ func (s *RedisStore) SetSession(ctx context.Context, rec contracts.SessionRecord
 	rec.LastSeen = time.Now().UTC()
 	key := fmt.Sprintf("session:%s", rec.SessionID)
 	return s.setIndexedJSON(ctx, key, rec, ttl, sessionIndexKey, gatewaySessionIndex(rec.GatewayNode))
+}
+
+func (s *RedisStore) ClaimPlayerSession(
+	ctx context.Context,
+	roomID,
+	playerID string,
+	ref contracts.ConnectionRef,
+	ttl time.Duration,
+) (contracts.ConnectionRef, error) {
+	if ttl <= 0 {
+		return contracts.ConnectionRef{}, errors.New("player session ttl must be positive")
+	}
+	value, err := playerSessionValue(roomID, playerID, ref)
+	if err != nil {
+		return contracts.ConnectionRef{}, err
+	}
+	result, err := claimPlayerSessionScript.Run(
+		ctx,
+		s.client,
+		[]string{playerSessionKey(roomID, playerID)},
+		value,
+		ttl.Milliseconds(),
+	).Text()
+	if err != nil {
+		return contracts.ConnectionRef{}, err
+	}
+	if result == "" {
+		return contracts.ConnectionRef{}, nil
+	}
+	var previous contracts.ConnectionRef
+	if err := json.Unmarshal([]byte(result), &previous); err != nil {
+		return contracts.ConnectionRef{}, fmt.Errorf("decode previous player session: %w", err)
+	}
+	return previous, nil
+}
+
+func (s *RedisStore) RefreshPlayerSession(
+	ctx context.Context,
+	roomID,
+	playerID string,
+	ref contracts.ConnectionRef,
+	ttl time.Duration,
+) (bool, error) {
+	if ttl <= 0 {
+		return false, errors.New("player session ttl must be positive")
+	}
+	value, err := playerSessionValue(roomID, playerID, ref)
+	if err != nil {
+		return false, err
+	}
+	result, err := refreshPlayerSessionScript.Run(
+		ctx,
+		s.client,
+		[]string{playerSessionKey(roomID, playerID)},
+		value,
+		ttl.Milliseconds(),
+	).Int()
+	return result == 1, err
+}
+
+func (s *RedisStore) IsPlayerSessionCurrent(
+	ctx context.Context,
+	roomID,
+	playerID string,
+	ref contracts.ConnectionRef,
+) (current bool, found bool, err error) {
+	if roomID == "" || playerID == "" || !ref.Valid() {
+		return false, false, errors.New("roomID, playerID, and connection reference are required")
+	}
+	value, err := s.client.Get(ctx, playerSessionKey(roomID, playerID)).Bytes()
+	if errors.Is(err, redis.Nil) {
+		return false, false, nil
+	}
+	if err != nil {
+		return false, false, err
+	}
+	var active contracts.ConnectionRef
+	if err := json.Unmarshal(value, &active); err != nil {
+		return false, true, fmt.Errorf("decode active player session: %w", err)
+	}
+	return active == ref, true, nil
+}
+
+func (s *RedisStore) ReleasePlayerSession(
+	ctx context.Context,
+	roomID,
+	playerID string,
+	ref contracts.ConnectionRef,
+) (bool, error) {
+	value, err := playerSessionValue(roomID, playerID, ref)
+	if err != nil {
+		return false, err
+	}
+	result, err := releasePlayerSessionScript.Run(
+		ctx,
+		s.client,
+		[]string{playerSessionKey(roomID, playerID)},
+		value,
+	).Int()
+	return result == 1, err
+}
+
+func (s *RedisStore) ClaimPlayerDisconnect(
+	ctx context.Context,
+	roomID,
+	playerID string,
+	ref contracts.ConnectionRef,
+	ttl time.Duration,
+) (bool, error) {
+	if ttl <= 0 {
+		return false, errors.New("player disconnect claim ttl must be positive")
+	}
+	value, err := playerSessionValue(roomID, playerID, ref)
+	if err != nil {
+		return false, err
+	}
+	tombstone, err := json.Marshal(contracts.ConnectionRef{SessionID: "disconnect"})
+	if err != nil {
+		return false, err
+	}
+	result, err := claimPlayerDisconnectScript.Run(
+		ctx,
+		s.client,
+		[]string{playerSessionKey(roomID, playerID)},
+		value,
+		tombstone,
+		ttl.Milliseconds(),
+	).Int()
+	return result == 1, err
+}
+
+func playerSessionKey(roomID, playerID string) string {
+	return fmt.Sprintf("active-player-session:%s:%s", roomID, playerID)
+}
+
+func playerSessionValue(
+	roomID,
+	playerID string,
+	ref contracts.ConnectionRef,
+) ([]byte, error) {
+	if roomID == "" || playerID == "" || !ref.Valid() {
+		return nil, errors.New("roomID, playerID, and connection reference are required")
+	}
+	return json.Marshal(ref)
 }
 
 func (s *RedisStore) GetSession(ctx context.Context, sessionID string) (contracts.SessionRecord, error) {

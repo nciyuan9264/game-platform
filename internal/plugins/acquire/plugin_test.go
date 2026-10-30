@@ -439,6 +439,75 @@ func TestPluginSerializesMergeSettlementByTurnOrder(t *testing.T) {
 	}
 }
 
+func TestPluginDisconnectAutoSettlesOnlyCurrentOfflineMergeHolder(t *testing.T) {
+	ctx := context.Background()
+	plugin := &Plugin{}
+	state, err := plugin.InitRoom(ctx, game.RoomConfig{
+		RoomID:        "acquire-disconnected-merge-holder",
+		OwnerPlayerID: "alice",
+		MaxPlayers:    2,
+		RandomSeed:    testRandomSeed,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	room, err := asRoom(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	room.Connections["alice"] = &domain.PlayerConn{PlayerID: "alice", Online: true, SeatIndex: 0}
+	room.Connections["bob"] = &domain.PlayerConn{PlayerID: "bob", Online: true, SeatIndex: 1}
+	room.PlayerSeq = []string{"alice", "bob"}
+	room.State.CurrentPlayer = "alice"
+	room.State.RoomStatus = domain.RoomStatusMergingSettle
+	room.State.MergeMainCompany = "Tower"
+	room.State.MergeSettleData = map[string]domain.SettleData{
+		"Sackson": {
+			Hoders:    []string{"alice", "bob"},
+			Dividends: map[string]int{},
+			Settled:   map[string]domain.MergingSettleResult{},
+		},
+	}
+	room.State.Companies["Tower"] = &domain.CompanyState{
+		Name: "Tower", Tiles: 6, StockTotal: 24, StockPrice: 600,
+	}
+	room.State.Companies["Sackson"] = &domain.CompanyState{
+		Name: "Sackson", Tiles: 4, StockTotal: 22, StockPrice: 400,
+	}
+	room.State.Players = map[string]*domain.PlayerState{
+		"alice": {Money: 6000, Stocks: map[string]int{"Sackson": 2, "Tower": 0}},
+		"bob":   {Money: 6000, Stocks: map[string]int{"Sackson": 1, "Tower": 0}},
+	}
+
+	if _, err := plugin.ApplyCommand(ctx, state, contracts.RoomCommand{
+		PlayerID: "alice",
+		Type:     "disconnect",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	settlement := room.State.MergeSettleData["Sackson"]
+	receipt, settled := settlement.Settled["alice"]
+	if !settled {
+		t.Fatalf("disconnected holder has no settlement receipt: %+v", settlement)
+	}
+	if receipt.HoldingBefore != 2 {
+		t.Fatalf("settlement receipt = %+v, want holdingBefore 2", receipt)
+	}
+	if len(settlement.Hoders) != 1 || settlement.Hoders[0] != "bob" {
+		t.Fatalf("pending holders = %v, want [bob]", settlement.Hoders)
+	}
+	if got := rules.CurrentMergeSettlePlayer(room); got != "bob" {
+		t.Fatalf("current settlement player = %q, want bob", got)
+	}
+	if !room.Connections["bob"].Online {
+		t.Fatal("next online shareholder was marked offline")
+	}
+	if _, duplicate := settlement.Settled["bob"]; duplicate {
+		t.Fatalf("online shareholder was auto-settled: %+v", settlement.Settled["bob"])
+	}
+}
+
 func TestPluginReplaysLegacyMergeSettlementOrder(t *testing.T) {
 	ctx := context.Background()
 	plugin := &Plugin{}

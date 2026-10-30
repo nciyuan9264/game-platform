@@ -206,35 +206,39 @@ type fakeHistoryLookup struct {
 }
 
 type fakeRoomhostStore struct {
-	snapshot        contracts.SnapshotRecord
-	snapshotErr     error
-	saveSnapshotErr error
-	room            contracts.RoomRecord
-	roomErr         error
-	match           contracts.MatchRecord
-	session         contracts.SessionRecord
-	sessionErr      error
-	presences       []contracts.PresenceRecord
-	presenceErr     error
-	outboundErr     error
-	spectatorErr    error
-	operationErr    error
-	resetHistoryErr error
-	savedOutbound   []contracts.OutboundMessage
-	savedSnapshots  []contracts.SnapshotRecord
-	savedSpectator  []contracts.SpectatorSnapshotRecord
-	setRooms        []contracts.RoomRecord
-	rosterMatchID   string
-	rosterPlayers   []contracts.MatchPlayerRecord
-	matchPlayers    []contracts.MatchPlayerRecord
-	matchPlayersErr error
-	operationEvents []contracts.GameLogEvent
-	startedHistory  []history.Game
-	finishedHistory []int64
-	appendedHistory []history.Event
-	historyLookup   fakeHistoryLookup
-	visibilityErr   error
-	visibilityCalls []string
+	snapshot         contracts.SnapshotRecord
+	snapshotErr      error
+	saveSnapshotErr  error
+	room             contracts.RoomRecord
+	roomErr          error
+	match            contracts.MatchRecord
+	session          contracts.SessionRecord
+	sessionErr       error
+	activeCurrent    bool
+	activeFound      bool
+	activeConfigured bool
+	activeErr        error
+	presences        []contracts.PresenceRecord
+	presenceErr      error
+	outboundErr      error
+	spectatorErr     error
+	operationErr     error
+	resetHistoryErr  error
+	savedOutbound    []contracts.OutboundMessage
+	savedSnapshots   []contracts.SnapshotRecord
+	savedSpectator   []contracts.SpectatorSnapshotRecord
+	setRooms         []contracts.RoomRecord
+	rosterMatchID    string
+	rosterPlayers    []contracts.MatchPlayerRecord
+	matchPlayers     []contracts.MatchPlayerRecord
+	matchPlayersErr  error
+	operationEvents  []contracts.GameLogEvent
+	startedHistory   []history.Game
+	finishedHistory  []int64
+	appendedHistory  []history.Event
+	historyLookup    fakeHistoryLookup
+	visibilityErr    error
+	visibilityCalls  []string
 }
 
 func (s *fakeRoomhostStore) SaveRuntimeEvent(context.Context, contracts.RuntimeEvent) error {
@@ -325,6 +329,21 @@ func (s *fakeRoomhostStore) GetSession(context.Context, string) (contracts.Sessi
 		return contracts.SessionRecord{}, sql.ErrNoRows
 	}
 	return s.session, nil
+}
+
+func (s *fakeRoomhostStore) IsPlayerSessionCurrent(
+	context.Context,
+	string,
+	string,
+	contracts.ConnectionRef,
+) (bool, bool, error) {
+	if s.activeErr != nil {
+		return false, false, s.activeErr
+	}
+	if !s.activeConfigured {
+		return true, true, nil
+	}
+	return s.activeCurrent, s.activeFound, nil
 }
 
 func (s *fakeRoomhostStore) ListPresence(context.Context, string) ([]contracts.PresenceRecord, error) {
@@ -955,8 +974,10 @@ func TestValidateGatewayCommandBindsSessionIdentity(t *testing.T) {
 
 	valid := contracts.RoomCommand{
 		ConnectionRef: session.ConnectionRef,
+		RoomID:        "room-1",
 		UserID:        session.UserID,
 		PlayerID:      session.PlayerID,
+		Type:          "game_action",
 	}
 	if err := host.validateGatewayCommand(context.Background(), valid); err != nil {
 		t.Fatalf("valid command rejected: %v", err)
@@ -971,6 +992,27 @@ func TestValidateGatewayCommandBindsSessionIdentity(t *testing.T) {
 	missingConnection := contracts.RoomCommand{UserID: "user-1", PlayerID: "player-1"}
 	if err := host.validateGatewayCommand(context.Background(), missingConnection); err == nil {
 		t.Fatal("gateway command without connection reference should be rejected")
+	}
+
+	staleHost := NewHost("roomhost-1", &fakeRoomhostStore{
+		session:          session,
+		activeConfigured: true,
+		activeFound:      true,
+		activeCurrent:    false,
+	}, nil, nil, nil)
+	if err := staleHost.validateGatewayCommand(context.Background(), valid); err == nil {
+		t.Fatal("replaced gateway session should be rejected")
+	}
+
+	connect := valid
+	connect.Type = "connect"
+	if err := staleHost.validateGatewayCommand(context.Background(), connect); err != nil {
+		t.Fatalf("connect lifecycle command rejected: %v", err)
+	}
+	disconnect := valid
+	disconnect.Type = "disconnect"
+	if err := staleHost.validateGatewayCommand(context.Background(), disconnect); err != nil {
+		t.Fatalf("disconnect lifecycle command rejected: %v", err)
 	}
 
 	runtimeCommand := contracts.RoomCommand{Type: contracts.RuntimeCommandRoomClose}

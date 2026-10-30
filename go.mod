@@ -3,6 +3,7 @@ module github.com/nciyuan9264/game-platform
 go 1.24.4
 
 require (
+	github.com/alicebob/miniredis/v2 v2.35.0
 	github.com/bytedance/gopkg v0.1.4
 	github.com/cloudwego/gopkg v0.2.0
 	github.com/cloudwego/kitex v0.16.3
@@ -23,6 +24,7 @@ require (
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
+	github.com/yuin/gopher-lua v1.1.1 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/runtime v0.62.0 // indirect
 	go.opentelemetry.io/contrib/propagators/b3 v1.20.0 // indirect

@@ -67,6 +67,11 @@ const (
 	websocketReadLimit    = 64 << 10
 	websocketPongWait     = 70 * time.Second
 	websocketPingPeriod   = 30 * time.Second
+	gatewaySessionTTL     = 24 * time.Hour
+	playerDisconnectTTL   = time.Minute
+
+	identityConflictCode    = "IDENTITY_CONFLICT"
+	identityConflictMessage = "当前对局已在另一台设备接管，此设备已停止操作。"
 )
 
 type clientConnection struct {
@@ -178,18 +183,16 @@ func (s *Server) cleanupStaleSessions(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	staleSessionIDs := map[string]struct{}{}
+	staleSessions := map[string]contracts.SessionRecord{}
 	for _, session := range sessions {
 		if session.GatewayNode != s.nodeID {
 			continue
 		}
-		staleSessionIDs[session.SessionID] = struct{}{}
-		if err := s.store.DeleteSession(ctx, session.SessionID); err != nil {
-			return err
-		}
+		staleSessions[session.SessionID] = session
 	}
 	for _, presence := range presences {
-		if _, stale := staleSessionIDs[presence.SessionID]; !stale {
+		session, stale := staleSessions[presence.SessionID]
+		if !stale {
 			continue
 		}
 		if err := s.store.MarkPresenceOffline(ctx, presence.RoomID, presence.SessionID); err != nil {
@@ -199,15 +202,15 @@ func (s *Server) cleanupStaleSessions(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		onlineElsewhere := false
-		for _, other := range roomPresences {
-			if other.SessionID == presence.SessionID || !other.Online {
-				continue
-			}
-			if other.RoomID == presence.RoomID && other.PlayerID == presence.PlayerID {
-				onlineElsewhere = true
-				break
-			}
+		onlineElsewhere, disconnectClaimed, err := s.finalizePlayerSession(
+			ctx,
+			presence.RoomID,
+			presence.PlayerID,
+			session.ConnectionRef,
+			roomPresences,
+		)
+		if err != nil {
+			return err
 		}
 		if onlineElsewhere {
 			continue
@@ -216,12 +219,20 @@ func (s *Server) cleanupStaleSessions(ctx context.Context) error {
 		if roomErr != nil {
 			return roomErr
 		}
+		if disconnectClaimed {
+			s.sendPlayerDisconnect(room, session)
+		}
 		if err := s.store.MarkMatchPlayerOffline(ctx, room.CurrentMatchID, presence.PlayerID, time.Now().UTC()); err != nil {
 			return err
 		}
 	}
-	if len(staleSessionIDs) > 0 {
-		observability.Info("gateway stale sessions cleaned", "nodeID", s.nodeID, "count", len(staleSessionIDs))
+	for sessionID := range staleSessions {
+		if err := s.store.DeleteSession(ctx, sessionID); err != nil {
+			return err
+		}
+	}
+	if len(staleSessions) > 0 {
+		observability.Info("gateway stale sessions cleaned", "nodeID", s.nodeID, "count", len(staleSessions))
 	}
 	return nil
 }
@@ -259,17 +270,14 @@ func (s *Server) cleanupInactiveGatewaySessions(ctx context.Context) error {
 		return err
 	}
 
-	staleSessionIDs := map[string]struct{}{}
+	staleSessions := map[string]contracts.SessionRecord{}
 	for _, session := range sessions {
 		if _, active := activeNodes[session.GatewayNode]; active {
 			continue
 		}
-		staleSessionIDs[session.SessionID] = struct{}{}
-		if err := s.store.DeleteSession(ctx, session.SessionID); err != nil {
-			return err
-		}
+		staleSessions[session.SessionID] = session
 	}
-	if len(staleSessionIDs) == 0 {
+	if len(staleSessions) == 0 {
 		return nil
 	}
 
@@ -284,24 +292,51 @@ func (s *Server) cleanupInactiveGatewaySessions(ctx context.Context) error {
 		activePlayers[presence.RoomID+"\x00"+presence.PlayerID] = struct{}{}
 	}
 	for _, presence := range presences {
-		if _, stale := staleSessionIDs[presence.SessionID]; !stale {
+		session, stale := staleSessions[presence.SessionID]
+		if !stale {
 			continue
 		}
 		if err := s.store.MarkPresenceOffline(ctx, presence.RoomID, presence.SessionID); err != nil {
 			return err
 		}
 		if _, onlineElsewhere := activePlayers[presence.RoomID+"\x00"+presence.PlayerID]; onlineElsewhere {
+			if _, err := s.store.ReleasePlayerSession(
+				ctx,
+				presence.RoomID,
+				presence.PlayerID,
+				session.ConnectionRef,
+			); err != nil {
+				return err
+			}
 			continue
+		}
+		disconnectClaimed, err := s.store.ClaimPlayerDisconnect(
+			ctx,
+			presence.RoomID,
+			presence.PlayerID,
+			session.ConnectionRef,
+			playerDisconnectTTL,
+		)
+		if err != nil {
+			return err
 		}
 		room, roomErr := s.store.GetRoom(ctx, presence.RoomID)
 		if roomErr != nil {
 			return roomErr
 		}
+		if disconnectClaimed {
+			s.sendPlayerDisconnect(room, session)
+		}
 		if err := s.store.MarkMatchPlayerOffline(ctx, room.CurrentMatchID, presence.PlayerID, time.Now().UTC()); err != nil {
 			return err
 		}
 	}
-	observability.Info("inactive gateway sessions cleaned", "nodeID", s.nodeID, "count", len(staleSessionIDs))
+	for sessionID := range staleSessions {
+		if err := s.store.DeleteSession(ctx, sessionID); err != nil {
+			return err
+		}
+	}
+	observability.Info("inactive gateway sessions cleaned", "nodeID", s.nodeID, "count", len(staleSessions))
 	return nil
 }
 
@@ -392,10 +427,10 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	})
 	now := time.Now().UTC()
 	connRef := contracts.ConnectionRef{GatewayNode: s.nodeID, SessionID: sessionID}
-	session := contracts.SessionRecord{ConnectionRef: connRef, UserID: identity.UserID, PlayerID: playerID, Name: identity.Name, Email: identity.Email, Avatar: identity.Avatar, DisplayName: identity.DisplayName, ConnectedAt: now, LastSeen: now, ExpiresAt: now.Add(24 * time.Hour)}
+	session := contracts.SessionRecord{ConnectionRef: connRef, UserID: identity.UserID, PlayerID: playerID, Name: identity.Name, Email: identity.Email, Avatar: identity.Avatar, DisplayName: identity.DisplayName, ConnectedAt: now, LastSeen: now, ExpiresAt: now.Add(gatewaySessionTTL)}
 	presence := contracts.PresenceRecord{ConnectionRef: connRef, RoomID: roomID, UserID: identity.UserID, PlayerID: playerID, Online: true, JoinedAt: now, LastSeen: now}
-	_ = s.store.SetSession(ctx, session, 24*time.Hour)
-	_ = s.store.SetPresence(ctx, presence, 24*time.Hour)
+	_ = s.store.SetSession(ctx, session, gatewaySessionTTL)
+	_ = s.store.SetPresence(ctx, presence, gatewaySessionTTL)
 	_ = s.store.UpsertMatchPlayer(ctx, rec.CurrentMatchID, contracts.MatchPlayerRecord{UserID: identity.UserID, PlayerID: playerID, DisplayName: identity.DisplayName, Name: identity.Name, Email: identity.Email, Avatar: identity.Avatar, GatewayNode: s.nodeID, Online: true, JoinedAt: now, LastSeen: now})
 
 	client := &clientConnection{conn: conn}
@@ -403,23 +438,12 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	s.conns[sessionID] = client
 	s.mu.Unlock()
 
-	lastSeq := queryInt64(r, "lastSeq", 0)
-	if lastSeq > 0 {
-		s.backfill(ctx, client, roomID, rec.CurrentMatchID, sessionID, playerID, lastSeq)
-	}
-
 	cleanupFailedConnection := func() {
-		s.mu.Lock()
-		delete(s.conns, sessionID)
-		s.mu.Unlock()
-		_ = s.store.MarkPresenceOffline(context.Background(), roomID, sessionID)
-		_ = s.store.DeleteSession(context.Background(), sessionID)
-		_ = s.store.MarkMatchPlayerOffline(context.Background(), rec.CurrentMatchID, playerID, time.Now().UTC())
 		_ = client.writeControl(
 			websocket.CloseMessage,
 			websocket.FormatCloseMessage(websocket.CloseTryAgainLater, "room temporarily unavailable"),
 		)
-		_ = client.close()
+		s.cleanupConnection(client, rec, session)
 	}
 
 	connectDeadline := time.Now().Add(45 * time.Second)
@@ -453,6 +477,20 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	previous, err := s.store.ClaimPlayerSession(ctx, roomID, playerID, connRef, gatewaySessionTTL)
+	if err != nil {
+		observability.Warn("claim player session failed", "roomID", roomID, "sessionID", sessionID, "playerID", playerID, "error", err)
+		cleanupFailedConnection()
+		return
+	}
+	if previous.Valid() && previous != connRef {
+		s.replacePlayerSession(ctx, rec, session, previous)
+	}
+
+	lastSeq := queryInt64(r, "lastSeq", 0)
+	if lastSeq > 0 {
+		s.backfill(ctx, client, roomID, rec.CurrentMatchID, sessionID, playerID, lastSeq)
+	}
 	go s.readLoop(client, rec, session, playerID)
 }
 
@@ -478,6 +516,19 @@ func (s *Server) readLoop(client *clientConnection, rec contracts.RoomRecord, se
 	done := make(chan struct{})
 	_ = client.conn.SetReadDeadline(time.Now().Add(websocketPongWait))
 	client.conn.SetPongHandler(func(string) error {
+		refreshed, err := s.store.RefreshPlayerSession(
+			context.Background(),
+			rec.RoomID,
+			playerID,
+			session.ConnectionRef,
+			gatewaySessionTTL,
+		)
+		if err != nil {
+			return fmt.Errorf("refresh player session: %w", err)
+		}
+		if !refreshed {
+			return errors.New("player session was replaced")
+		}
 		return client.conn.SetReadDeadline(time.Now().Add(websocketPongWait))
 	})
 	go func() {
@@ -497,36 +548,32 @@ func (s *Server) readLoop(client *clientConnection, rec contracts.RoomRecord, se
 	}()
 	defer func() {
 		close(done)
-		s.mu.Lock()
-		delete(s.conns, session.SessionID)
-		s.mu.Unlock()
-		_ = client.close()
-		disconnect := contracts.RoomCommand{SchemaVersion: contracts.RealtimeSchemaVersion, CommandID: uuid.NewString(), TraceID: uuid.NewString(), RoomID: rec.RoomID, MatchID: rec.CurrentMatchID, GameType: rec.GameType, Epoch: rec.Epoch, UserID: session.UserID, PlayerID: playerID, ConnectionRef: session.ConnectionRef, Type: "disconnect", SentAt: time.Now().UTC()}
-		ack, sendErr := s.router.SendRoomCommand(context.Background(), rec.OwnerNode, disconnect, 3*time.Second)
-		if roomRouteRefreshRequired(ack, sendErr) && ack.ErrorCode != "stale_match" {
-			if latest, err := s.store.GetRoom(context.Background(), rec.RoomID); err == nil {
-				if routed, routeErr := s.readyRoute(context.Background(), latest); routeErr == nil {
-					if disconnectMatchesCurrentRoute(disconnect, routed) {
-						disconnect.GameType = routed.GameType
-						disconnect.Epoch = routed.Epoch
-						_, _ = s.router.SendRoomCommand(context.Background(), routed.OwnerNode, disconnect, 3*time.Second)
-					}
-				}
-			}
-		}
-		_ = s.store.MarkPresenceOffline(context.Background(), rec.RoomID, session.SessionID)
-		_ = s.store.DeleteSession(context.Background(), session.SessionID)
-		_ = s.store.MarkMatchPlayerOffline(context.Background(), rec.CurrentMatchID, playerID, time.Now().UTC())
+		s.cleanupConnection(client, rec, session)
 	}()
 	for {
 		var msg contracts.ClientCommand
 		if err := client.conn.ReadJSON(&msg); err != nil {
 			return
 		}
+		current, found, err := s.store.IsPlayerSessionCurrent(
+			context.Background(),
+			rec.RoomID,
+			playerID,
+			session.ConnectionRef,
+		)
+		if err != nil {
+			observability.Warn("validate player session failed", "roomID", rec.RoomID, "sessionID", session.SessionID, "playerID", playerID, "error", err)
+			return
+		}
+		if !found || !current {
+			_ = client.writeJSON(identityConflictError(rec))
+			observability.Warn("stale player session rejected", "roomID", rec.RoomID, "sessionID", session.SessionID, "playerID", playerID, "commandID", msg.CommandID)
+			return
+		}
 		now := time.Now().UTC()
 		if now.Sub(lastCacheRefresh) >= time.Minute {
 			session.LastSeen = now
-			_ = s.store.SetSession(context.Background(), session, 24*time.Hour)
+			_ = s.store.SetSession(context.Background(), session, gatewaySessionTTL)
 			_ = s.store.SetPresence(context.Background(), contracts.PresenceRecord{
 				ConnectionRef: session.ConnectionRef,
 				RoomID:        rec.RoomID,
@@ -535,7 +582,14 @@ func (s *Server) readLoop(client *clientConnection, rec contracts.RoomRecord, se
 				Online:        true,
 				JoinedAt:      session.ConnectedAt,
 				LastSeen:      now,
-			}, 24*time.Hour)
+			}, gatewaySessionTTL)
+			_, _ = s.store.RefreshPlayerSession(
+				context.Background(),
+				rec.RoomID,
+				playerID,
+				session.ConnectionRef,
+				gatewaySessionTTL,
+			)
 			lastCacheRefresh = now
 		}
 		if msg.SchemaVersion != contracts.RealtimeSchemaVersion ||
@@ -644,6 +698,187 @@ func (s *Server) readLoop(client *clientConnection, rec contracts.RoomRecord, se
 	}
 }
 
+func (s *Server) replacePlayerSession(
+	ctx context.Context,
+	rec contracts.RoomRecord,
+	session contracts.SessionRecord,
+	previous contracts.ConnectionRef,
+) {
+	out := playerSessionReplacementMessage(rec, session, previous)
+	if err := s.router.Deliver(out); err != nil {
+		observability.Warn("deliver player session replacement failed", "roomID", rec.RoomID, "sessionID", previous.SessionID, "playerID", session.PlayerID, "error", err)
+	} else {
+		observability.Info("player session replaced", "roomID", rec.RoomID, "previousSessionID", previous.SessionID, "sessionID", session.SessionID, "playerID", session.PlayerID)
+	}
+	_ = s.store.SaveRuntimeEvent(ctx, contracts.RuntimeEvent{
+		RoomID:    rec.RoomID,
+		MatchID:   rec.CurrentMatchID,
+		NodeID:    s.nodeID,
+		Component: "gateway",
+		Event:     "session_replaced",
+		Message:   "new player session replaced previous controller",
+		Payload: map[string]any{
+			"playerID":          session.PlayerID,
+			"previousGateway":   previous.GatewayNode,
+			"previousSessionID": previous.SessionID,
+			"gatewayNode":       session.GatewayNode,
+			"sessionID":         session.SessionID,
+		},
+	})
+}
+
+func playerSessionReplacementMessage(
+	rec contracts.RoomRecord,
+	session contracts.SessionRecord,
+	previous contracts.ConnectionRef,
+) contracts.OutboundMessage {
+	return contracts.OutboundMessage{
+		SchemaVersion:  contracts.RealtimeSchemaVersion,
+		MessageID:      uuid.NewString(),
+		TraceID:        uuid.NewString(),
+		RoomID:         rec.RoomID,
+		MatchID:        rec.CurrentMatchID,
+		Seq:            rec.LastAppliedSeq,
+		Epoch:          rec.Epoch,
+		OwnerNode:      rec.OwnerNode,
+		TargetUserID:   session.UserID,
+		TargetPlayerID: session.PlayerID,
+		TargetConn:     previous,
+		CloseAfter:     true,
+		Payload:        identityConflictError(rec),
+		CreatedAt:      time.Now().UTC(),
+	}
+}
+
+func identityConflictError(rec contracts.RoomRecord) contracts.ErrorMessage {
+	return contracts.ErrorMessage{
+		SchemaVersion: contracts.RealtimeSchemaVersion,
+		Type:          contracts.MessageTypeError,
+		RoomID:        rec.RoomID,
+		MatchID:       rec.CurrentMatchID,
+		Seq:           rec.LastAppliedSeq,
+		Code:          identityConflictCode,
+		Message:       identityConflictMessage,
+	}
+}
+
+func (s *Server) cleanupConnection(
+	client *clientConnection,
+	rec contracts.RoomRecord,
+	session contracts.SessionRecord,
+) {
+	s.mu.Lock()
+	delete(s.conns, session.SessionID)
+	s.mu.Unlock()
+	_ = client.close()
+
+	ctx := context.Background()
+	if err := s.store.MarkPresenceOffline(ctx, rec.RoomID, session.SessionID); err != nil {
+		observability.Warn("mark presence offline failed", "roomID", rec.RoomID, "sessionID", session.SessionID, "playerID", session.PlayerID, "error", err)
+	}
+	presences, presenceErr := s.store.ListPresence(ctx, rec.RoomID)
+	if presenceErr != nil {
+		observability.Warn("list presence during connection cleanup failed", "roomID", rec.RoomID, "sessionID", session.SessionID, "playerID", session.PlayerID, "error", presenceErr)
+	}
+	onlineElsewhere := presenceErr != nil || hasOnlinePlayerPresence(presences, rec.RoomID, session.PlayerID)
+	disconnectClaimed := false
+	if presenceErr == nil {
+		var finalizeErr error
+		onlineElsewhere, disconnectClaimed, finalizeErr = s.finalizePlayerSession(
+			ctx,
+			rec.RoomID,
+			session.PlayerID,
+			session.ConnectionRef,
+			presences,
+		)
+		if finalizeErr != nil {
+			observability.Warn("finalize player session failed", "roomID", rec.RoomID, "sessionID", session.SessionID, "playerID", session.PlayerID, "error", finalizeErr)
+			disconnectClaimed = false
+		}
+	} else if _, err := s.store.ReleasePlayerSession(
+		ctx,
+		rec.RoomID,
+		session.PlayerID,
+		session.ConnectionRef,
+	); err != nil {
+		observability.Warn("release player session failed", "roomID", rec.RoomID, "sessionID", session.SessionID, "playerID", session.PlayerID, "error", err)
+	}
+	if disconnectClaimed {
+		s.sendPlayerDisconnect(rec, session)
+	}
+	if err := s.store.DeleteSession(ctx, session.SessionID); err != nil {
+		observability.Warn("delete gateway session failed", "roomID", rec.RoomID, "sessionID", session.SessionID, "playerID", session.PlayerID, "error", err)
+	}
+	if !onlineElsewhere {
+		if err := s.store.MarkMatchPlayerOffline(ctx, rec.CurrentMatchID, session.PlayerID, time.Now().UTC()); err != nil {
+			observability.Warn("mark match player offline failed", "roomID", rec.RoomID, "sessionID", session.SessionID, "playerID", session.PlayerID, "error", err)
+		}
+	}
+}
+
+func hasOnlinePlayerPresence(
+	presences []contracts.PresenceRecord,
+	roomID,
+	playerID string,
+) bool {
+	for _, presence := range presences {
+		if presence.Online && presence.RoomID == roomID && presence.PlayerID == playerID {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Server) finalizePlayerSession(
+	ctx context.Context,
+	roomID,
+	playerID string,
+	ref contracts.ConnectionRef,
+	presences []contracts.PresenceRecord,
+) (onlineElsewhere bool, disconnectClaimed bool, err error) {
+	if hasOnlinePlayerPresence(presences, roomID, playerID) {
+		_, err := s.store.ReleasePlayerSession(ctx, roomID, playerID, ref)
+		return true, false, err
+	}
+	claimed, err := s.store.ClaimPlayerDisconnect(
+		ctx,
+		roomID,
+		playerID,
+		ref,
+		playerDisconnectTTL,
+	)
+	return false, claimed, err
+}
+
+func (s *Server) sendPlayerDisconnect(rec contracts.RoomRecord, session contracts.SessionRecord) {
+	disconnect := contracts.RoomCommand{
+		SchemaVersion: contracts.RealtimeSchemaVersion,
+		CommandID:     uuid.NewString(),
+		TraceID:       uuid.NewString(),
+		RoomID:        rec.RoomID,
+		MatchID:       rec.CurrentMatchID,
+		GameType:      rec.GameType,
+		Epoch:         rec.Epoch,
+		UserID:        session.UserID,
+		PlayerID:      session.PlayerID,
+		ConnectionRef: session.ConnectionRef,
+		Type:          "disconnect",
+		SentAt:        time.Now().UTC(),
+	}
+	ack, sendErr := s.router.SendRoomCommand(context.Background(), rec.OwnerNode, disconnect, 3*time.Second)
+	if roomRouteRefreshRequired(ack, sendErr) && ack.ErrorCode != "stale_match" {
+		if latest, err := s.store.GetRoom(context.Background(), rec.RoomID); err == nil {
+			if routed, routeErr := s.readyRoute(context.Background(), latest); routeErr == nil {
+				if disconnectMatchesCurrentRoute(disconnect, routed) {
+					disconnect.GameType = routed.GameType
+					disconnect.Epoch = routed.Epoch
+					_, _ = s.router.SendRoomCommand(context.Background(), routed.OwnerNode, disconnect, 3*time.Second)
+				}
+			}
+		}
+	}
+}
+
 func (s *Server) readyRoute(ctx context.Context, rec contracts.RoomRecord) (contracts.RoomRecord, error) {
 	if s.owners == nil {
 		return contracts.RoomRecord{}, errors.New("room owner resolver is unavailable")
@@ -665,7 +900,10 @@ func (s *Server) readyRoute(ctx context.Context, rec contracts.RoomRecord) (cont
 }
 
 func clientCommandTypeAllowed(commandType string) bool {
-	return commandType != "" && !strings.HasPrefix(commandType, "runtime_")
+	return commandType != "" &&
+		commandType != "connect" &&
+		commandType != "disconnect" &&
+		!strings.HasPrefix(commandType, "runtime_")
 }
 
 func clientCommandPayload(gameType, commandType string, payload any) (any, error) {
