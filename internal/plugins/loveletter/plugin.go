@@ -14,7 +14,7 @@ import (
 
 const (
 	GameType            = "loveletter"
-	EngineVersion       = "loveletter-v3"
+	EngineVersion       = "loveletter-v4"
 	ReplaySchemaVersion = 1
 	defaultMaxPlayers   = 6
 	maxNoHumanChecks    = 3
