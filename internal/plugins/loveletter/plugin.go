@@ -34,8 +34,8 @@ const (
 const (
 	turnTimeout          = 60 * time.Second
 	roundTransitionDelay = 15 * time.Second
-	aiMinDelay           = 1200 * time.Millisecond
-	aiMaxDelay           = 2 * time.Second
+	aiMinDelay           = 3 * time.Second
+	aiMaxDelay           = 5 * time.Second
 )
 
 type Plugin struct{}

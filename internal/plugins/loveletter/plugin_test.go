@@ -165,6 +165,20 @@ func TestAIUsesOnlyVisibleInformation(t *testing.T) {
 	}
 }
 
+func TestAIScheduleUsesReadableDelay(t *testing.T) {
+	state := startPreparedMatch(t, 2)
+	state.CurrentPlayer = "ai_001"
+	state.Status = StatusDraw
+
+	request := nextAIRequest(state)
+	if request == nil {
+		t.Fatal("AI request was not scheduled")
+	}
+	if request.Delay < 3*time.Second || request.Delay > 5*time.Second {
+		t.Fatalf("AI delay = %s", request.Delay)
+	}
+}
+
 func TestHistoryAndReplayExposeAllHandsAfterTheMatch(t *testing.T) {
 	state := startPreparedMatch(t, 4)
 	state.Roster["owner"].Favors = state.Goal
