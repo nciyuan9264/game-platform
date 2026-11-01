@@ -590,6 +590,7 @@ type LoginShowcaseData struct {
 	TotalPlayers        int64                  `thrift:"total_players,1,required" frugal:"1,required,i64" json:"total_players"`
 	NewlyJoinedPlayers_ int64                  `thrift:"newly_joined_players,2,required" frugal:"2,required,i64" json:"newly_joined_players"`
 	RecentPlayers       []*LoginShowcasePlayer `thrift:"recent_players,3,required" frugal:"3,required,list<LoginShowcasePlayer>" json:"recent_players"`
+	TotalGames          int64                  `thrift:"total_games,4,required" frugal:"4,required,i64" json:"total_games"`
 }
 
 func NewLoginShowcaseData() *LoginShowcaseData {
@@ -610,6 +611,10 @@ func (p *LoginShowcaseData) GetNewlyJoinedPlayers_() (v int64) {
 func (p *LoginShowcaseData) GetRecentPlayers() (v []*LoginShowcasePlayer) {
 	return p.RecentPlayers
 }
+
+func (p *LoginShowcaseData) GetTotalGames() (v int64) {
+	return p.TotalGames
+}
 func (p *LoginShowcaseData) SetTotalPlayers(val int64) {
 	p.TotalPlayers = val
 }
@@ -618,6 +623,9 @@ func (p *LoginShowcaseData) SetNewlyJoinedPlayers_(val int64) {
 }
 func (p *LoginShowcaseData) SetRecentPlayers(val []*LoginShowcasePlayer) {
 	p.RecentPlayers = val
+}
+func (p *LoginShowcaseData) SetTotalGames(val int64) {
+	p.TotalGames = val
 }
 
 func (p *LoginShowcaseData) String() string {
@@ -631,6 +639,7 @@ var fieldIDToName_LoginShowcaseData = map[int16]string{
 	1: "total_players",
 	2: "newly_joined_players",
 	3: "recent_players",
+	4: "total_games",
 }
 
 type LoginShowcaseResp struct {
