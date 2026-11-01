@@ -12,7 +12,8 @@ import (
 func (p *Plugin) IsRecordableCommand(commandType string) bool {
 	switch commandType {
 	case CommandLockCard, CommandUnlockCard, CommandChooseRow,
-		CommandNextRound, CommandTimeout, CommandRoundTransition:
+		CommandNextRound, CommandTimeout, CommandRevealTransition,
+		CommandRoundTransition:
 		return true
 	default:
 		return false

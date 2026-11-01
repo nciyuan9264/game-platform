@@ -137,6 +137,7 @@ func setupRound(state *State, roundNo int) error {
 	state.Status = StatusSelecting
 	state.TurnDeadline = time.Time{}
 	state.TurnTimeout = 0
+	state.RevealDeadline = time.Time{}
 	state.RoundTransitionDeadline = time.Time{}
 	appendAction(state, Action{
 		Kind:    "roundStart",
@@ -170,7 +171,7 @@ func lockCard(
 	if !allPlayersLocked(state) {
 		return nil
 	}
-	return revealAndResolve(state)
+	return revealSelections(state)
 }
 
 func unlockCard(state *State, playerID string) error {
@@ -196,7 +197,7 @@ func allPlayersLocked(state *State) bool {
 	return len(state.PlayerOrder) > 0
 }
 
-func revealAndResolve(state *State) error {
+func revealSelections(state *State) error {
 	state.Queue = make([]Selection, 0, len(state.PlayerOrder))
 	for _, playerID := range state.PlayerOrder {
 		player := state.Roster[playerID]
@@ -233,6 +234,18 @@ func revealAndResolve(state *State) error {
 	}
 	state.TurnDeadline = time.Time{}
 	state.TurnTimeout = 0
+	state.Status = StatusRevealing
+	return nil
+}
+
+func resolveRevealedSelections(state *State) error {
+	if state.Status != StatusRevealing ||
+		state.LastResolution == nil ||
+		len(state.Queue) == 0 {
+		return errors.New("cards are not ready to resolve")
+	}
+	state.RevealDeadline = time.Time{}
+	state.Status = StatusSelecting
 	return resolveQueue(state)
 }
 

@@ -23,7 +23,7 @@ func validateState(state *State) error {
 		return errors.New("sixnimmt state has invalid visibility")
 	}
 	switch state.Status {
-	case StatusMatch, StatusWaiting, StatusSelecting, StatusChooseRow,
+	case StatusMatch, StatusWaiting, StatusSelecting, StatusRevealing, StatusChooseRow,
 		StatusRoundEnd, StatusEnd:
 	default:
 		return errors.New("sixnimmt state has invalid status")
@@ -61,6 +61,13 @@ func validateState(state *State) error {
 			state.QueueCursor >= len(state.Queue)) {
 		return errors.New("sixnimmt row choice is inconsistent")
 	}
+	if state.Status == StatusRevealing &&
+		(state.LastResolution == nil ||
+			len(state.Queue) == 0 ||
+			state.QueueCursor != 0 ||
+			state.LastResolution.Complete) {
+		return errors.New("sixnimmt reveal phase is inconsistent")
+	}
 	return nil
 }
 
@@ -76,7 +83,7 @@ func validateCardConservation(state *State) error {
 		cards = append(cards, player.Hand...)
 		cards = append(cards, player.Taken...)
 	}
-	if state.Status == StatusChooseRow {
+	if state.Status == StatusRevealing || state.Status == StatusChooseRow {
 		for index := state.QueueCursor; index < len(state.Queue); index++ {
 			cards = append(cards, state.Queue[index].Card)
 		}

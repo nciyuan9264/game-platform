@@ -113,6 +113,12 @@ func completeTenTurns(t *testing.T, players int) {
 				t.Fatalf("turn %d player %s: %v", turn, playerID, err)
 			}
 		}
+		if state.Status != StatusRevealing {
+			t.Fatalf("turn %d status = %s, want revealing", turn, state.Status)
+		}
+		if err := resolveRevealedSelections(state); err != nil {
+			t.Fatalf("turn %d reveal: %v", turn, err)
+		}
 		if err := validateCardConservation(state); err != nil {
 			t.Fatalf("turn %d: %v", turn, err)
 		}

@@ -13,26 +13,28 @@ import (
 
 const (
 	GameType            = "sixnimmt"
-	EngineVersion       = "sixnimmt-v4"
+	EngineVersion       = "sixnimmt-v5"
 	ReplaySchemaVersion = 1
 	defaultMaxPlayers   = 10
 	maxNoHumanChecks    = 3
 )
 
 const (
-	CommandLockCard        = "game_lock_card"
-	CommandUnlockCard      = "game_unlock_card"
-	CommandChooseRow       = "game_choose_row"
-	CommandNextRound       = "game_next_round"
-	CommandTimeout         = "turn_timeout"
-	CommandRoundTransition = "round_transition_timeout"
+	CommandLockCard         = "game_lock_card"
+	CommandUnlockCard       = "game_unlock_card"
+	CommandChooseRow        = "game_choose_row"
+	CommandNextRound        = "game_next_round"
+	CommandTimeout          = "turn_timeout"
+	CommandRevealTransition = "reveal_transition_timeout"
+	CommandRoundTransition  = "round_transition_timeout"
 )
 
 const (
-	turnTimeout          = 60 * time.Second
-	roundTransitionDelay = 15 * time.Second
-	aiMinDelay           = 800 * time.Millisecond
-	aiMaxDelay           = 1600 * time.Millisecond
+	turnTimeout           = 60 * time.Second
+	revealTransitionDelay = 15 * time.Second
+	roundTransitionDelay  = 15 * time.Second
+	aiMinDelay            = 800 * time.Millisecond
+	aiMaxDelay            = 1600 * time.Millisecond
 )
 
 type Plugin struct{}
@@ -292,6 +294,12 @@ func (p *Plugin) ApplyCommand(
 		} else {
 			err = p.applyTimeout(ctx, typed, command.PlayerID)
 		}
+	case CommandRevealTransition:
+		if command.ConnectionRef.Valid() {
+			err = errors.New("client cannot submit reveal transition commands")
+		} else {
+			err = resolveRevealedSelections(typed)
+		}
 	case CommandRoundTransition:
 		if command.ConnectionRef.Valid() {
 			err = errors.New("client cannot submit round transition commands")
@@ -352,6 +360,19 @@ func (p *Plugin) PendingCommands(
 			ExecuteAt: typed.RoundTransitionDeadline,
 			PlayerID:  typed.OwnerID,
 			Type:      CommandRoundTransition,
+		}}, nil
+	}
+	if typed.Status == StatusRevealing && !typed.RevealDeadline.IsZero() {
+		return []game.ScheduledCommand{{
+			Key: fmt.Sprintf(
+				"reveal:%d:%d:%d",
+				typed.RoundNo,
+				typed.TurnNo,
+				typed.RevealDeadline.UnixNano(),
+			),
+			ExecuteAt: typed.RevealDeadline,
+			PlayerID:  typed.OwnerID,
+			Type:      CommandRevealTransition,
 		}}, nil
 	}
 	if typed.TurnDeadline.IsZero() {
@@ -509,6 +530,7 @@ func updateDeadlines(state *State, commandTime time.Time) {
 	if state.Status == StatusRoundEnd {
 		state.TurnDeadline = time.Time{}
 		state.TurnTimeout = 0
+		state.RevealDeadline = time.Time{}
 		if state.RoundTransitionDeadline.IsZero() {
 			state.RoundTransitionDeadline = commandTime.UTC().
 				Add(roundTransitionDelay)
@@ -520,6 +542,16 @@ func updateDeadlines(state *State, commandTime time.Time) {
 		return
 	}
 	state.RoundTransitionDeadline = time.Time{}
+	if state.Status == StatusRevealing {
+		state.TurnDeadline = time.Time{}
+		state.TurnTimeout = 0
+		if state.RevealDeadline.IsZero() {
+			state.RevealDeadline = commandTime.UTC().
+				Add(revealTransitionDelay)
+		}
+		return
+	}
+	state.RevealDeadline = time.Time{}
 	if state.Status != StatusSelecting && state.Status != StatusChooseRow {
 		state.TurnDeadline = time.Time{}
 		state.TurnTimeout = 0
@@ -585,6 +617,7 @@ func roomDataView(state *State, players map[string]any) map[string]any {
 		"roundResult":     roundResult,
 		"turnDeadline":    deadlineValue(state.TurnDeadline),
 		"turnTimeoutMs":   state.TurnTimeout.Milliseconds(),
+		"revealDeadline":  deadlineValue(state.RevealDeadline),
 		"roundTransitionDeadline": deadlineValue(
 			state.RoundTransitionDeadline,
 		),

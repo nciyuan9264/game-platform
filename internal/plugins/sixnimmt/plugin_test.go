@@ -89,6 +89,12 @@ func TestStateCodecPreservesPartialResolution(t *testing.T) {
 	if err := lockCard(state, "p2", 24, ""); err != nil {
 		t.Fatal(err)
 	}
+	if state.Status != StatusRevealing {
+		t.Fatalf("status = %s, want revealing", state.Status)
+	}
+	if err := resolveRevealedSelections(state); err != nil {
+		t.Fatal(err)
+	}
 	if state.Status != StatusChooseRow {
 		t.Fatalf("status = %s, want chooseRow", state.Status)
 	}
@@ -105,6 +111,90 @@ func TestStateCodecPreservesPartialResolution(t *testing.T) {
 		!reflect.DeepEqual(got.PendingChoice, state.PendingChoice) ||
 		!reflect.DeepEqual(got.Rows, state.Rows) {
 		t.Fatalf("decoded partial resolution differs: %+v", got)
+	}
+}
+
+func TestRevealPhaseWaitsFifteenSecondsBeforeResolving(t *testing.T) {
+	plugin, state := startedTestState(t, 2)
+	state.Rows = [][]int{{12}, {30}, {61}, {79}}
+	state.Roster["p1"].Hand = []int{80}
+	state.Roster["p2"].Hand = []int{90}
+	state.UnusedCards = remainingCards(state)
+	commandTime := time.Unix(1_800_000_000, 0).UTC()
+
+	for _, command := range []contracts.RoomCommand{
+		{
+			Type:     CommandLockCard,
+			PlayerID: "p1",
+			Payload:  map[string]any{"card": 80},
+			SentAt:   commandTime.Add(-time.Second),
+		},
+		{
+			Type:     CommandLockCard,
+			PlayerID: "p2",
+			Payload:  map[string]any{"card": 90},
+			SentAt:   commandTime,
+		},
+	} {
+		if _, err := plugin.ApplyCommand(context.Background(), state, command); err != nil {
+			t.Fatalf("%s: %v", command.PlayerID, err)
+		}
+	}
+
+	if state.Status != StatusRevealing {
+		t.Fatalf("status = %s, want revealing", state.Status)
+	}
+	if got, want := state.RevealDeadline, commandTime.Add(15*time.Second); !got.Equal(want) {
+		t.Fatalf("reveal deadline = %s, want %s", got, want)
+	}
+	if !reflect.DeepEqual(state.Rows, [][]int{{12}, {30}, {61}, {79}}) {
+		t.Fatalf("rows changed before reveal deadline: %v", state.Rows)
+	}
+	if state.LastResolution == nil ||
+		!reflect.DeepEqual(state.LastResolution.Selections, []Selection{
+			{PlayerID: "p1", Card: 80},
+			{PlayerID: "p2", Card: 90},
+		}) {
+		t.Fatalf("revealed selections = %+v", state.LastResolution)
+	}
+
+	pending, err := plugin.PendingCommands(context.Background(), state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pending) != 1 ||
+		pending[0].Type != CommandRevealTransition ||
+		!pending[0].ExecuteAt.Equal(state.RevealDeadline) {
+		t.Fatalf("pending reveal command = %+v", pending)
+	}
+
+	if _, err := plugin.ApplyCommand(context.Background(), state, contracts.RoomCommand{
+		Type:     CommandRevealTransition,
+		PlayerID: state.OwnerID,
+		SentAt:   state.RevealDeadline,
+		ConnectionRef: contracts.ConnectionRef{
+			GatewayNode: "gateway",
+			SessionID:   "session",
+		},
+	}); err == nil {
+		t.Fatal("client submitted reveal transition was accepted")
+	}
+
+	if _, err := plugin.ApplyCommand(context.Background(), state, contracts.RoomCommand{
+		Type:     CommandRevealTransition,
+		PlayerID: state.OwnerID,
+		SentAt:   state.RevealDeadline,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if state.Status != StatusSelecting || state.TurnNo != 2 {
+		t.Fatalf("state = %s turn %d, want selecting turn 2", state.Status, state.TurnNo)
+	}
+	if !state.RevealDeadline.IsZero() {
+		t.Fatalf("reveal deadline was not cleared: %s", state.RevealDeadline)
+	}
+	if !reflect.DeepEqual(state.Rows, [][]int{{12}, {30}, {61}, {79, 80, 90}}) {
+		t.Fatalf("resolved rows = %v", state.Rows)
 	}
 }
 

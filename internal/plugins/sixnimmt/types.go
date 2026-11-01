@@ -6,6 +6,7 @@ const (
 	StatusMatch     = "match"
 	StatusWaiting   = "waiting"
 	StatusSelecting = "selecting"
+	StatusRevealing = "revealing"
 	StatusChooseRow = "chooseRow"
 	StatusRoundEnd  = "roundEnd"
 	StatusEnd       = "end"
@@ -127,6 +128,7 @@ type State struct {
 	GameStartTime           time.Time          `json:"gameStartTime,omitempty"`
 	TurnDeadline            time.Time          `json:"turnDeadline,omitempty"`
 	TurnTimeout             time.Duration      `json:"turnTimeout,omitempty"`
+	RevealDeadline          time.Time          `json:"revealDeadline,omitempty"`
 	RoundTransitionDeadline time.Time          `json:"roundTransitionDeadline,omitempty"`
 	NoHumanChecks           int                `json:"noHumanChecks,omitempty"`
 }

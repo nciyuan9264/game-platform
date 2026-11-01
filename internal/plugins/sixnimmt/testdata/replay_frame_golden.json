@@ -15,6 +15,7 @@
     "pendingChoice",
     "playerOrder",
     "players",
+    "revealDeadline",
     "roundNo",
     "roundResult",
     "roundTransitionDeadline",
