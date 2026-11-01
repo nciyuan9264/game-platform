@@ -117,6 +117,10 @@ func roomDataView(state *State, players map[string]any) map[string]any {
 		data["transitionDeadline"] = deadlineValue(state.TransitionDeadline)
 		data["transitionTimeoutMs"] = state.TransitionTimeout.Milliseconds()
 	}
+	if !state.TurnDeadline.IsZero() {
+		data["turnDeadline"] = deadlineValue(state.TurnDeadline)
+		data["turnTimeoutMs"] = state.TurnTimeout.Milliseconds()
+	}
 	return data
 }
 
@@ -157,7 +161,7 @@ func playerDataView(
 		}
 		if playerID == viewerID && !player.ActionDeadline.IsZero() {
 			value["actionDeadline"] = deadlineValue(player.ActionDeadline)
-			value["actionTimeoutMs"] = playerActionTimeout.Milliseconds()
+			value["actionTimeoutMs"] = saleActionTimeout.Milliseconds()
 		}
 		result[playerID] = value
 	}

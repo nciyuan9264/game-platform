@@ -324,6 +324,7 @@ func lockSale(state *State, playerID string, property int, source string) error 
 	if lockedPlayerCount(state) == len(state.PlayerOrder) {
 		state.Status = StatusSellLocked
 		clearTurnDeadlines(state)
+		return revealSale(state, SourceSystem)
 	}
 	return nil
 }

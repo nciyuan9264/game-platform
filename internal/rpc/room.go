@@ -147,13 +147,13 @@ func createRoomTurnTimeoutSeconds(gameType string, req *platform.CreateRoomReq) 
 	}
 	if gameType == contracts.GameForSale {
 		if req.IsSetTurnTimeoutSeconds() &&
-			turnTimeoutSeconds != 60 {
+			turnTimeoutSeconds != 15 {
 			return 0, platformError(
 				"invalid_request",
-				errors.New("forsale turnTimeoutSeconds is fixed at 60"),
+				errors.New("forsale turnTimeoutSeconds is fixed at 15"),
 			)
 		}
-		return 60, nil
+		return 15, nil
 	}
 	if gameType == contracts.GameOnitama {
 		if req.IsSetTurnTimeoutSeconds() &&

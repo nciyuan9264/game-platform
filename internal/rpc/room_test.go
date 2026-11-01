@@ -75,3 +75,26 @@ func TestCreateRoomTurnTimeoutSecondsFixesSixNimmtAtSixty(t *testing.T) {
 		t.Fatalf("error = %v, want invalid_request", err)
 	}
 }
+
+func TestCreateRoomTurnTimeoutSecondsFixesForSaleAtFifteen(t *testing.T) {
+	got, err := createRoomTurnTimeoutSeconds(
+		contracts.GameForSale,
+		&platform.CreateRoomReq{},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != 15 {
+		t.Fatalf("timeout = %d, want 15", got)
+	}
+	timeout := int32(60)
+	_, err = createRoomTurnTimeoutSeconds(
+		contracts.GameForSale,
+		&platform.CreateRoomReq{TurnTimeoutSeconds: &timeout},
+	)
+	var platformErr interface{ GetCode() string }
+	if !errors.As(err, &platformErr) ||
+		platformErr.GetCode() != "invalid_request" {
+		t.Fatalf("error = %v, want invalid_request", err)
+	}
+}

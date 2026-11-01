@@ -14,7 +14,7 @@ import (
 
 const (
 	GameType            = "forsale"
-	EngineVersion       = "forsale-v3"
+	EngineVersion       = "forsale-v4"
 	ReplaySchemaVersion = 1
 	defaultMaxPlayers   = 6
 	maxNoHumanChecks    = 3
@@ -32,11 +32,13 @@ const (
 )
 
 const (
-	playerActionTimeout = 60 * time.Second
-	phaseActionTimeout  = 8 * time.Second
-	aiMinDelay          = 1200 * time.Millisecond
-	aiMaxDelay          = 2 * time.Second
-	aiDecisionTimeout   = 750 * time.Millisecond
+	auctionActionTimeout = 15 * time.Second
+	saleActionTimeout    = 60 * time.Second
+	phaseActionTimeout   = 8 * time.Second
+	saleResultTimeout    = 10 * time.Second
+	aiMinDelay           = 3 * time.Second
+	aiMaxDelay           = 5 * time.Second
+	aiDecisionTimeout    = 750 * time.Millisecond
 )
 
 var aiNames = []string{"小满", "阿橙", "松子", "米拉", "可可"}
@@ -165,7 +167,7 @@ func (p *Plugin) RoomMetadata(
 	}
 	return game.RoomMetadata{
 		Visibility:         typed.Visibility,
-		TurnTimeoutSeconds: int(playerActionTimeout / time.Second),
+		TurnTimeoutSeconds: int(auctionActionTimeout / time.Second),
 	}, nil
 }
 
@@ -504,8 +506,8 @@ func armAutomation(state *State, sentAt time.Time) {
 		state.TurnTimeout = 0
 		player := state.Roster[state.CurrentPlayer]
 		if player != nil && !player.AI {
-			state.TurnTimeout = playerActionTimeout
-			state.TurnDeadline = sentAt.Add(playerActionTimeout)
+			state.TurnTimeout = auctionActionTimeout
+			state.TurnDeadline = sentAt.Add(auctionActionTimeout)
 		}
 	case StatusSellSelect:
 		state.TurnDeadline = zeroTime()
@@ -517,14 +519,18 @@ func armAutomation(state *State, sentAt time.Time) {
 				continue
 			}
 			if player.ActionDeadline.IsZero() {
-				player.ActionDeadline = sentAt.Add(playerActionTimeout)
+				player.ActionDeadline = sentAt.Add(saleActionTimeout)
 			}
 		}
 	case StatusBuyResult, StatusBridge, StatusSellLocked, StatusSellReveal:
 		clearTurnDeadlines(state)
 		if state.TransitionDeadline.IsZero() {
-			state.TransitionTimeout = phaseActionTimeout
-			state.TransitionDeadline = sentAt.Add(phaseActionTimeout)
+			timeout := phaseActionTimeout
+			if state.Status == StatusSellReveal {
+				timeout = saleResultTimeout
+			}
+			state.TransitionTimeout = timeout
+			state.TransitionDeadline = sentAt.Add(timeout)
 		}
 	default:
 		clearTurnDeadlines(state)

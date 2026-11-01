@@ -108,6 +108,48 @@ func TestStateCodecRoundTrip(t *testing.T) {
 	}
 }
 
+func TestAutomationUsesPhaseSpecificDurations(t *testing.T) {
+	now := time.Unix(250, 0).UTC()
+	state := preparedState(t, 3, 305)
+	state.Roster[state.CurrentPlayer].AI = false
+	armAutomation(state, now)
+	if state.TurnTimeout != auctionActionTimeout ||
+		!state.TurnDeadline.Equal(now.Add(auctionActionTimeout)) {
+		t.Fatalf("auction deadline = %s/%s", state.TurnTimeout, state.TurnDeadline)
+	}
+
+	state.Status = StatusBuyResult
+	clearTurnDeadlines(state)
+	clearTransitionDeadline(state)
+	armAutomation(state, now)
+	if state.TransitionTimeout != phaseActionTimeout ||
+		!state.TransitionDeadline.Equal(now.Add(phaseActionTimeout)) {
+		t.Fatalf("buy result deadline = %s/%s",
+			state.TransitionTimeout, state.TransitionDeadline)
+	}
+
+	state.Status = StatusSellReveal
+	clearTransitionDeadline(state)
+	armAutomation(state, now)
+	if state.TransitionTimeout != saleResultTimeout ||
+		!state.TransitionDeadline.Equal(now.Add(saleResultTimeout)) {
+		t.Fatalf("sale result deadline = %s/%s",
+			state.TransitionTimeout, state.TransitionDeadline)
+	}
+}
+
+func TestAIRequestsUseHumanReadableDelay(t *testing.T) {
+	state := preparedState(t, 3, 306)
+	requests := nextAIRequests(state)
+	if len(requests) != 1 {
+		t.Fatalf("requests = %d, want 1", len(requests))
+	}
+	if requests[0].Delay < aiMinDelay || requests[0].Delay > aiMaxDelay {
+		t.Fatalf("delay = %s, want between %s and %s",
+			requests[0].Delay, aiMinDelay, aiMaxDelay)
+	}
+}
+
 func TestPhaseTimeoutOnlyAdvancesCurrentPhase(t *testing.T) {
 	state := preparedState(t, 3, 303)
 	for state.Status == StatusAuction {

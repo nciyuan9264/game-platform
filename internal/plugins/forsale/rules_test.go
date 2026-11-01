@@ -110,11 +110,8 @@ func TestSalePairsSortedPropertiesAndCheques(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if state.Status != StatusSellLocked {
+	if state.Status != StatusSellReveal {
 		t.Fatalf("state = %s", state.Status)
-	}
-	if err := revealSale(state, SourceSystem); err != nil {
-		t.Fatal(err)
 	}
 	if got := state.Roster[state.PlayerOrder[0]].Cheques[0]; got != 0 {
 		t.Fatalf("property 4 cheque = %d", got)
