@@ -14,7 +14,7 @@ import (
 const (
 	GameType            = "sixnimmt"
 	EngineVersion       = "sixnimmt-v5"
-	ReplaySchemaVersion = 1
+	ReplaySchemaVersion = 2
 	defaultMaxPlayers   = 10
 	maxNoHumanChecks    = 3
 )
