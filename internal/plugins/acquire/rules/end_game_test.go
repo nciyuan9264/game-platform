@@ -31,8 +31,28 @@ func TestRefreshEndGameEligibilityLatchesAndIncludesEveryHuman(t *testing.T) {
 	}
 
 	RefreshEndGameEligibility(room, map[string]int{"Tower": 11, "Sackson": 12})
+	if room.State.EndGame.Eligible {
+		t.Fatal("only some established safe companies unlocked end game")
+	}
+
+	allCompanies := map[string]int{
+		"Sackson":     11,
+		"Tower":       12,
+		"American":    13,
+		"Festival":    14,
+		"Worldwide":   15,
+		"Continental": 16,
+		"Imperial":    10,
+	}
+	RefreshEndGameEligibility(room, allCompanies)
+	if room.State.EndGame.Eligible {
+		t.Fatal("an established company below 11 tiles unlocked end game")
+	}
+
+	allCompanies["Imperial"] = 11
+	RefreshEndGameEligibility(room, allCompanies)
 	if !room.State.EndGame.Eligible || room.State.EndGame.Condition != EndConditionAllCompaniesSafe {
-		t.Fatalf("safe companies did not unlock end game: %+v", room.State.EndGame)
+		t.Fatalf("all seven established safe companies did not unlock end game: %+v", room.State.EndGame)
 	}
 	if room.State.EndGame.Votes["human-1"] || room.State.EndGame.Votes["human-2"] {
 		t.Fatal("human votes must default to false")

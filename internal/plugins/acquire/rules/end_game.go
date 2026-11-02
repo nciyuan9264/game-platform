@@ -14,6 +14,16 @@ const (
 	acquireBoardTileCount = 108
 )
 
+var acquireCompanyNames = [...]string{
+	"Sackson",
+	"Tower",
+	"American",
+	"Festival",
+	"Worldwide",
+	"Continental",
+	"Imperial",
+}
+
 type EndVotePayload struct {
 	Allow *bool `json:"allow"`
 }
@@ -54,13 +64,16 @@ func RefreshEndGameEligibility(room *domain.Room, companyTiles map[string]int) {
 	}
 
 	candidates := make([]endCompanyCandidate, 0, len(companyTiles))
-	allEstablishedSafe := len(companyTiles) > 0
 	for name, tiles := range companyTiles {
 		if tiles >= 41 {
 			candidates = append(candidates, endCompanyCandidate{Name: name, Tiles: tiles})
 		}
-		if tiles < 11 {
-			allEstablishedSafe = false
+	}
+	allCompaniesEstablishedAndSafe := true
+	for _, name := range acquireCompanyNames {
+		if companyTiles[name] < 11 {
+			allCompaniesEstablishedAndSafe = false
+			break
 		}
 	}
 
@@ -76,7 +89,7 @@ func RefreshEndGameEligibility(room *domain.Room, companyTiles map[string]int) {
 		end.Condition = EndConditionCompanySize
 		end.Company = candidates[0].Name
 		end.TileCount = candidates[0].Tiles
-	} else if allEstablishedSafe {
+	} else if allCompaniesEstablishedAndSafe {
 		end.Eligible = true
 		end.Condition = EndConditionAllCompaniesSafe
 	}
