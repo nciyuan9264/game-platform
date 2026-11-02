@@ -32,6 +32,8 @@ type AuthService interface {
 
 	UploadAvatar(ctx context.Context, req *UploadAvatarReq) (r *UploadAvatarResp, err error)
 
+	ListAvatarPresets(ctx context.Context, req *ListAvatarPresetsReq) (r *ListAvatarPresetsResp, err error)
+
 	ListPasskeys(ctx context.Context, req *ListPasskeysReq) (r *ListPasskeysResp, err error)
 
 	SendPasskeyManagementCode(ctx context.Context, req *SendPasskeyManagementCodeReq) (r *PasskeyManagementCodeResp, err error)
@@ -1181,6 +1183,100 @@ func (p *AuthServiceUploadAvatarResult) String() string {
 }
 
 var fieldIDToName_AuthServiceUploadAvatarResult = map[int16]string{
+	0: "success",
+	1: "err",
+}
+
+type AuthServiceListAvatarPresetsArgs struct {
+	Req *ListAvatarPresetsReq `thrift:"req,1,required" frugal:"1,required,ListAvatarPresetsReq" json:"req"`
+}
+
+func NewAuthServiceListAvatarPresetsArgs() *AuthServiceListAvatarPresetsArgs {
+	return &AuthServiceListAvatarPresetsArgs{}
+}
+
+func (p *AuthServiceListAvatarPresetsArgs) InitDefault() {
+}
+
+var AuthServiceListAvatarPresetsArgs_Req_DEFAULT *ListAvatarPresetsReq
+
+func (p *AuthServiceListAvatarPresetsArgs) GetReq() (v *ListAvatarPresetsReq) {
+	if !p.IsSetReq() {
+		return AuthServiceListAvatarPresetsArgs_Req_DEFAULT
+	}
+	return p.Req
+}
+func (p *AuthServiceListAvatarPresetsArgs) SetReq(val *ListAvatarPresetsReq) {
+	p.Req = val
+}
+
+func (p *AuthServiceListAvatarPresetsArgs) IsSetReq() bool {
+	return p.Req != nil
+}
+
+func (p *AuthServiceListAvatarPresetsArgs) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("AuthServiceListAvatarPresetsArgs(%+v)", *p)
+}
+
+var fieldIDToName_AuthServiceListAvatarPresetsArgs = map[int16]string{
+	1: "req",
+}
+
+type AuthServiceListAvatarPresetsResult struct {
+	Success *ListAvatarPresetsResp `thrift:"success,0,optional" frugal:"0,optional,ListAvatarPresetsResp" json:"success,omitempty"`
+	Err     *AuthError             `thrift:"err,1,optional" frugal:"1,optional,AuthError" json:"err,omitempty"`
+}
+
+func NewAuthServiceListAvatarPresetsResult() *AuthServiceListAvatarPresetsResult {
+	return &AuthServiceListAvatarPresetsResult{}
+}
+
+func (p *AuthServiceListAvatarPresetsResult) InitDefault() {
+}
+
+var AuthServiceListAvatarPresetsResult_Success_DEFAULT *ListAvatarPresetsResp
+
+func (p *AuthServiceListAvatarPresetsResult) GetSuccess() (v *ListAvatarPresetsResp) {
+	if !p.IsSetSuccess() {
+		return AuthServiceListAvatarPresetsResult_Success_DEFAULT
+	}
+	return p.Success
+}
+
+var AuthServiceListAvatarPresetsResult_Err_DEFAULT *AuthError
+
+func (p *AuthServiceListAvatarPresetsResult) GetErr() (v *AuthError) {
+	if !p.IsSetErr() {
+		return AuthServiceListAvatarPresetsResult_Err_DEFAULT
+	}
+	return p.Err
+}
+func (p *AuthServiceListAvatarPresetsResult) SetSuccess(x interface{}) {
+	p.Success = x.(*ListAvatarPresetsResp)
+}
+func (p *AuthServiceListAvatarPresetsResult) SetErr(val *AuthError) {
+	p.Err = val
+}
+
+func (p *AuthServiceListAvatarPresetsResult) IsSetSuccess() bool {
+	return p.Success != nil
+}
+
+func (p *AuthServiceListAvatarPresetsResult) IsSetErr() bool {
+	return p.Err != nil
+}
+
+func (p *AuthServiceListAvatarPresetsResult) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("AuthServiceListAvatarPresetsResult(%+v)", *p)
+}
+
+var fieldIDToName_AuthServiceListAvatarPresetsResult = map[int16]string{
 	0: "success",
 	1: "err",
 }

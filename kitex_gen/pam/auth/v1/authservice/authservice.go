@@ -97,6 +97,13 @@ var serviceMethods = map[string]kitex.MethodInfo{
 		false,
 		kitex.WithStreamingMode(kitex.StreamingNone),
 	),
+	"ListAvatarPresets": kitex.NewMethodInfo(
+		listAvatarPresetsHandler,
+		newAuthServiceListAvatarPresetsArgs,
+		newAuthServiceListAvatarPresetsResult,
+		false,
+		kitex.WithStreamingMode(kitex.StreamingNone),
+	),
 	"ListPasskeys": kitex.NewMethodInfo(
 		listPasskeysHandler,
 		newAuthServiceListPasskeysArgs,
@@ -533,6 +540,30 @@ func newAuthServiceUploadAvatarArgs() interface{} {
 
 func newAuthServiceUploadAvatarResult() interface{} {
 	return v1.NewAuthServiceUploadAvatarResult()
+}
+
+func listAvatarPresetsHandler(ctx context.Context, handler interface{}, arg, result interface{}) error {
+	realArg := arg.(*v1.AuthServiceListAvatarPresetsArgs)
+	realResult := result.(*v1.AuthServiceListAvatarPresetsResult)
+	success, err := handler.(v1.AuthService).ListAvatarPresets(ctx, realArg.Req)
+	if err != nil {
+		switch v := err.(type) {
+		case *v1.AuthError:
+			realResult.Err = v
+		default:
+			return err
+		}
+	} else {
+		realResult.Success = success
+	}
+	return nil
+}
+func newAuthServiceListAvatarPresetsArgs() interface{} {
+	return v1.NewAuthServiceListAvatarPresetsArgs()
+}
+
+func newAuthServiceListAvatarPresetsResult() interface{} {
+	return v1.NewAuthServiceListAvatarPresetsResult()
 }
 
 func listPasskeysHandler(ctx context.Context, handler interface{}, arg, result interface{}) error {
@@ -992,6 +1023,20 @@ func (p *kClient) UploadAvatar(ctx context.Context, req *v1.UploadAvatarReq) (r 
 	_args.Req = req
 	var _result v1.AuthServiceUploadAvatarResult
 	if err = p.c.Call(ctx, "UploadAvatar", &_args, &_result); err != nil {
+		return
+	}
+	switch {
+	case _result.Err != nil:
+		return r, _result.Err
+	}
+	return _result.GetSuccess(), nil
+}
+
+func (p *kClient) ListAvatarPresets(ctx context.Context, req *v1.ListAvatarPresetsReq) (r *v1.ListAvatarPresetsResp, err error) {
+	var _args v1.AuthServiceListAvatarPresetsArgs
+	_args.Req = req
+	var _result v1.AuthServiceListAvatarPresetsResult
+	if err = p.c.Call(ctx, "ListAvatarPresets", &_args, &_result); err != nil {
 		return
 	}
 	switch {

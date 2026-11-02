@@ -6,6 +6,7 @@ import (
 
 	platform "github.com/nciyuan9264/game-platform-client/kitex_gen/pam/game/platform/v1"
 	"github.com/nciyuan9264/game-platform/internal/authclient"
+	"github.com/nciyuan9264/game-platform/internal/history"
 	"github.com/nciyuan9264/game-platform/internal/playerprofile"
 )
 
@@ -86,5 +87,32 @@ func TestResolveRoomProfilesAddsMissingOwnerToUnstartedRoom(t *testing.T) {
 		owner.GetPlayerID() != "7" ||
 		owner.GetDisplayName() != "Alice" {
 		t.Fatalf("owner profile = %+v", owner)
+	}
+}
+
+func TestResolveLeaderboardIncludesCurrentProfileAvatar(t *testing.T) {
+	directory := &fakeRoomProfileDirectory{
+		profiles: map[string]authclient.PublicProfile{
+			"7": {
+				DisplayName: "Alice",
+				Avatar:      "https://cdn.example.com/alice.png",
+			},
+		},
+	}
+	handler := &Handler{profiles: playerprofile.NewResolver(directory)}
+	entries := []history.LeaderboardEntry{{
+		UserID:      7,
+		PlayerID:    "7",
+		DisplayName: "Persisted Alice",
+	}}
+
+	handler.resolveLeaderboard(context.Background(), entries)
+
+	if entries[0].DisplayName != "Alice" ||
+		entries[0].Avatar != "https://cdn.example.com/alice.png" {
+		t.Fatalf("leaderboard profile = %+v", entries[0])
+	}
+	if len(directory.requested) != 1 || directory.requested[0] != "7" {
+		t.Fatalf("requested user IDs = %v", directory.requested)
 	}
 }

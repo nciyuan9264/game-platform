@@ -132,9 +132,11 @@ func (h *Handler) resolveLeaderboard(ctx context.Context, entries []history.Lead
 			DisplayName: entry.DisplayName,
 		})
 	}
-	displayNames := h.profiles.Resolve(ctx, subjects)
+	profiles := h.profiles.ResolveProfiles(ctx, subjects)
 	for index := range entries {
-		entries[index].DisplayName = displayNames[entries[index].PlayerID]
+		profile := profiles[entries[index].PlayerID]
+		entries[index].DisplayName = profile.DisplayName
+		entries[index].Avatar = profile.Avatar
 	}
 }
 

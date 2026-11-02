@@ -422,13 +422,17 @@ func (h *Handler) GetLeaderboard(ctx context.Context, req *platform.GetLeaderboa
 		} else {
 			metric.Rank = &platform.RankLeaderboardMetric{AvgRank: floatValueOrZero(entry.AvgRank)}
 		}
-		mapped = append(mapped, &platform.LeaderboardEntry{
+		mappedEntry := &platform.LeaderboardEntry{
 			UserID:      entry.UserID,
 			PlayerID:    entry.PlayerID,
 			TotalGames:  int32(entry.TotalGames),
 			Metric:      metric,
 			DisplayName: stringPointer(entry.DisplayName),
-		})
+		}
+		if avatar := strings.TrimSpace(entry.Avatar); avatar != "" {
+			mappedEntry.Avatar = stringPointer(avatar)
+		}
+		mapped = append(mapped, mappedEntry)
 	}
 	return &platform.LeaderboardResp{
 		StatusCode: http.StatusOK,

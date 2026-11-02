@@ -87,6 +87,7 @@ type LeaderboardEntry struct {
 	UserID      int64    `json:"userID"`
 	PlayerID    string   `json:"playerID"`
 	DisplayName string   `json:"displayName"`
+	Avatar      string   `json:"avatar,omitempty"`
 	TotalGames  int      `json:"totalGames"`
 	Wins        *int     `json:"wins,omitempty"`
 	WinRate     *float64 `json:"winRate,omitempty"`

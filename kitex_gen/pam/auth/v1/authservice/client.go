@@ -23,6 +23,7 @@ type Client interface {
 	GetProfile(ctx context.Context, req *v1.GetProfileReq, callOptions ...callopt.Option) (r *v1.UserResp, err error)
 	UpdateUser(ctx context.Context, req *v1.UpdateUserReq, callOptions ...callopt.Option) (r *v1.UserResp, err error)
 	UploadAvatar(ctx context.Context, req *v1.UploadAvatarReq, callOptions ...callopt.Option) (r *v1.UploadAvatarResp, err error)
+	ListAvatarPresets(ctx context.Context, req *v1.ListAvatarPresetsReq, callOptions ...callopt.Option) (r *v1.ListAvatarPresetsResp, err error)
 	ListPasskeys(ctx context.Context, req *v1.ListPasskeysReq, callOptions ...callopt.Option) (r *v1.ListPasskeysResp, err error)
 	SendPasskeyManagementCode(ctx context.Context, req *v1.SendPasskeyManagementCodeReq, callOptions ...callopt.Option) (r *v1.PasskeyManagementCodeResp, err error)
 	BeginPasskeyRegistration(ctx context.Context, req *v1.BeginPasskeyRegistrationReq, callOptions ...callopt.Option) (r *v1.PasskeyCeremonyResp, err error)
@@ -124,6 +125,11 @@ func (p *kAuthServiceClient) UpdateUser(ctx context.Context, req *v1.UpdateUserR
 func (p *kAuthServiceClient) UploadAvatar(ctx context.Context, req *v1.UploadAvatarReq, callOptions ...callopt.Option) (r *v1.UploadAvatarResp, err error) {
 	ctx = client.NewCtxWithCallOptions(ctx, callOptions)
 	return p.kClient.UploadAvatar(ctx, req)
+}
+
+func (p *kAuthServiceClient) ListAvatarPresets(ctx context.Context, req *v1.ListAvatarPresetsReq, callOptions ...callopt.Option) (r *v1.ListAvatarPresetsResp, err error) {
+	ctx = client.NewCtxWithCallOptions(ctx, callOptions)
+	return p.kClient.ListAvatarPresets(ctx, req)
 }
 
 func (p *kAuthServiceClient) ListPasskeys(ctx context.Context, req *v1.ListPasskeysReq, callOptions ...callopt.Option) (r *v1.ListPasskeysResp, err error) {

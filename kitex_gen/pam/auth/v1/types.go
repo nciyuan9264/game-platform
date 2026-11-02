@@ -13,6 +13,7 @@ type UserIdentity struct {
 	DisplayName *string  `thrift:"display_name,4,optional" frugal:"4,optional,string" json:"display_name,omitempty"`
 	Avatar      *string  `thrift:"avatar,5,optional" frugal:"5,optional,string" json:"avatar,omitempty"`
 	Roles       []string `thrift:"roles,6,optional" frugal:"6,optional,list<string>" json:"roles,omitempty"`
+	AvatarId    *string  `thrift:"avatar_id,7,optional" frugal:"7,optional,string" json:"avatar_id,omitempty"`
 }
 
 func NewUserIdentity() *UserIdentity {
@@ -70,6 +71,15 @@ func (p *UserIdentity) GetRoles() (v []string) {
 	}
 	return p.Roles
 }
+
+var UserIdentity_AvatarId_DEFAULT string
+
+func (p *UserIdentity) GetAvatarId() (v string) {
+	if !p.IsSetAvatarId() {
+		return UserIdentity_AvatarId_DEFAULT
+	}
+	return *p.AvatarId
+}
 func (p *UserIdentity) SetUserId(val string) {
 	p.UserId = val
 }
@@ -87,6 +97,9 @@ func (p *UserIdentity) SetAvatar(val *string) {
 }
 func (p *UserIdentity) SetRoles(val []string) {
 	p.Roles = val
+}
+func (p *UserIdentity) SetAvatarId(val *string) {
+	p.AvatarId = val
 }
 
 func (p *UserIdentity) IsSetEmail() bool {
@@ -109,6 +122,10 @@ func (p *UserIdentity) IsSetRoles() bool {
 	return p.Roles != nil
 }
 
+func (p *UserIdentity) IsSetAvatarId() bool {
+	return p.AvatarId != nil
+}
+
 func (p *UserIdentity) String() string {
 	if p == nil {
 		return "<nil>"
@@ -123,6 +140,7 @@ var fieldIDToName_UserIdentity = map[int16]string{
 	4: "display_name",
 	5: "avatar",
 	6: "roles",
+	7: "avatar_id",
 }
 
 type EmptyData struct {
@@ -1171,6 +1189,7 @@ type UpdateUserReq struct {
 	Email       *string `thrift:"email,2,optional" frugal:"2,optional,string" json:"email,omitempty"`
 	Name        *string `thrift:"name,3,optional" frugal:"3,optional,string" json:"name,omitempty"`
 	Avatar      *string `thrift:"avatar,4,optional" frugal:"4,optional,string" json:"avatar,omitempty"`
+	AvatarId    *string `thrift:"avatar_id,5,optional" frugal:"5,optional,string" json:"avatar_id,omitempty"`
 }
 
 func NewUpdateUserReq() *UpdateUserReq {
@@ -1210,6 +1229,15 @@ func (p *UpdateUserReq) GetAvatar() (v string) {
 	}
 	return *p.Avatar
 }
+
+var UpdateUserReq_AvatarId_DEFAULT string
+
+func (p *UpdateUserReq) GetAvatarId() (v string) {
+	if !p.IsSetAvatarId() {
+		return UpdateUserReq_AvatarId_DEFAULT
+	}
+	return *p.AvatarId
+}
 func (p *UpdateUserReq) SetAccessToken(val string) {
 	p.AccessToken = val
 }
@@ -1221,6 +1249,9 @@ func (p *UpdateUserReq) SetName(val *string) {
 }
 func (p *UpdateUserReq) SetAvatar(val *string) {
 	p.Avatar = val
+}
+func (p *UpdateUserReq) SetAvatarId(val *string) {
+	p.AvatarId = val
 }
 
 func (p *UpdateUserReq) IsSetEmail() bool {
@@ -1235,6 +1266,10 @@ func (p *UpdateUserReq) IsSetAvatar() bool {
 	return p.Avatar != nil
 }
 
+func (p *UpdateUserReq) IsSetAvatarId() bool {
+	return p.AvatarId != nil
+}
+
 func (p *UpdateUserReq) String() string {
 	if p == nil {
 		return "<nil>"
@@ -1247,6 +1282,7 @@ var fieldIDToName_UpdateUserReq = map[int16]string{
 	2: "email",
 	3: "name",
 	4: "avatar",
+	5: "avatar_id",
 }
 
 type UploadAvatarReq struct {
@@ -1412,6 +1448,175 @@ func (p *UploadAvatarResp) String() string {
 }
 
 var fieldIDToName_UploadAvatarResp = map[int16]string{
+	1: "status_code",
+	2: "message",
+	3: "data",
+}
+
+type AvatarPreset struct {
+	Id        string `thrift:"id,1,required" frugal:"1,required,string" json:"id"`
+	Name      string `thrift:"name,2,required" frugal:"2,required,string" json:"name"`
+	Avatar    string `thrift:"avatar,3,required" frugal:"3,required,string" json:"avatar"`
+	Thumbnail string `thrift:"thumbnail,4,required" frugal:"4,required,string" json:"thumbnail"`
+}
+
+func NewAvatarPreset() *AvatarPreset {
+	return &AvatarPreset{}
+}
+
+func (p *AvatarPreset) InitDefault() {
+}
+
+func (p *AvatarPreset) GetId() (v string) {
+	return p.Id
+}
+
+func (p *AvatarPreset) GetName() (v string) {
+	return p.Name
+}
+
+func (p *AvatarPreset) GetAvatar() (v string) {
+	return p.Avatar
+}
+
+func (p *AvatarPreset) GetThumbnail() (v string) {
+	return p.Thumbnail
+}
+func (p *AvatarPreset) SetId(val string) {
+	p.Id = val
+}
+func (p *AvatarPreset) SetName(val string) {
+	p.Name = val
+}
+func (p *AvatarPreset) SetAvatar(val string) {
+	p.Avatar = val
+}
+func (p *AvatarPreset) SetThumbnail(val string) {
+	p.Thumbnail = val
+}
+
+func (p *AvatarPreset) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("AvatarPreset(%+v)", *p)
+}
+
+var fieldIDToName_AvatarPreset = map[int16]string{
+	1: "id",
+	2: "name",
+	3: "avatar",
+	4: "thumbnail",
+}
+
+type ListAvatarPresetsReq struct {
+}
+
+func NewListAvatarPresetsReq() *ListAvatarPresetsReq {
+	return &ListAvatarPresetsReq{}
+}
+
+func (p *ListAvatarPresetsReq) InitDefault() {
+}
+
+func (p *ListAvatarPresetsReq) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("ListAvatarPresetsReq(%+v)", *p)
+}
+
+var fieldIDToName_ListAvatarPresetsReq = map[int16]string{}
+
+type ListAvatarPresetsData struct {
+	Version string          `thrift:"version,1,required" frugal:"1,required,string" json:"version"`
+	Presets []*AvatarPreset `thrift:"presets,2,required" frugal:"2,required,list<AvatarPreset>" json:"presets"`
+}
+
+func NewListAvatarPresetsData() *ListAvatarPresetsData {
+	return &ListAvatarPresetsData{}
+}
+
+func (p *ListAvatarPresetsData) InitDefault() {
+}
+
+func (p *ListAvatarPresetsData) GetVersion() (v string) {
+	return p.Version
+}
+
+func (p *ListAvatarPresetsData) GetPresets() (v []*AvatarPreset) {
+	return p.Presets
+}
+func (p *ListAvatarPresetsData) SetVersion(val string) {
+	p.Version = val
+}
+func (p *ListAvatarPresetsData) SetPresets(val []*AvatarPreset) {
+	p.Presets = val
+}
+
+func (p *ListAvatarPresetsData) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("ListAvatarPresetsData(%+v)", *p)
+}
+
+var fieldIDToName_ListAvatarPresetsData = map[int16]string{
+	1: "version",
+	2: "presets",
+}
+
+type ListAvatarPresetsResp struct {
+	StatusCode int32                  `thrift:"status_code,1,required" frugal:"1,required,i32" json:"status_code"`
+	Message    string                 `thrift:"message,2,required" frugal:"2,required,string" json:"message"`
+	Data       *ListAvatarPresetsData `thrift:"data,3,required" frugal:"3,required,ListAvatarPresetsData" json:"data"`
+}
+
+func NewListAvatarPresetsResp() *ListAvatarPresetsResp {
+	return &ListAvatarPresetsResp{}
+}
+
+func (p *ListAvatarPresetsResp) InitDefault() {
+}
+
+func (p *ListAvatarPresetsResp) GetStatusCode() (v int32) {
+	return p.StatusCode
+}
+
+func (p *ListAvatarPresetsResp) GetMessage() (v string) {
+	return p.Message
+}
+
+var ListAvatarPresetsResp_Data_DEFAULT *ListAvatarPresetsData
+
+func (p *ListAvatarPresetsResp) GetData() (v *ListAvatarPresetsData) {
+	if !p.IsSetData() {
+		return ListAvatarPresetsResp_Data_DEFAULT
+	}
+	return p.Data
+}
+func (p *ListAvatarPresetsResp) SetStatusCode(val int32) {
+	p.StatusCode = val
+}
+func (p *ListAvatarPresetsResp) SetMessage(val string) {
+	p.Message = val
+}
+func (p *ListAvatarPresetsResp) SetData(val *ListAvatarPresetsData) {
+	p.Data = val
+}
+
+func (p *ListAvatarPresetsResp) IsSetData() bool {
+	return p.Data != nil
+}
+
+func (p *ListAvatarPresetsResp) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("ListAvatarPresetsResp(%+v)", *p)
+}
+
+var fieldIDToName_ListAvatarPresetsResp = map[int16]string{
 	1: "status_code",
 	2: "message",
 	3: "data",
