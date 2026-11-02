@@ -154,6 +154,17 @@ func normalizeUserQuery(input UserQuery) UserQuery {
 		input.PageSize = 100
 	}
 	input.Query = strings.TrimSpace(input.Query)
+	switch strings.ToLower(strings.TrimSpace(input.SortBy)) {
+	case "user", "created_at", "last_active_at", "active_days", "games_played", "player_duration", "favorite_game":
+		input.SortBy = strings.ToLower(strings.TrimSpace(input.SortBy))
+	default:
+		input.SortBy = "created_at"
+	}
+	if strings.EqualFold(strings.TrimSpace(input.SortOrder), "asc") {
+		input.SortOrder = "asc"
+	} else {
+		input.SortOrder = "desc"
+	}
 	return input
 }
 

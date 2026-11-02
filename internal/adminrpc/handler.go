@@ -46,7 +46,11 @@ func (h *Handler) ListUsers(ctx context.Context, req *admin.ListUsersReq) (*admi
 		return nil, adminError("invalid_request", errors.New("request is required"))
 	}
 	result, err := h.analytics.Users(ctx, adminanalytics.UserQuery{
-		Page: int(req.GetPage()), PageSize: int(req.GetPageSize()), Query: req.GetQuery(),
+		Page:      int(req.GetPage()),
+		PageSize:  int(req.GetPageSize()),
+		Query:     req.GetQuery(),
+		SortBy:    req.GetSortBy(),
+		SortOrder: req.GetSortOrder(),
 	})
 	if err != nil {
 		return nil, mapAnalyticsError(err)

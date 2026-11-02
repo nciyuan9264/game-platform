@@ -1,10 +1,12 @@
 package adminanalytics
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -22,10 +24,13 @@ type activityStats struct {
 
 func (s *Service) Users(ctx context.Context, query UserQuery) (UsersPage, error) {
 	query = normalizeUserQuery(query)
-	key := fmt.Sprintf("users:%d:%d:%s", query.Page, query.PageSize, strings.ToLower(query.Query))
-	return cachedValue(ctx, s, key, func(ctx context.Context) (UsersPage, error) {
+	key := fmt.Sprintf(
+		"users:all:%s:%s:%s",
+		strings.ToLower(query.Query), query.SortBy, query.SortOrder,
+	)
+	allUsers, err := cachedValue(ctx, s, key, func(ctx context.Context) (UsersPage, error) {
 		window := s.reportingWindow()
-		users, total, err := s.loadAuthUsers(ctx, query)
+		users, err := s.loadAuthUsers(ctx, query)
 		if err != nil {
 			return UsersPage{}, fmt.Errorf("load auth users: %w", err)
 		}
@@ -40,24 +45,23 @@ func (s *Service) Users(ctx context.Context, query UserQuery) (UsersPage, error)
 		for index := range users {
 			applyActivityStats(&users[index], stats[users[index].ID])
 		}
+		sortUsers(users, query)
+		total := int64(len(users))
 		return UsersPage{
-			Window: window, Users: users, Page: query.Page, PageSize: query.PageSize, Total: total,
+			Window: window, Users: users, Total: total,
 		}, nil
 	})
+	if err != nil {
+		return UsersPage{}, err
+	}
+	allUsers.Users = paginateUsers(allUsers.Users, query.Page, query.PageSize)
+	allUsers.Page = query.Page
+	allUsers.PageSize = query.PageSize
+	return allUsers, nil
 }
 
-func (s *Service) loadAuthUsers(ctx context.Context, query UserQuery) ([]User, int64, error) {
+func (s *Service) loadAuthUsers(ctx context.Context, query UserQuery) ([]User, error) {
 	filter := strings.TrimSpace(query.Query)
-	var total int64
-	if err := s.authDB.QueryRowContext(ctx, `
-		SELECT COUNT(*)
-		FROM public.users
-		WHERE deleted_at IS NULL
-			AND ($1 = '' OR id::text = $1 OR COALESCE(name, '') ILIKE '%' || $1 || '%'
-				OR COALESCE(email, '') ILIKE '%' || $1 || '%')`, filter).Scan(&total); err != nil {
-		return nil, 0, err
-	}
-	offset := (query.Page - 1) * query.PageSize
 	rows, err := s.authDB.QueryContext(ctx, `
 		SELECT
 			id,
@@ -69,21 +73,20 @@ func (s *Service) loadAuthUsers(ctx context.Context, query UserQuery) ([]User, i
 		WHERE deleted_at IS NULL
 			AND ($1 = '' OR id::text = $1 OR COALESCE(name, '') ILIKE '%' || $1 || '%'
 				OR COALESCE(email, '') ILIKE '%' || $1 || '%')
-		ORDER BY created_at DESC NULLS LAST, id DESC
-		LIMIT $2 OFFSET $3`, filter, query.PageSize, offset)
+		ORDER BY created_at DESC NULLS LAST, id DESC`, filter)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 	defer rows.Close()
-	users := make([]User, 0, query.PageSize)
+	users := []User{}
 	for rows.Next() {
 		var user User
 		if err := rows.Scan(&user.ID, &user.DisplayName, &user.Email, &user.Avatar, &user.CreatedAt); err != nil {
-			return nil, 0, err
+			return nil, err
 		}
 		users = append(users, user)
 	}
-	return users, total, rows.Err()
+	return users, rows.Err()
 }
 
 func (s *Service) loadActivityStats(ctx context.Context, userIDs []int64, window Window) (map[int64]activityStats, error) {
@@ -166,6 +169,70 @@ func applyActivityStats(user *User, stats activityStats) {
 	user.GamesPlayed = stats.gamesPlayed
 	user.PlayerDurationSeconds = stats.playerDurationSeconds
 	user.FavoriteGameType = stats.favoriteGameType
+}
+
+func sortUsers(users []User, query UserQuery) {
+	sort.SliceStable(users, func(leftIndex, rightIndex int) bool {
+		left := users[leftIndex]
+		right := users[rightIndex]
+		leftMissing := userSortValueMissing(left, query.SortBy)
+		rightMissing := userSortValueMissing(right, query.SortBy)
+		if leftMissing != rightMissing {
+			return !leftMissing
+		}
+		comparison := compareUserSortValue(left, right, query.SortBy)
+		if comparison == 0 {
+			comparison = cmp.Compare(left.ID, right.ID)
+		}
+		if query.SortOrder == "desc" {
+			return comparison > 0
+		}
+		return comparison < 0
+	})
+}
+
+func userSortValueMissing(user User, sortBy string) bool {
+	switch sortBy {
+	case "last_active_at":
+		return user.LastActiveAt == nil
+	case "favorite_game":
+		return user.FavoriteGameType == ""
+	default:
+		return false
+	}
+}
+
+func compareUserSortValue(left, right User, sortBy string) int {
+	switch sortBy {
+	case "user":
+		return strings.Compare(strings.ToLower(left.DisplayName), strings.ToLower(right.DisplayName))
+	case "created_at":
+		return left.CreatedAt.Compare(right.CreatedAt)
+	case "last_active_at":
+		if left.LastActiveAt == nil || right.LastActiveAt == nil {
+			return 0
+		}
+		return left.LastActiveAt.Compare(*right.LastActiveAt)
+	case "active_days":
+		return cmp.Compare(left.ActiveDays, right.ActiveDays)
+	case "games_played":
+		return cmp.Compare(left.GamesPlayed, right.GamesPlayed)
+	case "player_duration":
+		return cmp.Compare(left.PlayerDurationSeconds, right.PlayerDurationSeconds)
+	case "favorite_game":
+		return strings.Compare(left.FavoriteGameType, right.FavoriteGameType)
+	default:
+		return 0
+	}
+}
+
+func paginateUsers(users []User, page, pageSize int) []User {
+	start := (page - 1) * pageSize
+	if start >= len(users) {
+		return []User{}
+	}
+	end := min(start+pageSize, len(users))
+	return users[start:end]
 }
 
 func (s *Service) UserActivity(ctx context.Context, userID int64) (UserActivity, error) {

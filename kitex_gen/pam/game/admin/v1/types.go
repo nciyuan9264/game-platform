@@ -544,9 +544,11 @@ var fieldIDToName_OverviewResp = map[int16]string{
 }
 
 type ListUsersReq struct {
-	Page     *int32  `thrift:"page,1,optional" frugal:"1,optional,i32" json:"page,omitempty"`
-	PageSize *int32  `thrift:"page_size,2,optional" frugal:"2,optional,i32" json:"page_size,omitempty"`
-	Query    *string `thrift:"query,3,optional" frugal:"3,optional,string" json:"query,omitempty"`
+	Page      *int32  `thrift:"page,1,optional" frugal:"1,optional,i32" json:"page,omitempty"`
+	PageSize  *int32  `thrift:"page_size,2,optional" frugal:"2,optional,i32" json:"page_size,omitempty"`
+	Query     *string `thrift:"query,3,optional" frugal:"3,optional,string" json:"query,omitempty"`
+	SortBy    *string `thrift:"sort_by,4,optional" frugal:"4,optional,string" json:"sort_by,omitempty"`
+	SortOrder *string `thrift:"sort_order,5,optional" frugal:"5,optional,string" json:"sort_order,omitempty"`
 }
 
 func NewListUsersReq() *ListUsersReq {
@@ -582,6 +584,24 @@ func (p *ListUsersReq) GetQuery() (v string) {
 	}
 	return *p.Query
 }
+
+var ListUsersReq_SortBy_DEFAULT string
+
+func (p *ListUsersReq) GetSortBy() (v string) {
+	if !p.IsSetSortBy() {
+		return ListUsersReq_SortBy_DEFAULT
+	}
+	return *p.SortBy
+}
+
+var ListUsersReq_SortOrder_DEFAULT string
+
+func (p *ListUsersReq) GetSortOrder() (v string) {
+	if !p.IsSetSortOrder() {
+		return ListUsersReq_SortOrder_DEFAULT
+	}
+	return *p.SortOrder
+}
 func (p *ListUsersReq) SetPage(val *int32) {
 	p.Page = val
 }
@@ -590,6 +610,12 @@ func (p *ListUsersReq) SetPageSize(val *int32) {
 }
 func (p *ListUsersReq) SetQuery(val *string) {
 	p.Query = val
+}
+func (p *ListUsersReq) SetSortBy(val *string) {
+	p.SortBy = val
+}
+func (p *ListUsersReq) SetSortOrder(val *string) {
+	p.SortOrder = val
 }
 
 func (p *ListUsersReq) IsSetPage() bool {
@@ -604,6 +630,14 @@ func (p *ListUsersReq) IsSetQuery() bool {
 	return p.Query != nil
 }
 
+func (p *ListUsersReq) IsSetSortBy() bool {
+	return p.SortBy != nil
+}
+
+func (p *ListUsersReq) IsSetSortOrder() bool {
+	return p.SortOrder != nil
+}
+
 func (p *ListUsersReq) String() string {
 	if p == nil {
 		return "<nil>"
@@ -615,6 +649,8 @@ var fieldIDToName_ListUsersReq = map[int16]string{
 	1: "page",
 	2: "page_size",
 	3: "query",
+	4: "sort_by",
+	5: "sort_order",
 }
 
 type AdminUserSummary struct {
@@ -1451,14 +1487,89 @@ var fieldIDToName_LiveGameSummary = map[int16]string{
 	4: "online_players",
 }
 
+type LivePlayerSummary struct {
+	UserId      string  `thrift:"user_id,1,required" frugal:"1,required,string" json:"user_id"`
+	DisplayName string  `thrift:"display_name,2,required" frugal:"2,required,string" json:"display_name"`
+	Avatar      *string `thrift:"avatar,3,optional" frugal:"3,optional,string" json:"avatar,omitempty"`
+	Online      bool    `thrift:"online,4,required" frugal:"4,required,bool" json:"online"`
+	IsOwner     bool    `thrift:"is_owner,5,required" frugal:"5,required,bool" json:"is_owner"`
+}
+
+func NewLivePlayerSummary() *LivePlayerSummary {
+	return &LivePlayerSummary{}
+}
+
+func (p *LivePlayerSummary) InitDefault() {
+}
+
+func (p *LivePlayerSummary) GetUserId() (v string) {
+	return p.UserId
+}
+
+func (p *LivePlayerSummary) GetDisplayName() (v string) {
+	return p.DisplayName
+}
+
+var LivePlayerSummary_Avatar_DEFAULT string
+
+func (p *LivePlayerSummary) GetAvatar() (v string) {
+	if !p.IsSetAvatar() {
+		return LivePlayerSummary_Avatar_DEFAULT
+	}
+	return *p.Avatar
+}
+
+func (p *LivePlayerSummary) GetOnline() (v bool) {
+	return p.Online
+}
+
+func (p *LivePlayerSummary) GetIsOwner() (v bool) {
+	return p.IsOwner
+}
+func (p *LivePlayerSummary) SetUserId(val string) {
+	p.UserId = val
+}
+func (p *LivePlayerSummary) SetDisplayName(val string) {
+	p.DisplayName = val
+}
+func (p *LivePlayerSummary) SetAvatar(val *string) {
+	p.Avatar = val
+}
+func (p *LivePlayerSummary) SetOnline(val bool) {
+	p.Online = val
+}
+func (p *LivePlayerSummary) SetIsOwner(val bool) {
+	p.IsOwner = val
+}
+
+func (p *LivePlayerSummary) IsSetAvatar() bool {
+	return p.Avatar != nil
+}
+
+func (p *LivePlayerSummary) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("LivePlayerSummary(%+v)", *p)
+}
+
+var fieldIDToName_LivePlayerSummary = map[int16]string{
+	1: "user_id",
+	2: "display_name",
+	3: "avatar",
+	4: "online",
+	5: "is_owner",
+}
+
 type LiveRoomSummary struct {
-	RoomId        string `thrift:"room_id,1,required" frugal:"1,required,string" json:"room_id"`
-	MatchId       string `thrift:"match_id,2,required" frugal:"2,required,string" json:"match_id"`
-	GameType      string `thrift:"game_type,3,required" frugal:"3,required,string" json:"game_type"`
-	Status        string `thrift:"status,4,required" frugal:"4,required,string" json:"status"`
-	HumanPlayers  int64  `thrift:"human_players,5,required" frugal:"5,required,i64" json:"human_players"`
-	OnlinePlayers int64  `thrift:"online_players,6,required" frugal:"6,required,i64" json:"online_players"`
-	StartedAtUnix int64  `thrift:"started_at_unix,7,required" frugal:"7,required,i64" json:"started_at_unix"`
+	RoomId        string               `thrift:"room_id,1,required" frugal:"1,required,string" json:"room_id"`
+	MatchId       string               `thrift:"match_id,2,required" frugal:"2,required,string" json:"match_id"`
+	GameType      string               `thrift:"game_type,3,required" frugal:"3,required,string" json:"game_type"`
+	Status        string               `thrift:"status,4,required" frugal:"4,required,string" json:"status"`
+	HumanPlayers  int64                `thrift:"human_players,5,required" frugal:"5,required,i64" json:"human_players"`
+	OnlinePlayers int64                `thrift:"online_players,6,required" frugal:"6,required,i64" json:"online_players"`
+	StartedAtUnix int64                `thrift:"started_at_unix,7,required" frugal:"7,required,i64" json:"started_at_unix"`
+	Players       []*LivePlayerSummary `thrift:"players,8,required" frugal:"8,required,list<LivePlayerSummary>" json:"players"`
 }
 
 func NewLiveRoomSummary() *LiveRoomSummary {
@@ -1495,6 +1606,10 @@ func (p *LiveRoomSummary) GetOnlinePlayers() (v int64) {
 func (p *LiveRoomSummary) GetStartedAtUnix() (v int64) {
 	return p.StartedAtUnix
 }
+
+func (p *LiveRoomSummary) GetPlayers() (v []*LivePlayerSummary) {
+	return p.Players
+}
 func (p *LiveRoomSummary) SetRoomId(val string) {
 	p.RoomId = val
 }
@@ -1516,6 +1631,9 @@ func (p *LiveRoomSummary) SetOnlinePlayers(val int64) {
 func (p *LiveRoomSummary) SetStartedAtUnix(val int64) {
 	p.StartedAtUnix = val
 }
+func (p *LiveRoomSummary) SetPlayers(val []*LivePlayerSummary) {
+	p.Players = val
+}
 
 func (p *LiveRoomSummary) String() string {
 	if p == nil {
@@ -1532,6 +1650,7 @@ var fieldIDToName_LiveRoomSummary = map[int16]string{
 	5: "human_players",
 	6: "online_players",
 	7: "started_at_unix",
+	8: "players",
 }
 
 type LiveData struct {

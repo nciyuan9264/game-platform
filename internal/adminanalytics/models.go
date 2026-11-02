@@ -131,14 +131,24 @@ type LiveGame struct {
 	OnlinePlayers int64
 }
 
+type LivePlayer struct {
+	UserID      string
+	DisplayName string
+	Avatar      string
+	Online      bool
+	IsOwner     bool
+}
+
 type LiveRoom struct {
 	RoomID        string
 	MatchID       string
 	GameType      string
 	Status        string
+	OwnerUserID   string
 	HumanPlayers  int64
 	OnlinePlayers int64
 	StartedAt     time.Time
+	Players       []LivePlayer
 }
 
 type Live struct {
@@ -151,7 +161,9 @@ type Live struct {
 }
 
 type UserQuery struct {
-	Page     int
-	PageSize int
-	Query    string
+	Page      int
+	PageSize  int
+	Query     string
+	SortBy    string
+	SortOrder string
 }

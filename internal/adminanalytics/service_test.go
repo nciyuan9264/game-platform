@@ -85,12 +85,16 @@ func TestReportingWindowRejectsInvalidRanges(t *testing.T) {
 }
 
 func TestNormalizeUserQuery(t *testing.T) {
-	got := normalizeUserQuery(UserQuery{Page: -1, PageSize: 500, Query: "  player  "})
-	if got.Page != 1 || got.PageSize != 100 || got.Query != "player" {
+	got := normalizeUserQuery(UserQuery{
+		Page: -1, PageSize: 500, Query: "  player  ", SortBy: " GAMES_PLAYED ", SortOrder: " ASC ",
+	})
+	if got.Page != 1 || got.PageSize != 100 || got.Query != "player" ||
+		got.SortBy != "games_played" || got.SortOrder != "asc" {
 		t.Fatalf("normalized query = %+v", got)
 	}
 	defaults := normalizeUserQuery(UserQuery{})
-	if defaults.Page != 1 || defaults.PageSize != 20 {
+	if defaults.Page != 1 || defaults.PageSize != 20 ||
+		defaults.SortBy != "created_at" || defaults.SortOrder != "desc" {
 		t.Fatalf("default query = %+v", defaults)
 	}
 }

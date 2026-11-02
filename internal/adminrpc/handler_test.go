@@ -13,6 +13,7 @@ type fakeAnalytics struct {
 	overview      adminanalytics.Overview
 	overviewError error
 	overviewQuery *adminanalytics.DateRangeQuery
+	live          adminanalytics.Live
 }
 
 func (f fakeAnalytics) Overview(_ context.Context, query adminanalytics.DateRangeQuery) (adminanalytics.Overview, error) {
@@ -34,8 +35,8 @@ func (fakeAnalytics) Games(context.Context) (adminanalytics.Games, error) {
 	return adminanalytics.Games{}, nil
 }
 
-func (fakeAnalytics) Live(context.Context) (adminanalytics.Live, error) {
-	return adminanalytics.Live{}, nil
+func (f fakeAnalytics) Live(context.Context) (adminanalytics.Live, error) {
+	return f.live, nil
 }
 
 func TestGetOverviewMapsAnalyticsResponse(t *testing.T) {
@@ -92,6 +93,30 @@ func TestGetOverviewMapsInvalidDateRange(t *testing.T) {
 	adminErr, ok := err.(*admin.GameAdminError)
 	if !ok || adminErr.GetCode() != "invalid_request" {
 		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestGetLiveMapsPlayerNames(t *testing.T) {
+	analytics := fakeAnalytics{}
+	analytics.live = adminanalytics.Live{
+		GeneratedAt: time.Unix(100, 0),
+		Rooms: []adminanalytics.LiveRoom{{
+			RoomID: "room-1", MatchID: "match-1", GameType: "acquire",
+			Status: "preparing", HumanPlayers: 1, StartedAt: time.Unix(90, 0),
+			Players: []adminanalytics.LivePlayer{{
+				UserID: "7", DisplayName: "北海玩家", Avatar: "https://example.com/avatar.png",
+				Online: true, IsOwner: true,
+			}},
+		}},
+	}
+	handler := NewHandler(analytics)
+	response, err := handler.GetLive(context.Background(), &admin.EmptyReq{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	players := response.GetData().GetRooms()[0].GetPlayers()
+	if len(players) != 1 || players[0].GetDisplayName() != "北海玩家" || !players[0].GetIsOwner() {
+		t.Fatalf("players = %+v", players)
 	}
 }
 

@@ -135,10 +135,17 @@ func mapLive(value adminanalytics.Live) *admin.LiveData {
 	}
 	rooms := make([]*admin.LiveRoomSummary, 0, len(value.Rooms))
 	for _, item := range value.Rooms {
+		players := make([]*admin.LivePlayerSummary, 0, len(item.Players))
+		for _, player := range item.Players {
+			players = append(players, &admin.LivePlayerSummary{
+				UserId: player.UserID, DisplayName: player.DisplayName,
+				Avatar: optionalString(player.Avatar), Online: player.Online, IsOwner: player.IsOwner,
+			})
+		}
 		rooms = append(rooms, &admin.LiveRoomSummary{
 			RoomId: item.RoomID, MatchId: item.MatchID, GameType: item.GameType,
 			Status: item.Status, HumanPlayers: item.HumanPlayers, OnlinePlayers: item.OnlinePlayers,
-			StartedAtUnix: item.StartedAt.Unix(),
+			StartedAtUnix: item.StartedAt.Unix(), Players: players,
 		})
 	}
 	return &admin.LiveData{
