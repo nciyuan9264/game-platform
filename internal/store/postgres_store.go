@@ -282,7 +282,9 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 		`ALTER TABLE games ADD COLUMN IF NOT EXISTS initial_replay_payload BYTEA`,
 		`ALTER TABLE games ADD COLUMN IF NOT EXISTS legacy_source TEXT`,
 		`ALTER TABLE games ADD COLUMN IF NOT EXISTS legacy_game_id BIGINT`,
+		`ALTER TABLE games ADD COLUMN IF NOT EXISTS match_id TEXT NOT NULL DEFAULT ''`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_games_legacy_identity ON games (legacy_source, legacy_game_id) WHERE legacy_source IS NOT NULL`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_games_match_id ON games (match_id) WHERE match_id <> ''`,
 		`CREATE INDEX IF NOT EXISTS idx_games_room_open ON games (room_id, game_type, ended_at)`,
 		`CREATE TABLE IF NOT EXISTS game_players (
 			id BIGSERIAL PRIMARY KEY,

@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"sort"
 	"strconv"
+	"strings"
 
 	platform "github.com/nciyuan9264/game-platform-client/kitex_gen/pam/game/platform/v1"
 	"github.com/nciyuan9264/game-platform/internal/contracts"
@@ -105,6 +107,73 @@ func (h *Handler) GetHistoryDetail(ctx context.Context, req *platform.GetHistory
 			Events:  metas,
 		},
 	}, nil
+}
+
+func (h *Handler) GetResultCard(ctx context.Context, req *platform.GetResultCardReq) (*platform.ResultCardResp, error) {
+	userID, err := numericUserID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if req == nil || strings.TrimSpace(req.GetMatchId()) == "" {
+		return nil, platformError("invalid_request", errors.New("matchID is required"))
+	}
+	gameType, err := h.validGameType(ctx, req.GetGameType())
+	if err != nil {
+		return nil, err
+	}
+	gameRecord, players, err := h.store.GetResultCardGameForUser(
+		ctx,
+		strings.TrimSpace(req.GetMatchId()),
+		userID,
+		gameType,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, platformError("not_found", errors.New("result card not found"))
+	}
+	if err != nil {
+		return nil, platformError("history_error", err)
+	}
+	if gameRecord.EndedAt == nil {
+		return nil, platformError("not_found", errors.New("result card not found"))
+	}
+	h.resolveHistoryPlayers(ctx, players)
+	mappedPlayers := prepareResultCardPlayers(players, userID)
+	return &platform.ResultCardResp{
+		StatusCode: http.StatusOK,
+		Message:    "ok",
+		Data: &platform.ResultCardData{
+			GameType:        platform.GameType(gameRecord.GameType),
+			StartedAt:       platform.ISODateTime(formatTime(gameRecord.StartedAt)),
+			EndedAt:         platform.ISODateTime(formatTime(*gameRecord.EndedAt)),
+			DurationSeconds: int32(gameRecord.DurationSeconds),
+			Players:         mappedPlayers,
+		},
+	}, nil
+}
+
+func prepareResultCardPlayers(players []history.Player, userID int64) []*platform.ResultCardPlayer {
+	sort.SliceStable(players, func(i, j int) bool {
+		left, right := players[i], players[j]
+		if left.FinalRank == nil && right.FinalRank != nil {
+			return false
+		}
+		if left.FinalRank != nil && right.FinalRank == nil {
+			return true
+		}
+		if left.FinalRank != nil && right.FinalRank != nil &&
+			*left.FinalRank != *right.FinalRank {
+			return *left.FinalRank < *right.FinalRank
+		}
+		return left.SeatIndex < right.SeatIndex
+	})
+	selfPlayerID := ""
+	for _, player := range players {
+		if player.UserID != nil && *player.UserID == userID && !player.IsAI {
+			selfPlayerID = player.PlayerID
+			break
+		}
+	}
+	return mapResultCardPlayers(players, selfPlayerID)
 }
 
 func (h *Handler) GetSnapshot(ctx context.Context, req *platform.GetSnapshotReq) (*platform.SnapshotResp, error) {

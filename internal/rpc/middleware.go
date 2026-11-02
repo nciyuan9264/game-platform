@@ -87,6 +87,7 @@ var methodAuthPolicies = map[string]bool{
 	"StartNextMatch":   true,
 	"ListHistoryGames": true,
 	"GetHistoryDetail": true,
+	"GetResultCard":    true,
 	"GetSnapshot":      true,
 	"ListSnapshots":    true,
 	"GetStats":         true,

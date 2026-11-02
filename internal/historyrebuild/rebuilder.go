@@ -205,6 +205,7 @@ func (r *Rebuilder) Run(
 			ctx,
 			history.Game{
 				RoomID:               room.RoomID,
+				MatchID:              match.MatchID,
 				GameType:             room.GameType,
 				EngineVersion:        match.EngineVersion,
 				ReplaySchemaVersion:  plan.initialProjection.ReplaySchemaVersion,

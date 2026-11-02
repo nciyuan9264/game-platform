@@ -27,13 +27,13 @@ func (s *PostgresStore) StartHistoryGame(ctx context.Context, gameRecord history
 	var gameID int64
 	err = tx.QueryRowContext(ctx, `
 		INSERT INTO games (
-			room_id, game_type, engine_version, replay_schema_version,
+                       room_id, match_id, game_type, engine_version, replay_schema_version,
 			started_at, max_players, initial_state, initial_replay_payload,
 			created_at, updated_at
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$9)
+               ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$10)
 		RETURNING id`,
-		gameRecord.RoomID, gameRecord.GameType, gameRecord.EngineVersion,
-		gameRecord.ReplaySchemaVersion, gameRecord.StartedAt,
+		gameRecord.RoomID, gameRecord.MatchID, gameRecord.GameType,
+		gameRecord.EngineVersion, gameRecord.ReplaySchemaVersion, gameRecord.StartedAt,
 		gameRecord.MaxPlayers, nullableJSON(gameRecord.InitialState),
 		nullableBytes(gameRecord.InitialReplayPayload), now,
 	).Scan(&gameID)
@@ -342,6 +342,47 @@ func (s *PostgresStore) GetCompletedHistoryGameForUser(ctx context.Context, game
 	}
 	events, err := s.HistoryEvents(ctx, gameID, includeEvents)
 	return gameRecord, players, events, err
+}
+
+func (s *PostgresStore) GetResultCardGameForUser(
+	ctx context.Context,
+	matchID string,
+	userID int64,
+	gameType string,
+) (history.Game, []history.Player, error) {
+	row := s.db.QueryRowContext(ctx, `
+               SELECT g.id, g.room_id, g.game_type, g.engine_version,
+                       g.replay_schema_version, g.started_at, g.ended_at, g.duration_seconds,
+                       g.winner_user_id, g.winner_player_id, g.end_reason, g.max_players,
+                       g.initial_state, g.initial_replay_payload, g.final_result,
+                       g.created_at, g.updated_at
+               FROM games g
+               WHERE g.match_id = $1
+                       AND g.game_type = $2
+                       AND g.ended_at IS NOT NULL
+                       AND g.end_reason = $3
+                       AND EXISTS (
+                               SELECT 1
+                               FROM game_players gp
+                               WHERE gp.game_id = g.id
+                                       AND gp.user_id = $4
+                                       AND NOT gp.is_ai
+                       )`,
+		matchID,
+		gameType,
+		history.EndReasonCompleted,
+		userID,
+	)
+	gameRecord, err := scanHistoryGame(row)
+	if err != nil {
+		return history.Game{}, nil, err
+	}
+	gameRecord.MatchID = matchID
+	players, err := s.HistoryPlayers(ctx, gameRecord.ID)
+	if err != nil {
+		return history.Game{}, nil, err
+	}
+	return gameRecord, players, nil
 }
 
 func (s *PostgresStore) HistoryPlayers(ctx context.Context, gameID int64) ([]history.Player, error) {

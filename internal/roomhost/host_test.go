@@ -660,6 +660,9 @@ func TestRetryDirtyProjectionsHistoryConvergesWithoutChangingLiveState(t *testin
 		t.Fatalf("history writes = games:%d events:%d, want 1/1",
 			len(store.startedHistory), len(store.appendedHistory))
 	}
+	if store.startedHistory[0].MatchID != "retry-room-r1" {
+		t.Fatalf("history matchID = %q, want retry-room-r1", store.startedHistory[0].MatchID)
+	}
 	if len(engine.applied) != 1 || !engine.applied[0].Replay {
 		t.Fatalf("history commands were not replayed deterministically: %+v", engine.applied)
 	}

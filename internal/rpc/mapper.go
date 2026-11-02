@@ -262,6 +262,28 @@ func mapHistoryPlayers(values []history.Player) []*platform.HistoryGamePlayer {
 	return result
 }
 
+func mapResultCardPlayers(values []history.Player, selfPlayerID string) []*platform.ResultCardPlayer {
+	result := make([]*platform.ResultCardPlayer, 0, len(values))
+	for _, value := range values {
+		mapped := &platform.ResultCardPlayer{
+			DisplayName: value.DisplayName,
+			SeatIndex:   int32(value.SeatIndex),
+			IsAi:        value.IsAI,
+			FinalStocks: int32(value.FinalStocks),
+			IsWinner:    value.IsWinner,
+			IsSelf:      selfPlayerID != "" && value.PlayerID == selfPlayerID,
+			FinalScore:  int32Pointer(value.FinalScore),
+			FinalMoney:  int32Pointer(value.FinalMoney),
+			FinalRank:   int32Pointer(value.FinalRank),
+		}
+		if value.GameRole != "" {
+			mapped.GameRole = stringPointer(value.GameRole)
+		}
+		result = append(result, mapped)
+	}
+	return result
+}
+
 func formatTime(value time.Time) string {
 	if value.IsZero() {
 		return ""

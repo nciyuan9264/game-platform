@@ -2119,6 +2119,7 @@ func (r *RoomActor) ensureHistoryLocked(
 	}
 	gameID, err = r.host.store.StartHistoryGame(ctx, history.Game{
 		RoomID:               r.record.RoomID,
+		MatchID:              r.match.MatchID,
 		GameType:             r.record.GameType,
 		EngineVersion:        r.definition.Version,
 		ReplaySchemaVersion:  projection.ReplaySchemaVersion,

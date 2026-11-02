@@ -44,6 +44,21 @@ func TestUserAuthMiddlewareUsesGatewayIdentity(t *testing.T) {
 	}
 }
 
+func TestUserAuthMiddlewareRequiresIdentityForResultCard(t *testing.T) {
+	called := false
+	endpoint := UserAuthMiddleware(func(context.Context, any, any) error {
+		called = true
+		return nil
+	})
+	result := &platform.GamePlatformServiceGetResultCardResult{}
+	if err := endpoint(rpcContext("GetResultCard"), nil, result); err != nil {
+		t.Fatal(err)
+	}
+	if called || result.GetErr() == nil || result.GetErr().GetCode() != "unauthorized" {
+		t.Fatalf("called = %v, error = %v", called, result.GetErr())
+	}
+}
+
 func TestUserAuthMiddlewareRejectsMissingOrInvalidIdentity(t *testing.T) {
 	tests := []struct {
 		name string

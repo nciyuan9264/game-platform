@@ -459,6 +459,15 @@ func (s *Store) GetCompletedHistoryGameForUser(ctx context.Context, gameID, user
 	return s.Postgres.GetCompletedHistoryGameForUser(ctx, gameID, userID, gameType, includeEvents)
 }
 
+func (s *Store) GetResultCardGameForUser(
+	ctx context.Context,
+	matchID string,
+	userID int64,
+	gameType string,
+) (history.Game, []history.Player, error) {
+	return s.Postgres.GetResultCardGameForUser(ctx, matchID, userID, gameType)
+}
+
 func (s *Store) HistoryReplayPageForUser(
 	ctx context.Context,
 	gameID,
