@@ -26,6 +26,7 @@ func mapOverview(value adminanalytics.Overview) *admin.OverviewData {
 			ActiveUsers:           item.ActiveUsers,
 			GamesStarted:          item.GamesStarted,
 			GamesCompleted:        item.GamesCompleted,
+			GamesAbandoned:        item.GamesAbandoned,
 			GameDurationSeconds:   item.GameDurationSeconds,
 			PlayerDurationSeconds: item.PlayerDurationSeconds,
 		})
@@ -46,6 +47,7 @@ func mapOverview(value adminanalytics.Overview) *admin.OverviewData {
 			D30RetentionRate:             metrics.D30RetentionRate,
 			GamesStarted:                 metrics.GamesStarted,
 			GamesCompleted:               metrics.GamesCompleted,
+			GamesAbandoned:               metrics.GamesAbandoned,
 			CompletionRate:               metrics.CompletionRate,
 			GameDurationSeconds:          metrics.GameDurationSeconds,
 			PlayerDurationSeconds:        metrics.PlayerDurationSeconds,
@@ -113,6 +115,7 @@ func mapGames(value adminanalytics.Games) *admin.GamesData {
 		games = append(games, &admin.GameActivitySummary{
 			GameType: item.GameType, ActiveUsers: item.ActiveUsers,
 			GamesStarted: item.GamesStarted, GamesCompleted: item.GamesCompleted,
+			GamesAbandoned: item.GamesAbandoned,
 			CompletionRate: item.CompletionRate, GameDurationSeconds: item.GameDurationSeconds,
 			PlayerDurationSeconds:      item.PlayerDurationSeconds,
 			AverageGameDurationSeconds: item.AverageGameDuration,

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/lib/pq"
+	"github.com/nciyuan9264/game-platform/internal/history"
 )
 
 type authOverview struct {
@@ -15,9 +16,13 @@ type authOverview struct {
 	recentIDs  []int64
 }
 
-func (s *Service) Overview(ctx context.Context) (Overview, error) {
-	return cachedValue(ctx, s, "overview", func(ctx context.Context) (Overview, error) {
-		window := s.reportingWindow()
+func (s *Service) Overview(ctx context.Context, query DateRangeQuery) (Overview, error) {
+	window, err := s.reportingWindowFor(query)
+	if err != nil {
+		return Overview{}, err
+	}
+	key := fmt.Sprintf("overview:%s:%s", window.StartDate(), window.EndDate())
+	return cachedValue(ctx, s, key, func(ctx context.Context) (Overview, error) {
 		authData, err := s.loadAuthOverview(ctx, window)
 		if err != nil {
 			return Overview{}, fmt.Errorf("load auth overview: %w", err)
@@ -29,7 +34,7 @@ func (s *Service) Overview(ctx context.Context) (Overview, error) {
 		for index := range daily {
 			daily[index].NewUsers = authData.daily[daily[index].Date]
 		}
-		converted, err := s.countConvertedUsers(ctx, authData.recentIDs)
+		converted, err := s.countConvertedUsers(ctx, authData.recentIDs, window.EndUTC)
 		if err != nil {
 			return Overview{}, fmt.Errorf("count converted users: %w", err)
 		}
@@ -47,7 +52,10 @@ func (s *Service) loadAuthOverview(ctx context.Context, window Window) (authOver
 			COUNT(*),
 			COUNT(*) FILTER (WHERE created_at >= $1 AND created_at < $2)
 		FROM public.users
-		WHERE deleted_at IS NULL`, window.StartUTC, window.EndUTC).Scan(&result.totalUsers, &result.newUsers); err != nil {
+		WHERE created_at < $2 AND (deleted_at IS NULL OR deleted_at >= $2)`, window.StartUTC, window.EndUTC).Scan(
+		&result.totalUsers,
+		&result.newUsers,
+	); err != nil {
 		return authOverview{}, err
 	}
 	rows, err := s.authDB.QueryContext(ctx, `
@@ -56,7 +64,8 @@ func (s *Service) loadAuthOverview(ctx context.Context, window Window) (authOver
 		), registrations AS (
 			SELECT (created_at AT TIME ZONE 'Asia/Shanghai')::date AS day, COUNT(*) AS users
 			FROM public.users
-			WHERE deleted_at IS NULL AND created_at >= $3 AND created_at < $4
+			WHERE created_at >= $3 AND created_at < $4
+				AND (deleted_at IS NULL OR deleted_at >= $4)
 			GROUP BY 1
 		)
 		SELECT dates.day, COALESCE(registrations.users, 0)
@@ -80,7 +89,8 @@ func (s *Service) loadAuthOverview(ctx context.Context, window Window) (authOver
 	rows, err = s.authDB.QueryContext(ctx, `
 		SELECT id
 		FROM public.users
-		WHERE deleted_at IS NULL AND created_at >= $1 AND created_at < $2
+		WHERE created_at >= $1 AND created_at < $2
+			AND (deleted_at IS NULL OR deleted_at >= $2)
 		ORDER BY id`, window.StartUTC, window.EndUTC)
 	if err != nil {
 		return authOverview{}, err
@@ -96,7 +106,7 @@ func (s *Service) loadAuthOverview(ctx context.Context, window Window) (authOver
 	return result, rows.Err()
 }
 
-func (s *Service) countConvertedUsers(ctx context.Context, userIDs []int64) (int64, error) {
+func (s *Service) countConvertedUsers(ctx context.Context, userIDs []int64, endUTC time.Time) (int64, error) {
 	if len(userIDs) == 0 {
 		return 0, nil
 	}
@@ -105,7 +115,10 @@ func (s *Service) countConvertedUsers(ctx context.Context, userIDs []int64) (int
 		SELECT COUNT(DISTINCT gp.user_id)
 		FROM game_players gp
 		JOIN games g ON g.id = gp.game_id
-		WHERE NOT gp.is_ai AND gp.user_id = ANY($1)`, pq.Array(userIDs)).Scan(&count)
+		WHERE NOT gp.is_ai AND gp.user_id = ANY($1) AND g.started_at < $2`,
+		pq.Array(userIDs),
+		endUTC,
+	).Scan(&count)
 	return count, err
 }
 
@@ -117,8 +130,15 @@ func (s *Service) loadGameOverview(ctx context.Context, window Window) ([]DailyO
 			SELECT
 				(started_at AT TIME ZONE 'Asia/Shanghai')::date AS day,
 				COUNT(*) AS games_started,
-				COUNT(*) FILTER (WHERE ended_at IS NOT NULL) AS games_completed,
-				COALESCE(SUM(duration_seconds) FILTER (WHERE ended_at IS NOT NULL), 0) AS game_seconds
+				COUNT(*) FILTER (
+					WHERE ended_at IS NOT NULL AND end_reason = $5
+				) AS games_completed,
+				COUNT(*) FILTER (
+					WHERE ended_at IS NOT NULL AND end_reason = $6
+				) AS games_abandoned,
+				COALESCE(SUM(duration_seconds) FILTER (
+					WHERE ended_at IS NOT NULL AND end_reason = $5
+				), 0) AS game_seconds
 			FROM games
 			WHERE started_at >= $3 AND started_at < $4
 			GROUP BY 1
@@ -138,12 +158,16 @@ func (s *Service) loadGameOverview(ctx context.Context, window Window) ([]DailyO
 			COALESCE(player_daily.active_users, 0),
 			COALESCE(game_daily.games_started, 0),
 			COALESCE(game_daily.games_completed, 0),
+			COALESCE(game_daily.games_abandoned, 0),
 			COALESCE(game_daily.game_seconds, 0),
 			COALESCE(player_daily.player_seconds, 0)
 		FROM dates
 		LEFT JOIN game_daily USING (day)
 		LEFT JOIN player_daily USING (day)
-		ORDER BY dates.day`, window.StartDate(), window.EndDate(), window.StartUTC, window.EndUTC)
+		ORDER BY dates.day`,
+		window.StartDate(), window.EndDate(), window.StartUTC, window.EndUTC,
+		history.EndReasonCompleted, history.EndReasonAbandoned,
+	)
 	if err != nil {
 		return nil, OverviewMetrics{}, err
 	}
@@ -158,6 +182,7 @@ func (s *Service) loadGameOverview(ctx context.Context, window Window) ([]DailyO
 			&item.ActiveUsers,
 			&item.GamesStarted,
 			&item.GamesCompleted,
+			&item.GamesAbandoned,
 			&item.GameDurationSeconds,
 			&item.PlayerDurationSeconds,
 		); err != nil {
@@ -167,6 +192,7 @@ func (s *Service) loadGameOverview(ctx context.Context, window Window) ([]DailyO
 		daily = append(daily, item)
 		metrics.GamesStarted += item.GamesStarted
 		metrics.GamesCompleted += item.GamesCompleted
+		metrics.GamesAbandoned += item.GamesAbandoned
 		metrics.GameDurationSeconds += item.GameDurationSeconds
 		metrics.PlayerDurationSeconds += item.PlayerDurationSeconds
 	}

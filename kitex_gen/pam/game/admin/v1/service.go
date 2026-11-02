@@ -8,7 +8,7 @@ import (
 )
 
 type GameAdminService interface {
-	GetOverview(ctx context.Context, req *EmptyReq) (r *OverviewResp, err error)
+	GetOverview(ctx context.Context, req *OverviewReq) (r *OverviewResp, err error)
 
 	ListUsers(ctx context.Context, req *ListUsersReq) (r *UsersResp, err error)
 
@@ -20,7 +20,7 @@ type GameAdminService interface {
 }
 
 type GameAdminServiceGetOverviewArgs struct {
-	Req *EmptyReq `thrift:"req,1,required" frugal:"1,required,EmptyReq" json:"req"`
+	Req *OverviewReq `thrift:"req,1,required" frugal:"1,required,OverviewReq" json:"req"`
 }
 
 func NewGameAdminServiceGetOverviewArgs() *GameAdminServiceGetOverviewArgs {
@@ -30,15 +30,15 @@ func NewGameAdminServiceGetOverviewArgs() *GameAdminServiceGetOverviewArgs {
 func (p *GameAdminServiceGetOverviewArgs) InitDefault() {
 }
 
-var GameAdminServiceGetOverviewArgs_Req_DEFAULT *EmptyReq
+var GameAdminServiceGetOverviewArgs_Req_DEFAULT *OverviewReq
 
-func (p *GameAdminServiceGetOverviewArgs) GetReq() (v *EmptyReq) {
+func (p *GameAdminServiceGetOverviewArgs) GetReq() (v *OverviewReq) {
 	if !p.IsSetReq() {
 		return GameAdminServiceGetOverviewArgs_Req_DEFAULT
 	}
 	return p.Req
 }
-func (p *GameAdminServiceGetOverviewArgs) SetReq(val *EmptyReq) {
+func (p *GameAdminServiceGetOverviewArgs) SetReq(val *OverviewReq) {
 	p.Req = val
 }
 

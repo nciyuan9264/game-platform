@@ -12,7 +12,7 @@ import (
 )
 
 type analyticsService interface {
-	Overview(context.Context) (adminanalytics.Overview, error)
+	Overview(context.Context, adminanalytics.DateRangeQuery) (adminanalytics.Overview, error)
 	Users(context.Context, adminanalytics.UserQuery) (adminanalytics.UsersPage, error)
 	UserActivity(context.Context, int64) (adminanalytics.UserActivity, error)
 	Games(context.Context) (adminanalytics.Games, error)
@@ -27,11 +27,14 @@ func NewHandler(analytics analyticsService) *Handler {
 	return &Handler{analytics: analytics}
 }
 
-func (h *Handler) GetOverview(ctx context.Context, req *admin.EmptyReq) (*admin.OverviewResp, error) {
+func (h *Handler) GetOverview(ctx context.Context, req *admin.OverviewReq) (*admin.OverviewResp, error) {
 	if req == nil {
 		return nil, adminError("invalid_request", errors.New("request is required"))
 	}
-	result, err := h.analytics.Overview(ctx)
+	result, err := h.analytics.Overview(ctx, adminanalytics.DateRangeQuery{
+		StartDate: req.GetStartDate(),
+		EndDate:   req.GetEndDate(),
+	})
 	if err != nil {
 		return nil, mapAnalyticsError(err)
 	}
@@ -93,6 +96,9 @@ func (h *Handler) GetLive(ctx context.Context, req *admin.EmptyReq) (*admin.Live
 }
 
 func mapAnalyticsError(err error) *admin.GameAdminError {
+	if errors.Is(err, adminanalytics.ErrInvalidDateRange) {
+		return adminError("invalid_request", err)
+	}
 	if errors.Is(err, adminanalytics.ErrUserNotFound) {
 		return adminError("not_found", errors.New("user not found"))
 	}

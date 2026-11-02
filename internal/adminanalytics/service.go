@@ -12,7 +12,10 @@ import (
 	_ "github.com/lib/pq"
 )
 
-var ErrUserNotFound = errors.New("admin analytics user not found")
+var (
+	ErrInvalidDateRange = errors.New("invalid admin analytics date range")
+	ErrUserNotFound     = errors.New("admin analytics user not found")
+)
 
 type Config struct {
 	GamePostgresDSN string
@@ -95,18 +98,49 @@ func (s *Service) PingGame(ctx context.Context) error { return s.gameDB.PingCont
 func (s *Service) PingAuth(ctx context.Context) error { return s.authDB.PingContext(ctx) }
 
 func (s *Service) reportingWindow() Window {
+	window, _ := s.reportingWindowFor(DateRangeQuery{})
+	return window
+}
+
+func (s *Service) reportingWindowFor(query DateRangeQuery) (Window, error) {
 	generatedAt := s.now()
 	localNow := generatedAt.In(s.location)
-	end := time.Date(localNow.Year(), localNow.Month(), localNow.Day(), 0, 0, 0, 0, s.location)
-	start := end.AddDate(0, 0, -(DefaultWindowDays - 1))
+	today := time.Date(localNow.Year(), localNow.Month(), localNow.Day(), 0, 0, 0, 0, s.location)
+	startDate := strings.TrimSpace(query.StartDate)
+	endDate := strings.TrimSpace(query.EndDate)
+	if startDate == "" && endDate == "" {
+		endDate = today.Format(time.DateOnly)
+		startDate = today.AddDate(0, 0, -(DefaultWindowDays - 1)).Format(time.DateOnly)
+	}
+	if startDate == "" || endDate == "" {
+		return Window{}, fmt.Errorf("%w: start_date and end_date must be provided together", ErrInvalidDateRange)
+	}
+	start, err := time.ParseInLocation(time.DateOnly, startDate, s.location)
+	if err != nil {
+		return Window{}, fmt.Errorf("%w: start_date must use YYYY-MM-DD", ErrInvalidDateRange)
+	}
+	end, err := time.ParseInLocation(time.DateOnly, endDate, s.location)
+	if err != nil {
+		return Window{}, fmt.Errorf("%w: end_date must use YYYY-MM-DD", ErrInvalidDateRange)
+	}
+	if start.After(end) {
+		return Window{}, fmt.Errorf("%w: start_date must not be after end_date", ErrInvalidDateRange)
+	}
+	if end.After(today) {
+		return Window{}, fmt.Errorf("%w: end_date must not be in the future", ErrInvalidDateRange)
+	}
+	days := int(end.Sub(start).Hours()/24) + 1
+	if days > MaxWindowDays {
+		return Window{}, fmt.Errorf("%w: date range must not exceed %d days", ErrInvalidDateRange, MaxWindowDays)
+	}
 	return Window{
 		Start:       start,
 		End:         end,
 		StartUTC:    start.UTC(),
 		EndUTC:      end.AddDate(0, 0, 1).UTC(),
-		Days:        DefaultWindowDays,
+		Days:        days,
 		GeneratedAt: generatedAt.UTC(),
-	}
+	}, nil
 }
 
 func normalizeUserQuery(input UserQuery) UserQuery {

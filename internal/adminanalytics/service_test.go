@@ -2,6 +2,7 @@ package adminanalytics
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 )
@@ -26,6 +27,60 @@ func TestReportingWindowUsesBeijingCalendarDays(t *testing.T) {
 	}
 	if got := window.EndUTC.Format(time.RFC3339); got != "2026-11-02T16:00:00Z" {
 		t.Fatalf("end UTC = %s", got)
+	}
+}
+
+func TestReportingWindowAcceptsCustomDateRange(t *testing.T) {
+	location, err := time.LoadLocation(Timezone)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := &Service{
+		location: location,
+		now: func() time.Time {
+			return time.Date(2026, 11, 2, 3, 0, 0, 0, time.UTC)
+		},
+	}
+	window, err := service.reportingWindowFor(DateRangeQuery{
+		StartDate: "2026-10-27",
+		EndDate:   "2026-11-02",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if window.Days != 7 || window.StartDate() != "2026-10-27" || window.EndDate() != "2026-11-02" {
+		t.Fatalf("window = %+v", window)
+	}
+	if got := window.StartUTC.Format(time.RFC3339); got != "2026-10-26T16:00:00Z" {
+		t.Fatalf("start UTC = %s", got)
+	}
+	if got := window.EndUTC.Format(time.RFC3339); got != "2026-11-02T16:00:00Z" {
+		t.Fatalf("end UTC = %s", got)
+	}
+}
+
+func TestReportingWindowRejectsInvalidRanges(t *testing.T) {
+	location, err := time.LoadLocation(Timezone)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := &Service{
+		location: location,
+		now: func() time.Time {
+			return time.Date(2026, 11, 2, 3, 0, 0, 0, time.UTC)
+		},
+	}
+	tests := []DateRangeQuery{
+		{StartDate: "2026-11-01"},
+		{StartDate: "2026/11/01", EndDate: "2026-11-02"},
+		{StartDate: "2026-11-02", EndDate: "2026-11-01"},
+		{StartDate: "2026-11-01", EndDate: "2026-11-03"},
+		{StartDate: "2025-11-01", EndDate: "2026-11-02"},
+	}
+	for _, input := range tests {
+		if _, err := service.reportingWindowFor(input); !errors.Is(err, ErrInvalidDateRange) {
+			t.Fatalf("reportingWindowFor(%+v) error = %v", input, err)
+		}
 	}
 }
 

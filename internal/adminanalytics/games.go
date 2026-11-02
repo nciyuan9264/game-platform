@@ -3,6 +3,8 @@ package adminanalytics
 import (
 	"context"
 	"fmt"
+
+	"github.com/nciyuan9264/game-platform/internal/history"
 )
 
 func (s *Service) Games(ctx context.Context) (Games, error) {
@@ -11,8 +13,15 @@ func (s *Service) Games(ctx context.Context) (Games, error) {
 		rows, err := s.gameDB.QueryContext(ctx, `
 			WITH game_stats AS (
 				SELECT game_type, COUNT(*) AS games_started,
-					COUNT(*) FILTER (WHERE ended_at IS NOT NULL) AS games_completed,
-					COALESCE(SUM(duration_seconds) FILTER (WHERE ended_at IS NOT NULL), 0) AS game_seconds
+					COUNT(*) FILTER (
+						WHERE ended_at IS NOT NULL AND end_reason = $3
+					) AS games_completed,
+					COUNT(*) FILTER (
+						WHERE ended_at IS NOT NULL AND end_reason = $4
+					) AS games_abandoned,
+					COALESCE(SUM(duration_seconds) FILTER (
+						WHERE ended_at IS NOT NULL AND end_reason = $3
+					), 0) AS game_seconds
 				FROM games
 				WHERE started_at >= $1 AND started_at < $2
 				GROUP BY game_type
@@ -30,6 +39,7 @@ func (s *Service) Games(ctx context.Context) (Games, error) {
 				COALESCE(player_stats.active_users, 0),
 				COALESCE(game_stats.games_started, 0),
 				COALESCE(game_stats.games_completed, 0),
+				COALESCE(game_stats.games_abandoned, 0),
 				COALESCE(game_stats.game_seconds, 0),
 				COALESCE(player_stats.player_seconds, 0),
 				COALESCE(player_stats.player_games, 0)
@@ -37,7 +47,9 @@ func (s *Service) Games(ctx context.Context) (Games, error) {
 			LEFT JOIN game_stats USING (game_type)
 			LEFT JOIN player_stats USING (game_type)
 			ORDER BY COALESCE(player_stats.player_seconds, 0) DESC,
-				COALESCE(game_stats.games_started, 0) DESC, catalog.game_type`, window.StartUTC, window.EndUTC)
+				COALESCE(game_stats.games_started, 0) DESC, catalog.game_type`,
+			window.StartUTC, window.EndUTC, history.EndReasonCompleted, history.EndReasonAbandoned,
+		)
 		if err != nil {
 			return Games{}, fmt.Errorf("query game analytics: %w", err)
 		}
@@ -51,6 +63,7 @@ func (s *Service) Games(ctx context.Context) (Games, error) {
 				&item.ActiveUsers,
 				&item.GamesStarted,
 				&item.GamesCompleted,
+				&item.GamesAbandoned,
 				&item.GameDurationSeconds,
 				&item.PlayerDurationSeconds,
 				&playerGames,

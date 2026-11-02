@@ -27,6 +27,62 @@ func (p *EmptyReq) String() string {
 
 var fieldIDToName_EmptyReq = map[int16]string{}
 
+type OverviewReq struct {
+	StartDate *ISODate `thrift:"start_date,1,optional" frugal:"1,optional,string" json:"start_date,omitempty"`
+	EndDate   *ISODate `thrift:"end_date,2,optional" frugal:"2,optional,string" json:"end_date,omitempty"`
+}
+
+func NewOverviewReq() *OverviewReq {
+	return &OverviewReq{}
+}
+
+func (p *OverviewReq) InitDefault() {
+}
+
+var OverviewReq_StartDate_DEFAULT ISODate
+
+func (p *OverviewReq) GetStartDate() (v ISODate) {
+	if !p.IsSetStartDate() {
+		return OverviewReq_StartDate_DEFAULT
+	}
+	return *p.StartDate
+}
+
+var OverviewReq_EndDate_DEFAULT ISODate
+
+func (p *OverviewReq) GetEndDate() (v ISODate) {
+	if !p.IsSetEndDate() {
+		return OverviewReq_EndDate_DEFAULT
+	}
+	return *p.EndDate
+}
+func (p *OverviewReq) SetStartDate(val *ISODate) {
+	p.StartDate = val
+}
+func (p *OverviewReq) SetEndDate(val *ISODate) {
+	p.EndDate = val
+}
+
+func (p *OverviewReq) IsSetStartDate() bool {
+	return p.StartDate != nil
+}
+
+func (p *OverviewReq) IsSetEndDate() bool {
+	return p.EndDate != nil
+}
+
+func (p *OverviewReq) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("OverviewReq(%+v)", *p)
+}
+
+var fieldIDToName_OverviewReq = map[int16]string{
+	1: "start_date",
+	2: "end_date",
+}
+
 type AnalyticsWindow struct {
 	Timezone        string  `thrift:"timezone,1,required" frugal:"1,required,string" json:"timezone"`
 	StartDate       ISODate `thrift:"start_date,2,required" frugal:"2,required,string" json:"start_date"`
@@ -110,6 +166,7 @@ type OverviewMetrics struct {
 	PlayerDurationSeconds        int64   `thrift:"player_duration_seconds,15,required" frugal:"15,required,i64" json:"player_duration_seconds"`
 	AverageGameDurationSeconds   int64   `thrift:"average_game_duration_seconds,16,required" frugal:"16,required,i64" json:"average_game_duration_seconds"`
 	AveragePlayerDurationSeconds int64   `thrift:"average_player_duration_seconds,17,required" frugal:"17,required,i64" json:"average_player_duration_seconds"`
+	GamesAbandoned               int64   `thrift:"games_abandoned,18,required" frugal:"18,required,i64" json:"games_abandoned"`
 }
 
 func NewOverviewMetrics() *OverviewMetrics {
@@ -186,6 +243,10 @@ func (p *OverviewMetrics) GetAverageGameDurationSeconds() (v int64) {
 func (p *OverviewMetrics) GetAveragePlayerDurationSeconds() (v int64) {
 	return p.AveragePlayerDurationSeconds
 }
+
+func (p *OverviewMetrics) GetGamesAbandoned() (v int64) {
+	return p.GamesAbandoned
+}
 func (p *OverviewMetrics) SetTotalUsers(val int64) {
 	p.TotalUsers = val
 }
@@ -237,6 +298,9 @@ func (p *OverviewMetrics) SetAverageGameDurationSeconds(val int64) {
 func (p *OverviewMetrics) SetAveragePlayerDurationSeconds(val int64) {
 	p.AveragePlayerDurationSeconds = val
 }
+func (p *OverviewMetrics) SetGamesAbandoned(val int64) {
+	p.GamesAbandoned = val
+}
 
 func (p *OverviewMetrics) String() string {
 	if p == nil {
@@ -263,6 +327,7 @@ var fieldIDToName_OverviewMetrics = map[int16]string{
 	15: "player_duration_seconds",
 	16: "average_game_duration_seconds",
 	17: "average_player_duration_seconds",
+	18: "games_abandoned",
 }
 
 type DailyOverview struct {
@@ -273,6 +338,7 @@ type DailyOverview struct {
 	GamesCompleted        int64   `thrift:"games_completed,5,required" frugal:"5,required,i64" json:"games_completed"`
 	GameDurationSeconds   int64   `thrift:"game_duration_seconds,6,required" frugal:"6,required,i64" json:"game_duration_seconds"`
 	PlayerDurationSeconds int64   `thrift:"player_duration_seconds,7,required" frugal:"7,required,i64" json:"player_duration_seconds"`
+	GamesAbandoned        int64   `thrift:"games_abandoned,8,required" frugal:"8,required,i64" json:"games_abandoned"`
 }
 
 func NewDailyOverview() *DailyOverview {
@@ -309,6 +375,10 @@ func (p *DailyOverview) GetGameDurationSeconds() (v int64) {
 func (p *DailyOverview) GetPlayerDurationSeconds() (v int64) {
 	return p.PlayerDurationSeconds
 }
+
+func (p *DailyOverview) GetGamesAbandoned() (v int64) {
+	return p.GamesAbandoned
+}
 func (p *DailyOverview) SetDate(val ISODate) {
 	p.Date = val
 }
@@ -330,6 +400,9 @@ func (p *DailyOverview) SetGameDurationSeconds(val int64) {
 func (p *DailyOverview) SetPlayerDurationSeconds(val int64) {
 	p.PlayerDurationSeconds = val
 }
+func (p *DailyOverview) SetGamesAbandoned(val int64) {
+	p.GamesAbandoned = val
+}
 
 func (p *DailyOverview) String() string {
 	if p == nil {
@@ -346,6 +419,7 @@ var fieldIDToName_DailyOverview = map[int16]string{
 	5: "games_completed",
 	6: "game_duration_seconds",
 	7: "player_duration_seconds",
+	8: "games_abandoned",
 }
 
 type OverviewData struct {
@@ -1118,6 +1192,7 @@ type GameActivitySummary struct {
 	PlayerDurationSeconds      int64   `thrift:"player_duration_seconds,7,required" frugal:"7,required,i64" json:"player_duration_seconds"`
 	AverageGameDurationSeconds int64   `thrift:"average_game_duration_seconds,8,required" frugal:"8,required,i64" json:"average_game_duration_seconds"`
 	AverageHumanPlayers        float64 `thrift:"average_human_players,9,required" frugal:"9,required,double" json:"average_human_players"`
+	GamesAbandoned             int64   `thrift:"games_abandoned,10,required" frugal:"10,required,i64" json:"games_abandoned"`
 }
 
 func NewGameActivitySummary() *GameActivitySummary {
@@ -1162,6 +1237,10 @@ func (p *GameActivitySummary) GetAverageGameDurationSeconds() (v int64) {
 func (p *GameActivitySummary) GetAverageHumanPlayers() (v float64) {
 	return p.AverageHumanPlayers
 }
+
+func (p *GameActivitySummary) GetGamesAbandoned() (v int64) {
+	return p.GamesAbandoned
+}
 func (p *GameActivitySummary) SetGameType(val string) {
 	p.GameType = val
 }
@@ -1189,6 +1268,9 @@ func (p *GameActivitySummary) SetAverageGameDurationSeconds(val int64) {
 func (p *GameActivitySummary) SetAverageHumanPlayers(val float64) {
 	p.AverageHumanPlayers = val
 }
+func (p *GameActivitySummary) SetGamesAbandoned(val int64) {
+	p.GamesAbandoned = val
+}
 
 func (p *GameActivitySummary) String() string {
 	if p == nil {
@@ -1198,15 +1280,16 @@ func (p *GameActivitySummary) String() string {
 }
 
 var fieldIDToName_GameActivitySummary = map[int16]string{
-	1: "game_type",
-	2: "active_users",
-	3: "games_started",
-	4: "games_completed",
-	5: "completion_rate",
-	6: "game_duration_seconds",
-	7: "player_duration_seconds",
-	8: "average_game_duration_seconds",
-	9: "average_human_players",
+	1:  "game_type",
+	2:  "active_users",
+	3:  "games_started",
+	4:  "games_completed",
+	5:  "completion_rate",
+	6:  "game_duration_seconds",
+	7:  "player_duration_seconds",
+	8:  "average_game_duration_seconds",
+	9:  "average_human_players",
+	10: "games_abandoned",
 }
 
 type GamesData struct {

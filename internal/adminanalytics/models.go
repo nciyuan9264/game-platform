@@ -4,6 +4,7 @@ import "time"
 
 const (
 	DefaultWindowDays = 30
+	MaxWindowDays     = 366
 	Timezone          = "Asia/Shanghai"
 )
 
@@ -32,6 +33,7 @@ type OverviewMetrics struct {
 	D30RetentionRate          float64
 	GamesStarted              int64
 	GamesCompleted            int64
+	GamesAbandoned            int64
 	CompletionRate            float64
 	GameDurationSeconds       int64
 	PlayerDurationSeconds     int64
@@ -45,6 +47,7 @@ type DailyOverview struct {
 	ActiveUsers           int64
 	GamesStarted          int64
 	GamesCompleted        int64
+	GamesAbandoned        int64
 	GameDurationSeconds   int64
 	PlayerDurationSeconds int64
 }
@@ -53,6 +56,11 @@ type Overview struct {
 	Window  Window
 	Metrics OverviewMetrics
 	Daily   []DailyOverview
+}
+
+type DateRangeQuery struct {
+	StartDate string
+	EndDate   string
 }
 
 type User struct {
@@ -103,6 +111,7 @@ type GameActivity struct {
 	ActiveUsers             int64
 	GamesStarted            int64
 	GamesCompleted          int64
+	GamesAbandoned          int64
 	CompletionRate          float64
 	GameDurationSeconds     int64
 	PlayerDurationSeconds   int64

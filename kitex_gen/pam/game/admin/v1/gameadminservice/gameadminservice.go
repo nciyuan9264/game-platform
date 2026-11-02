@@ -244,7 +244,7 @@ func newServiceClient(c client.Client) *kClient {
 	}
 }
 
-func (p *kClient) GetOverview(ctx context.Context, req *v1.EmptyReq) (r *v1.OverviewResp, err error) {
+func (p *kClient) GetOverview(ctx context.Context, req *v1.OverviewReq) (r *v1.OverviewResp, err error) {
 	var _args v1.GameAdminServiceGetOverviewArgs
 	_args.Req = req
 	var _result v1.GameAdminServiceGetOverviewResult

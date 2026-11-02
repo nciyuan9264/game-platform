@@ -10,11 +10,16 @@ import (
 )
 
 type fakeAnalytics struct {
-	overview adminanalytics.Overview
+	overview      adminanalytics.Overview
+	overviewError error
+	overviewQuery *adminanalytics.DateRangeQuery
 }
 
-func (f fakeAnalytics) Overview(context.Context) (adminanalytics.Overview, error) {
-	return f.overview, nil
+func (f fakeAnalytics) Overview(_ context.Context, query adminanalytics.DateRangeQuery) (adminanalytics.Overview, error) {
+	if f.overviewQuery != nil {
+		*f.overviewQuery = query
+	}
+	return f.overview, f.overviewError
 }
 
 func (fakeAnalytics) Users(context.Context, adminanalytics.UserQuery) (adminanalytics.UsersPage, error) {
@@ -39,17 +44,25 @@ func TestGetOverviewMapsAnalyticsResponse(t *testing.T) {
 		t.Fatal(err)
 	}
 	end := time.Date(2026, 11, 2, 0, 0, 0, 0, location)
-	handler := NewHandler(fakeAnalytics{overview: adminanalytics.Overview{
+	var query adminanalytics.DateRangeQuery
+	handler := NewHandler(fakeAnalytics{overviewQuery: &query, overview: adminanalytics.Overview{
 		Window: adminanalytics.Window{
 			Start:       end.AddDate(0, 0, -29),
 			End:         end,
 			Days:        30,
 			GeneratedAt: end.UTC(),
 		},
-		Metrics: adminanalytics.OverviewMetrics{TotalUsers: 12, DAU: 3, MAU: 6},
-		Daily:   []adminanalytics.DailyOverview{{Date: "2026-11-02", NewUsers: 2}},
+		Metrics: adminanalytics.OverviewMetrics{
+			TotalUsers: 12, DAU: 3, MAU: 6, GamesCompleted: 4, GamesAbandoned: 2,
+		},
+		Daily: []adminanalytics.DailyOverview{{
+			Date: "2026-11-02", NewUsers: 2, GamesCompleted: 1, GamesAbandoned: 1,
+		}},
 	}})
-	response, err := handler.GetOverview(context.Background(), &admin.EmptyReq{})
+	response, err := handler.GetOverview(context.Background(), &admin.OverviewReq{
+		StartDate: optionalString("2026-10-27"),
+		EndDate:   optionalString("2026-11-02"),
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,6 +71,27 @@ func TestGetOverviewMapsAnalyticsResponse(t *testing.T) {
 	}
 	if got := response.GetData().GetDaily()[0].GetNewUsers_(); got != 2 {
 		t.Fatalf("new users = %d", got)
+	}
+	if got := response.GetData().GetMetrics().GetGamesAbandoned(); got != 2 {
+		t.Fatalf("abandoned games = %d", got)
+	}
+	if got := response.GetData().GetDaily()[0].GetGamesAbandoned(); got != 1 {
+		t.Fatalf("daily abandoned games = %d", got)
+	}
+	if query.StartDate != "2026-10-27" || query.EndDate != "2026-11-02" {
+		t.Fatalf("query = %+v", query)
+	}
+}
+
+func TestGetOverviewMapsInvalidDateRange(t *testing.T) {
+	handler := NewHandler(fakeAnalytics{overviewError: adminanalytics.ErrInvalidDateRange})
+	_, err := handler.GetOverview(context.Background(), &admin.OverviewReq{})
+	if err == nil {
+		t.Fatal("expected invalid request error")
+	}
+	adminErr, ok := err.(*admin.GameAdminError)
+	if !ok || adminErr.GetCode() != "invalid_request" {
+		t.Fatalf("error = %v", err)
 	}
 }
 
