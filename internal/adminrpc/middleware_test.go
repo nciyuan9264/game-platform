@@ -12,10 +12,10 @@ import (
 
 func TestAdminAuthMiddlewareRequiresAdminRole(t *testing.T) {
 	tests := []struct {
-		name      string
-		ctx       context.Context
-		wantCode  string
-		wantCall  bool
+		name     string
+		ctx      context.Context
+		wantCode string
+		wantCall bool
 	}{
 		{name: "missing identity", ctx: adminRPCContext("GetOverview"), wantCode: "unauthorized"},
 		{name: "player forbidden", ctx: adminGatewayContext("GetOverview", "7", []string{"player"}), wantCode: "forbidden"},
