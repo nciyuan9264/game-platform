@@ -557,6 +557,7 @@ func (p *OverviewMetrics) FastRead(buf []byte) (int, error) {
 	var issetAverageGameDurationSeconds bool = false
 	var issetAveragePlayerDurationSeconds bool = false
 	var issetGamesAbandoned bool = false
+	var issetTotalGames bool = false
 	for {
 		fieldTypeId, fieldId, l, err = thrift.Binary.ReadFieldBegin(buf[offset:])
 		offset += l
@@ -837,6 +838,21 @@ func (p *OverviewMetrics) FastRead(buf []byte) (int, error) {
 					goto SkipFieldError
 				}
 			}
+		case 19:
+			if fieldTypeId == thrift.I64 {
+				l, err = p.FastReadField19(buf[offset:])
+				offset += l
+				if err != nil {
+					goto ReadFieldError
+				}
+				issetTotalGames = true
+			} else {
+				l, err = thrift.Binary.Skip(buf[offset:], fieldTypeId)
+				offset += l
+				if err != nil {
+					goto SkipFieldError
+				}
+			}
 		default:
 			l, err = thrift.Binary.Skip(buf[offset:], fieldTypeId)
 			offset += l
@@ -933,6 +949,11 @@ func (p *OverviewMetrics) FastRead(buf []byte) (int, error) {
 
 	if !issetGamesAbandoned {
 		fieldId = 18
+		goto RequiredFieldNotSetError
+	}
+
+	if !issetTotalGames {
+		fieldId = 19
 		goto RequiredFieldNotSetError
 	}
 	return offset, nil
@@ -1198,6 +1219,20 @@ func (p *OverviewMetrics) FastReadField18(buf []byte) (int, error) {
 	return offset, nil
 }
 
+func (p *OverviewMetrics) FastReadField19(buf []byte) (int, error) {
+	offset := 0
+
+	var _field int64
+	if v, l, err := thrift.Binary.ReadI64(buf[offset:]); err != nil {
+		return offset, err
+	} else {
+		offset += l
+		_field = v
+	}
+	p.TotalGames = _field
+	return offset, nil
+}
+
 func (p *OverviewMetrics) FastWrite(buf []byte) int {
 	return p.FastWriteNocopy(buf, nil)
 }
@@ -1223,6 +1258,7 @@ func (p *OverviewMetrics) FastWriteNocopy(buf []byte, w thrift.NocopyWriter) int
 		offset += p.fastWriteField16(buf[offset:], w)
 		offset += p.fastWriteField17(buf[offset:], w)
 		offset += p.fastWriteField18(buf[offset:], w)
+		offset += p.fastWriteField19(buf[offset:], w)
 	}
 	offset += thrift.Binary.WriteFieldStop(buf[offset:])
 	return offset
@@ -1249,6 +1285,7 @@ func (p *OverviewMetrics) BLength() int {
 		l += p.field16Length()
 		l += p.field17Length()
 		l += p.field18Length()
+		l += p.field19Length()
 	}
 	l += thrift.Binary.FieldStopLength()
 	return l
@@ -1380,6 +1417,13 @@ func (p *OverviewMetrics) fastWriteField18(buf []byte, w thrift.NocopyWriter) in
 	return offset
 }
 
+func (p *OverviewMetrics) fastWriteField19(buf []byte, w thrift.NocopyWriter) int {
+	offset := 0
+	offset += thrift.Binary.WriteFieldBegin(buf[offset:], thrift.I64, 19)
+	offset += thrift.Binary.WriteI64(buf[offset:], p.TotalGames)
+	return offset
+}
+
 func (p *OverviewMetrics) field1Length() int {
 	l := 0
 	l += thrift.Binary.FieldBeginLength()
@@ -1500,6 +1544,13 @@ func (p *OverviewMetrics) field17Length() int {
 }
 
 func (p *OverviewMetrics) field18Length() int {
+	l := 0
+	l += thrift.Binary.FieldBeginLength()
+	l += thrift.Binary.I64Length()
+	return l
+}
+
+func (p *OverviewMetrics) field19Length() int {
 	l := 0
 	l += thrift.Binary.FieldBeginLength()
 	l += thrift.Binary.I64Length()

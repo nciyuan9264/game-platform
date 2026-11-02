@@ -123,6 +123,13 @@ func (s *Service) countConvertedUsers(ctx context.Context, userIDs []int64, endU
 }
 
 func (s *Service) loadGameOverview(ctx context.Context, window Window) ([]DailyOverview, OverviewMetrics, error) {
+	metrics := OverviewMetrics{}
+	if err := s.gameDB.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM games
+		WHERE started_at < $1`, window.EndUTC).Scan(&metrics.TotalGames); err != nil {
+		return nil, OverviewMetrics{}, err
+	}
 	rows, err := s.gameDB.QueryContext(ctx, `
 		WITH dates AS (
 			SELECT generate_series($1::date, $2::date, interval '1 day')::date AS day
@@ -173,7 +180,6 @@ func (s *Service) loadGameOverview(ctx context.Context, window Window) ([]DailyO
 	}
 	defer rows.Close()
 	daily := make([]DailyOverview, 0, window.Days)
-	metrics := OverviewMetrics{}
 	for rows.Next() {
 		var day time.Time
 		var item DailyOverview

@@ -167,6 +167,7 @@ type OverviewMetrics struct {
 	AverageGameDurationSeconds   int64   `thrift:"average_game_duration_seconds,16,required" frugal:"16,required,i64" json:"average_game_duration_seconds"`
 	AveragePlayerDurationSeconds int64   `thrift:"average_player_duration_seconds,17,required" frugal:"17,required,i64" json:"average_player_duration_seconds"`
 	GamesAbandoned               int64   `thrift:"games_abandoned,18,required" frugal:"18,required,i64" json:"games_abandoned"`
+	TotalGames                   int64   `thrift:"total_games,19,required" frugal:"19,required,i64" json:"total_games"`
 }
 
 func NewOverviewMetrics() *OverviewMetrics {
@@ -247,6 +248,10 @@ func (p *OverviewMetrics) GetAveragePlayerDurationSeconds() (v int64) {
 func (p *OverviewMetrics) GetGamesAbandoned() (v int64) {
 	return p.GamesAbandoned
 }
+
+func (p *OverviewMetrics) GetTotalGames() (v int64) {
+	return p.TotalGames
+}
 func (p *OverviewMetrics) SetTotalUsers(val int64) {
 	p.TotalUsers = val
 }
@@ -301,6 +306,9 @@ func (p *OverviewMetrics) SetAveragePlayerDurationSeconds(val int64) {
 func (p *OverviewMetrics) SetGamesAbandoned(val int64) {
 	p.GamesAbandoned = val
 }
+func (p *OverviewMetrics) SetTotalGames(val int64) {
+	p.TotalGames = val
+}
 
 func (p *OverviewMetrics) String() string {
 	if p == nil {
@@ -328,6 +336,7 @@ var fieldIDToName_OverviewMetrics = map[int16]string{
 	16: "average_game_duration_seconds",
 	17: "average_player_duration_seconds",
 	18: "games_abandoned",
+	19: "total_games",
 }
 
 type DailyOverview struct {

@@ -54,7 +54,7 @@ func TestGetOverviewMapsAnalyticsResponse(t *testing.T) {
 			GeneratedAt: end.UTC(),
 		},
 		Metrics: adminanalytics.OverviewMetrics{
-			TotalUsers: 12, DAU: 3, MAU: 6, GamesCompleted: 4, GamesAbandoned: 2,
+			TotalUsers: 12, TotalGames: 20, DAU: 3, MAU: 6, GamesCompleted: 4, GamesAbandoned: 2,
 		},
 		Daily: []adminanalytics.DailyOverview{{
 			Date: "2026-11-02", NewUsers: 2, GamesCompleted: 1, GamesAbandoned: 1,
@@ -69,6 +69,9 @@ func TestGetOverviewMapsAnalyticsResponse(t *testing.T) {
 	}
 	if response.GetStatusCode() != 200 || response.GetData().GetMetrics().GetTotalUsers() != 12 {
 		t.Fatalf("response = %+v", response)
+	}
+	if got := response.GetData().GetMetrics().GetTotalGames(); got != 20 {
+		t.Fatalf("total games = %d", got)
 	}
 	if got := response.GetData().GetDaily()[0].GetNewUsers_(); got != 2 {
 		t.Fatalf("new users = %d", got)

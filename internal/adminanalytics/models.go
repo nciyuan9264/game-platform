@@ -22,6 +22,7 @@ func (w Window) EndDate() string   { return w.End.Format(time.DateOnly) }
 
 type OverviewMetrics struct {
 	TotalUsers                int64
+	TotalGames                int64
 	NewUsers                  int64
 	DAU                       int64
 	WAU                       int64

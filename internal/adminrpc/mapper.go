@@ -36,6 +36,7 @@ func mapOverview(value adminanalytics.Overview) *admin.OverviewData {
 		Window: mapWindow(value.Window),
 		Metrics: &admin.OverviewMetrics{
 			TotalUsers:                   metrics.TotalUsers,
+			TotalGames:                   metrics.TotalGames,
 			NewUsers_:                    metrics.NewUsers,
 			Dau:                          metrics.DAU,
 			Wau:                          metrics.WAU,
