@@ -31,6 +31,7 @@ mark_all_games() {
 }
 
 mark_all_centers() {
+  centers[admin-rpc]=1
   centers[migrate-schema]=1
   centers[control-plane]=1
   centers[platform-rpc]=1
@@ -124,6 +125,9 @@ for path in "${files[@]}"; do
       ;;
     internal/rpc/*|cmd/platform-rpc/*)
       centers[platform-rpc]=1
+      ;;
+    internal/adminanalytics/*|internal/adminrpc/*|cmd/admin-rpc/*|kitex_gen/pam/game/admin/*)
+      centers[admin-rpc]=1
       ;;
     internal/gateway/*|cmd/gateway/*)
       centers[gateway]=1

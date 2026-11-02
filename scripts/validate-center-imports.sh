@@ -5,8 +5,11 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 paths=(
+  cmd/admin-rpc
   cmd/control-plane
   cmd/platform-rpc
+  internal/adminanalytics
+  internal/adminrpc
   internal/control
   internal/rpc
 )

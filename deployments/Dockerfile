@@ -16,5 +16,5 @@ RUN CGO_ENABLED=0 GOOS=linux go build -buildvcs=false -o /out/service ./cmd/${SE
 FROM debian:bookworm-slim
 WORKDIR /app
 COPY --from=builder /out/service /app/service
-EXPOSE 8080 9000 18092 18093
+EXPOSE 8080 9000 18092 18093 18094 18095
 ENTRYPOINT ["/app/service"]

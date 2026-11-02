@@ -24,6 +24,19 @@ func TestServiceNameUsesFallback(t *testing.T) {
 	}
 }
 
+func TestServerOptionsUsesGameAdminPSMOverride(t *testing.T) {
+	t.Setenv("GAME_ADMIN_RPC_PSM", "game.operations.rpc")
+	t.Setenv("CONTROL_RPC_PSM", "game.platform.control")
+	t.Setenv("ETCD_ENDPOINTS", "")
+	_, got, err := ServerOptions("game.admin.rpc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "game.operations.rpc" {
+		t.Fatalf("ServerOptions() PSM = %q, want game.operations.rpc", got)
+	}
+}
+
 func TestServiceNameRejectsNonThreeSegmentPSM(t *testing.T) {
 	t.Setenv("AUTH_RPC_PSM", "pam.auth")
 	if _, err := ServiceName("AUTH_RPC_PSM", "pam.auth.rpc"); err == nil {

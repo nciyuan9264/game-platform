@@ -41,11 +41,11 @@ assert_case \
   docs/game-plugin-guide.md
 
 assert_case \
-  '{"center":["control-plane","gateway","migrate-schema","platform-rpc"],"games":["acquire","cantstop","davinci","forsale","fugitive","hex","hive","loveletter","onitama","othello","quoridor","sixnimmt","splendor","warchest","yinsh"],"productionChange":true,"docsOnly":false}' \
+  '{"center":["admin-rpc","control-plane","gateway","migrate-schema","platform-rpc"],"games":["acquire","cantstop","davinci","forsale","fugitive","hex","hive","loveletter","onitama","othello","quoridor","sixnimmt","splendor","warchest","yinsh"],"productionChange":true,"docsOnly":false}' \
   internal/contracts/types.go
 
 assert_case \
-  '{"center":["control-plane","gateway","migrate-schema","platform-rpc"],"games":["acquire","cantstop","davinci","forsale","fugitive","hex","hive","loveletter","onitama","othello","quoridor","sixnimmt","splendor","warchest","yinsh"],"productionChange":true,"docsOnly":false}' \
+  '{"center":["admin-rpc","control-plane","gateway","migrate-schema","platform-rpc"],"games":["acquire","cantstop","davinci","forsale","fugitive","hex","hive","loveletter","onitama","othello","quoridor","sixnimmt","splendor","warchest","yinsh"],"productionChange":true,"docsOnly":false}' \
   docker-compose.prod.yml \
   .github/workflows/deploy.yml
 
@@ -108,5 +108,11 @@ assert_case \
   '{"center":[],"games":["cantstop"],"productionChange":true,"docsOnly":false}' \
   internal/plugins/cantstop/rules.go \
   internal/plugins/cantstop/rules_test.go
+
+assert_case \
+  '{"center":["admin-rpc"],"games":[],"productionChange":true,"docsOnly":false}' \
+  internal/adminanalytics/overview.go \
+  internal/adminrpc/handler.go \
+  cmd/admin-rpc/main.go
 
 printf 'changed release component tests passed\n'

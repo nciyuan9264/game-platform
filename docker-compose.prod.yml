@@ -90,6 +90,29 @@ services:
           - game-platform-rpc
     restart: unless-stopped
 
+  admin-rpc:
+    image: ${GAME_PLATFORM_IMAGE_REGISTRY:-sgccr.ccs.tencentyun.com/tengxuntcr}/game-platform-admin-rpc:${GAME_PLATFORM_IMAGE_TAG:-latest}
+    environment:
+      <<: *runtime-env
+      AUTH_POSTGRES_DSN: ${AUTH_POSTGRES_DSN:-${POSTGRES_DSN:?set shared RDS DSN}}
+      ADMIN_ANALYTICS_CACHE_TTL: ${ADMIN_ANALYTICS_CACHE_TTL:-60s}
+      GAME_ADMIN_RPC_ADDR: ':18094'
+      GAME_ADMIN_HEALTH_ADDR: ':18095'
+      GAME_ADMIN_RPC_PSM: game.admin.rpc
+      KITEX_IP_TO_REGISTRY: admin-rpc
+      KITEX_PORT_TO_REGISTRY: '18094'
+    ports:
+      - '127.0.0.1:18094:18094'
+      - '127.0.0.1:18095:18095'
+    depends_on:
+      schema-migrate:
+        condition: service_completed_successfully
+    networks:
+      global-network:
+        aliases:
+          - game-admin-rpc
+    restart: unless-stopped
+
   gateway:
     image: ${GAME_PLATFORM_IMAGE_REGISTRY:-sgccr.ccs.tencentyun.com/tengxuntcr}/game-platform-gateway:${GAME_PLATFORM_IMAGE_TAG:-latest}
     environment:

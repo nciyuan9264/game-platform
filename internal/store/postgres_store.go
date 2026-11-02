@@ -186,6 +186,7 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_matches_room_round ON matches (runtime_room_id, round_no)`,
 		`CREATE INDEX IF NOT EXISTS idx_matches_game_type_started ON matches (game_type, started_at DESC)`,
 		`CREATE INDEX IF NOT EXISTS idx_matches_status ON matches (status)`,
+		`CREATE INDEX IF NOT EXISTS idx_matches_admin_live ON matches (status, started_at DESC) INCLUDE (runtime_room_id, match_id, game_type)`,
 		`CREATE INDEX IF NOT EXISTS idx_matches_owner_user_id ON matches (owner_user_id)`,
 		`CREATE TABLE IF NOT EXISTS match_players (
 			match_id TEXT NOT NULL REFERENCES matches(match_id) ON DELETE CASCADE,
@@ -207,6 +208,7 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 		`ALTER TABLE match_players ADD COLUMN IF NOT EXISTS ready BOOLEAN NOT NULL DEFAULT false`,
 		`ALTER TABLE match_players ADD COLUMN IF NOT EXISTS game_role TEXT NOT NULL DEFAULT ''`,
 		`CREATE INDEX IF NOT EXISTS idx_match_players_user_id ON match_players (user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_match_players_admin_online ON match_players (match_id, online) WHERE NOT is_ai`,
 		`CREATE TABLE IF NOT EXISTS game_catalog (
 			game_type TEXT PRIMARY KEY,
 			active_engine_version TEXT NOT NULL,
@@ -274,6 +276,7 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 		`ALTER TABLE games ALTER COLUMN end_reason SET DEFAULT ''`,
 		`ALTER TABLE games ALTER COLUMN end_reason SET NOT NULL`,
 		`CREATE INDEX IF NOT EXISTS idx_games_type_started ON games (game_type, started_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_games_admin_started ON games (started_at DESC) INCLUDE (game_type, ended_at, duration_seconds)`,
 		`ALTER TABLE games ADD COLUMN IF NOT EXISTS engine_version TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE games ADD COLUMN IF NOT EXISTS replay_schema_version INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE games ADD COLUMN IF NOT EXISTS initial_replay_payload BYTEA`,
@@ -315,6 +318,7 @@ func (s *PostgresStore) Migrate(ctx context.Context) error {
 			AND player.user_id IS NOT NULL`,
 		`CREATE INDEX IF NOT EXISTS idx_game_players_game ON game_players (game_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_game_players_user ON game_players (user_id, game_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_game_players_admin_user_game ON game_players (user_id, game_id) WHERE NOT is_ai AND user_id IS NOT NULL`,
 		`CREATE TABLE IF NOT EXISTS player_identity_aliases (
 			game_id BIGINT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
 			match_id TEXT NOT NULL,

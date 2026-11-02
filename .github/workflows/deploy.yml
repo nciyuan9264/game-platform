@@ -72,7 +72,7 @@ jobs:
           games="$(jq -c '.games' <<<"${matrix}")"
           case "${COMPONENT_OVERRIDE}" in
             center)
-              center='["control-plane","gateway","migrate-schema","platform-rpc"]'
+              center='["admin-rpc","control-plane","gateway","migrate-schema","platform-rpc"]'
               games='[]'
               ;;
             acquire|davinci|splendor|yinsh|othello|fugitive|warchest|quoridor|hex|loveletter|sixnimmt|forsale|onitama|hive|cantstop)
@@ -310,6 +310,13 @@ jobs:
             if printf '%s\n' "${services}" | grep -Fxq platform-rpc; then
               for attempt in $(seq 1 30); do
                 curl --fail --silent http://127.0.0.1:18093/readyz >/dev/null && break
+                test "${attempt}" -lt 30
+                sleep 2
+              done
+            fi
+            if printf '%s\n' "${services}" | grep -Fxq admin-rpc; then
+              for attempt in $(seq 1 30); do
+                curl --fail --silent http://127.0.0.1:18095/readyz >/dev/null && break
                 test "${attempt}" -lt 30
                 sleep 2
               done

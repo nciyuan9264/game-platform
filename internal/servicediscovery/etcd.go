@@ -17,8 +17,11 @@ var psmPattern = regexp.MustCompile(`^[a-z][a-z0-9_-]*\.[a-z][a-z0-9_-]*\.[a-z][
 // ServerOptions returns PSM metadata and optional etcd registration options.
 func ServerOptions(defaultPSM string) ([]server.Option, string, error) {
 	key := "CONTROL_RPC_PSM"
-	if defaultPSM == "game.platform.rpc" {
+	switch defaultPSM {
+	case "game.platform.rpc":
 		key = "GAME_PLATFORM_RPC_PSM"
+	case "game.admin.rpc":
+		key = "GAME_ADMIN_RPC_PSM"
 	}
 	psm := env(key, defaultPSM)
 	if err := ValidatePSM(psm); err != nil {
