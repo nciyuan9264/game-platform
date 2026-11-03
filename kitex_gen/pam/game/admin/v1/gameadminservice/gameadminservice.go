@@ -286,7 +286,7 @@ func (p *kClient) GetUserActivity(ctx context.Context, req *v1.GetUserActivityRe
 	return _result.GetSuccess(), nil
 }
 
-func (p *kClient) ListGames(ctx context.Context, req *v1.EmptyReq) (r *v1.GamesResp, err error) {
+func (p *kClient) ListGames(ctx context.Context, req *v1.GamesReq) (r *v1.GamesResp, err error) {
 	var _args v1.GameAdminServiceListGamesArgs
 	_args.Req = req
 	var _result v1.GameAdminServiceListGamesResult

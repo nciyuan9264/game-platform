@@ -14,7 +14,7 @@ type GameAdminService interface {
 
 	GetUserActivity(ctx context.Context, req *GetUserActivityReq) (r *UserActivityResp, err error)
 
-	ListGames(ctx context.Context, req *EmptyReq) (r *GamesResp, err error)
+	ListGames(ctx context.Context, req *GamesReq) (r *GamesResp, err error)
 
 	GetLive(ctx context.Context, req *EmptyReq) (r *LiveResp, err error)
 }
@@ -302,7 +302,7 @@ var fieldIDToName_GameAdminServiceGetUserActivityResult = map[int16]string{
 }
 
 type GameAdminServiceListGamesArgs struct {
-	Req *EmptyReq `thrift:"req,1,required" frugal:"1,required,EmptyReq" json:"req"`
+	Req *GamesReq `thrift:"req,1,required" frugal:"1,required,GamesReq" json:"req"`
 }
 
 func NewGameAdminServiceListGamesArgs() *GameAdminServiceListGamesArgs {
@@ -312,15 +312,15 @@ func NewGameAdminServiceListGamesArgs() *GameAdminServiceListGamesArgs {
 func (p *GameAdminServiceListGamesArgs) InitDefault() {
 }
 
-var GameAdminServiceListGamesArgs_Req_DEFAULT *EmptyReq
+var GameAdminServiceListGamesArgs_Req_DEFAULT *GamesReq
 
-func (p *GameAdminServiceListGamesArgs) GetReq() (v *EmptyReq) {
+func (p *GameAdminServiceListGamesArgs) GetReq() (v *GamesReq) {
 	if !p.IsSetReq() {
 		return GameAdminServiceListGamesArgs_Req_DEFAULT
 	}
 	return p.Req
 }
-func (p *GameAdminServiceListGamesArgs) SetReq(val *EmptyReq) {
+func (p *GameAdminServiceListGamesArgs) SetReq(val *GamesReq) {
 	p.Req = val
 }
 

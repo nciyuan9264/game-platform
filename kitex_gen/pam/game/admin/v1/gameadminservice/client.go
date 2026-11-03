@@ -14,7 +14,7 @@ type Client interface {
 	GetOverview(ctx context.Context, req *v1.OverviewReq, callOptions ...callopt.Option) (r *v1.OverviewResp, err error)
 	ListUsers(ctx context.Context, req *v1.ListUsersReq, callOptions ...callopt.Option) (r *v1.UsersResp, err error)
 	GetUserActivity(ctx context.Context, req *v1.GetUserActivityReq, callOptions ...callopt.Option) (r *v1.UserActivityResp, err error)
-	ListGames(ctx context.Context, req *v1.EmptyReq, callOptions ...callopt.Option) (r *v1.GamesResp, err error)
+	ListGames(ctx context.Context, req *v1.GamesReq, callOptions ...callopt.Option) (r *v1.GamesResp, err error)
 	GetLive(ctx context.Context, req *v1.EmptyReq, callOptions ...callopt.Option) (r *v1.LiveResp, err error)
 }
 
@@ -62,7 +62,7 @@ func (p *kGameAdminServiceClient) GetUserActivity(ctx context.Context, req *v1.G
 	return p.kClient.GetUserActivity(ctx, req)
 }
 
-func (p *kGameAdminServiceClient) ListGames(ctx context.Context, req *v1.EmptyReq, callOptions ...callopt.Option) (r *v1.GamesResp, err error) {
+func (p *kGameAdminServiceClient) ListGames(ctx context.Context, req *v1.GamesReq, callOptions ...callopt.Option) (r *v1.GamesResp, err error) {
 	ctx = client.NewCtxWithCallOptions(ctx, callOptions)
 	return p.kClient.ListGames(ctx, req)
 }

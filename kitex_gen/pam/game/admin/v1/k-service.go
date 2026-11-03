@@ -835,7 +835,7 @@ RequiredFieldNotSetError:
 
 func (p *GameAdminServiceListGamesArgs) FastReadField1(buf []byte) (int, error) {
 	offset := 0
-	_field := NewEmptyReq()
+	_field := NewGamesReq()
 	if l, err := _field.FastRead(buf[offset:]); err != nil {
 		return offset, err
 	} else {

@@ -15,7 +15,7 @@ type analyticsService interface {
 	Overview(context.Context, adminanalytics.DateRangeQuery) (adminanalytics.Overview, error)
 	Users(context.Context, adminanalytics.UserQuery) (adminanalytics.UsersPage, error)
 	UserActivity(context.Context, int64) (adminanalytics.UserActivity, error)
-	Games(context.Context) (adminanalytics.Games, error)
+	Games(context.Context, adminanalytics.GamesQuery) (adminanalytics.Games, error)
 	Live(context.Context) (adminanalytics.Live, error)
 }
 
@@ -77,11 +77,17 @@ func (h *Handler) GetUserActivity(ctx context.Context, req *admin.GetUserActivit
 	}, nil
 }
 
-func (h *Handler) ListGames(ctx context.Context, req *admin.EmptyReq) (*admin.GamesResp, error) {
+func (h *Handler) ListGames(ctx context.Context, req *admin.GamesReq) (*admin.GamesResp, error) {
 	if req == nil {
 		return nil, adminError("invalid_request", errors.New("request is required"))
 	}
-	result, err := h.analytics.Games(ctx)
+	result, err := h.analytics.Games(ctx, adminanalytics.GamesQuery{
+		DateRange: adminanalytics.DateRangeQuery{
+			StartDate: req.GetStartDate(),
+			EndDate:   req.GetEndDate(),
+		},
+		AllTime: req.GetAllTime(),
+	})
 	if err != nil {
 		return nil, mapAnalyticsError(err)
 	}

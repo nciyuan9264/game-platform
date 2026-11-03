@@ -13,6 +13,7 @@ type fakeAnalytics struct {
 	overview      adminanalytics.Overview
 	overviewError error
 	overviewQuery *adminanalytics.DateRangeQuery
+	gamesQuery    *adminanalytics.GamesQuery
 	live          adminanalytics.Live
 }
 
@@ -31,7 +32,10 @@ func (fakeAnalytics) UserActivity(context.Context, int64) (adminanalytics.UserAc
 	return adminanalytics.UserActivity{}, nil
 }
 
-func (fakeAnalytics) Games(context.Context) (adminanalytics.Games, error) {
+func (f fakeAnalytics) Games(_ context.Context, query adminanalytics.GamesQuery) (adminanalytics.Games, error) {
+	if f.gamesQuery != nil {
+		*f.gamesQuery = query
+	}
 	return adminanalytics.Games{}, nil
 }
 
@@ -96,6 +100,34 @@ func TestGetOverviewMapsInvalidDateRange(t *testing.T) {
 	adminErr, ok := err.(*admin.GameAdminError)
 	if !ok || adminErr.GetCode() != "invalid_request" {
 		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestListGamesForwardsDateRange(t *testing.T) {
+	var query adminanalytics.GamesQuery
+	handler := NewHandler(fakeAnalytics{gamesQuery: &query})
+	_, err := handler.ListGames(context.Background(), &admin.GamesReq{
+		StartDate: optionalString("2026-10-01"),
+		EndDate:   optionalString("2026-10-15"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if query.DateRange.StartDate != "2026-10-01" || query.DateRange.EndDate != "2026-10-15" || query.AllTime {
+		t.Fatalf("query = %+v", query)
+	}
+}
+
+func TestListGamesForwardsAllTime(t *testing.T) {
+	allTime := true
+	var query adminanalytics.GamesQuery
+	handler := NewHandler(fakeAnalytics{gamesQuery: &query})
+	_, err := handler.ListGames(context.Background(), &admin.GamesReq{AllTime: &allTime})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !query.AllTime || query.DateRange.StartDate != "" || query.DateRange.EndDate != "" {
+		t.Fatalf("query = %+v", query)
 	}
 }
 

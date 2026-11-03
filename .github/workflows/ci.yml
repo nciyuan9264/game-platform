@@ -23,7 +23,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: nciyuan9264/pam-idl
-          ref: bff0ef71bb70e2a84aff767b5f559700b03ae6bd
+          ref: ff277dcaeaa587ea855e20e7671895a7921cbf93
           path: pam-idl
 
       - name: Setup Go

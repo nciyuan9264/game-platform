@@ -59,6 +59,29 @@ func TestReportingWindowAcceptsCustomDateRange(t *testing.T) {
 	}
 }
 
+func TestReportingWindowForGamesSupportsAllTime(t *testing.T) {
+	location, err := time.LoadLocation(Timezone)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := &Service{
+		location: location,
+		now: func() time.Time {
+			return time.Date(2026, 11, 1, 16, 30, 0, 0, time.UTC)
+		},
+	}
+	window, err := service.reportingWindowForGames(GamesQuery{AllTime: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if window.StartDate() != "1970-01-01" || window.EndDate() != "2026-11-02" {
+		t.Fatalf("window = %s..%s", window.StartDate(), window.EndDate())
+	}
+	if window.Days <= MaxWindowDays {
+		t.Fatalf("all-time days = %d", window.Days)
+	}
+}
+
 func TestReportingWindowRejectsInvalidRanges(t *testing.T) {
 	location, err := time.LoadLocation(Timezone)
 	if err != nil {

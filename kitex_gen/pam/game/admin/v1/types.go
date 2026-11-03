@@ -1227,6 +1227,80 @@ var fieldIDToName_UserActivityResp = map[int16]string{
 	3: "data",
 }
 
+type GamesReq struct {
+	StartDate *ISODate `thrift:"start_date,1,optional" frugal:"1,optional,string" json:"start_date,omitempty"`
+	EndDate   *ISODate `thrift:"end_date,2,optional" frugal:"2,optional,string" json:"end_date,omitempty"`
+	AllTime   *bool    `thrift:"all_time,3,optional" frugal:"3,optional,bool" json:"all_time,omitempty"`
+}
+
+func NewGamesReq() *GamesReq {
+	return &GamesReq{}
+}
+
+func (p *GamesReq) InitDefault() {
+}
+
+var GamesReq_StartDate_DEFAULT ISODate
+
+func (p *GamesReq) GetStartDate() (v ISODate) {
+	if !p.IsSetStartDate() {
+		return GamesReq_StartDate_DEFAULT
+	}
+	return *p.StartDate
+}
+
+var GamesReq_EndDate_DEFAULT ISODate
+
+func (p *GamesReq) GetEndDate() (v ISODate) {
+	if !p.IsSetEndDate() {
+		return GamesReq_EndDate_DEFAULT
+	}
+	return *p.EndDate
+}
+
+var GamesReq_AllTime_DEFAULT bool
+
+func (p *GamesReq) GetAllTime() (v bool) {
+	if !p.IsSetAllTime() {
+		return GamesReq_AllTime_DEFAULT
+	}
+	return *p.AllTime
+}
+func (p *GamesReq) SetStartDate(val *ISODate) {
+	p.StartDate = val
+}
+func (p *GamesReq) SetEndDate(val *ISODate) {
+	p.EndDate = val
+}
+func (p *GamesReq) SetAllTime(val *bool) {
+	p.AllTime = val
+}
+
+func (p *GamesReq) IsSetStartDate() bool {
+	return p.StartDate != nil
+}
+
+func (p *GamesReq) IsSetEndDate() bool {
+	return p.EndDate != nil
+}
+
+func (p *GamesReq) IsSetAllTime() bool {
+	return p.AllTime != nil
+}
+
+func (p *GamesReq) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("GamesReq(%+v)", *p)
+}
+
+var fieldIDToName_GamesReq = map[int16]string{
+	1: "start_date",
+	2: "end_date",
+	3: "all_time",
+}
+
 type GameActivitySummary struct {
 	GameType                   string  `thrift:"game_type,1,required" frugal:"1,required,string" json:"game_type"`
 	ActiveUsers                int64   `thrift:"active_users,2,required" frugal:"2,required,i64" json:"active_users"`

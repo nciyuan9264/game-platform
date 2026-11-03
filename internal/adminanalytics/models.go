@@ -64,6 +64,11 @@ type DateRangeQuery struct {
 	EndDate   string
 }
 
+type GamesQuery struct {
+	DateRange DateRangeQuery
+	AllTime   bool
+}
+
 type User struct {
 	ID                    int64
 	DisplayName           string

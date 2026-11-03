@@ -7,9 +7,13 @@ import (
 	"github.com/nciyuan9264/game-platform/internal/history"
 )
 
-func (s *Service) Games(ctx context.Context) (Games, error) {
-	return cachedValue(ctx, s, "games", func(ctx context.Context) (Games, error) {
-		window := s.reportingWindow()
+func (s *Service) Games(ctx context.Context, query GamesQuery) (Games, error) {
+	window, err := s.reportingWindowForGames(query)
+	if err != nil {
+		return Games{}, err
+	}
+	key := fmt.Sprintf("games:%t:%s:%s", query.AllTime, window.StartDate(), window.EndDate())
+	return cachedValue(ctx, s, key, func(ctx context.Context) (Games, error) {
 		rows, err := s.gameDB.QueryContext(ctx, `
 			WITH game_stats AS (
 				SELECT game_type, COUNT(*) AS games_started,

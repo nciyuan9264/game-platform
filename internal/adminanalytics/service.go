@@ -102,6 +102,24 @@ func (s *Service) reportingWindow() Window {
 	return window
 }
 
+func (s *Service) reportingWindowForGames(query GamesQuery) (Window, error) {
+	if !query.AllTime {
+		return s.reportingWindowFor(query.DateRange)
+	}
+	generatedAt := s.now()
+	localNow := generatedAt.In(s.location)
+	end := time.Date(localNow.Year(), localNow.Month(), localNow.Day(), 0, 0, 0, 0, s.location)
+	start := time.Date(1970, time.January, 1, 0, 0, 0, 0, s.location)
+	return Window{
+		Start:       start,
+		End:         end,
+		StartUTC:    start.UTC(),
+		EndUTC:      end.AddDate(0, 0, 1).UTC(),
+		Days:        int(end.Sub(start).Hours()/24) + 1,
+		GeneratedAt: generatedAt.UTC(),
+	}, nil
+}
+
 func (s *Service) reportingWindowFor(query DateRangeQuery) (Window, error) {
 	generatedAt := s.now()
 	localNow := generatedAt.In(s.location)
