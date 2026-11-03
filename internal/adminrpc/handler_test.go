@@ -14,6 +14,8 @@ type fakeAnalytics struct {
 	overviewError error
 	overviewQuery *adminanalytics.OverviewQuery
 	gamesQuery    *adminanalytics.GamesQuery
+	matches       adminanalytics.MatchesPage
+	matchesQuery  *adminanalytics.MatchQuery
 	live          adminanalytics.Live
 }
 
@@ -37,6 +39,13 @@ func (f fakeAnalytics) Games(_ context.Context, query adminanalytics.GamesQuery)
 		*f.gamesQuery = query
 	}
 	return adminanalytics.Games{}, nil
+}
+
+func (f fakeAnalytics) Matches(_ context.Context, query adminanalytics.MatchQuery) (adminanalytics.MatchesPage, error) {
+	if f.matchesQuery != nil {
+		*f.matchesQuery = query
+	}
+	return f.matches, nil
 }
 
 func (f fakeAnalytics) Live(context.Context) (adminanalytics.Live, error) {
@@ -144,6 +153,44 @@ func TestListGamesForwardsAllTime(t *testing.T) {
 	}
 }
 
+func TestListMatchesForwardsFiltersAndMapsPlayers(t *testing.T) {
+	userID := int64(7)
+	rank := 1
+	var query adminanalytics.MatchQuery
+	handler := NewHandler(fakeAnalytics{
+		matchesQuery: &query,
+		matches: adminanalytics.MatchesPage{
+			Page: 2, PageSize: 20, Total: 24,
+			Matches: []adminanalytics.Match{{
+				ID: 42, RoomID: "SP-1042", MatchID: "match-7", GameType: "splendor",
+				StartedAt: time.Unix(100, 0), EndedAt: time.Unix(130, 0), DurationSeconds: 30,
+				EndReason: "completed", MaxPlayers: 4,
+				Players: []adminanalytics.MatchPlayer{{
+					UserID: &userID, PlayerID: "player-7", DisplayName: "北海玩家",
+					SeatIndex: 1, FinalRank: &rank, IsWinner: true,
+				}},
+			}},
+		},
+	})
+	response, err := handler.ListMatches(context.Background(), &admin.ListMatchesReq{
+		Page: optionalInt32(2), PageSize: optionalInt32(20), Query: optionalString("北海"),
+		GameType: optionalString("splendor"), EndReason: optionalString("completed"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if query.Page != 2 || query.PageSize != 20 || query.Query != "北海" ||
+		query.GameType != "splendor" || query.EndReason != "completed" {
+		t.Fatalf("query = %+v", query)
+	}
+	data := response.GetData()
+	player := data.GetMatches()[0].GetPlayers()[0]
+	if data.GetTotal() != 24 || data.GetMatches()[0].GetRoomId() != "SP-1042" ||
+		player.GetUserId() != "7" || player.GetFinalRank() != 1 || !player.GetIsWinner() {
+		t.Fatalf("response = %+v", response)
+	}
+}
+
 func TestGetLiveMapsPlayerNames(t *testing.T) {
 	analytics := fakeAnalytics{}
 	analytics.live = adminanalytics.Live{
@@ -178,4 +225,8 @@ func TestGetUserActivityRejectsInvalidUserID(t *testing.T) {
 	if !ok || adminErr.GetCode() != "invalid_request" {
 		t.Fatalf("error = %v", err)
 	}
+}
+
+func optionalInt32(value int32) *int32 {
+	return &value
 }

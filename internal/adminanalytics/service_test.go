@@ -122,6 +122,20 @@ func TestNormalizeUserQuery(t *testing.T) {
 	}
 }
 
+func TestNormalizeMatchQuery(t *testing.T) {
+	got := normalizeMatchQuery(MatchQuery{
+		Page: -1, PageSize: 500, Query: "  SP-1042  ", GameType: " Splendor ", EndReason: " COMPLETED ",
+	})
+	if got.Page != 1 || got.PageSize != 100 || got.Query != "SP-1042" ||
+		got.GameType != "splendor" || got.EndReason != "completed" {
+		t.Fatalf("normalized query = %+v", got)
+	}
+	defaults := normalizeMatchQuery(MatchQuery{EndReason: "unknown"})
+	if defaults.Page != 1 || defaults.PageSize != 20 || defaults.EndReason != "" {
+		t.Fatalf("default query = %+v", defaults)
+	}
+}
+
 func TestCachedValueExpires(t *testing.T) {
 	now := time.Date(2026, 11, 2, 0, 0, 0, 0, time.UTC)
 	service := &Service{

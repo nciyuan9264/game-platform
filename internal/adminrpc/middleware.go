@@ -28,6 +28,7 @@ var adminMethods = map[string]struct{}{
 	"ListUsers":       {},
 	"GetUserActivity": {},
 	"ListGames":       {},
+	"ListMatches":     {},
 	"GetLive":         {},
 }
 

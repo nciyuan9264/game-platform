@@ -15,6 +15,7 @@ type Client interface {
 	ListUsers(ctx context.Context, req *v1.ListUsersReq, callOptions ...callopt.Option) (r *v1.UsersResp, err error)
 	GetUserActivity(ctx context.Context, req *v1.GetUserActivityReq, callOptions ...callopt.Option) (r *v1.UserActivityResp, err error)
 	ListGames(ctx context.Context, req *v1.GamesReq, callOptions ...callopt.Option) (r *v1.GamesResp, err error)
+	ListMatches(ctx context.Context, req *v1.ListMatchesReq, callOptions ...callopt.Option) (r *v1.MatchesResp, err error)
 	GetLive(ctx context.Context, req *v1.EmptyReq, callOptions ...callopt.Option) (r *v1.LiveResp, err error)
 }
 
@@ -65,6 +66,11 @@ func (p *kGameAdminServiceClient) GetUserActivity(ctx context.Context, req *v1.G
 func (p *kGameAdminServiceClient) ListGames(ctx context.Context, req *v1.GamesReq, callOptions ...callopt.Option) (r *v1.GamesResp, err error) {
 	ctx = client.NewCtxWithCallOptions(ctx, callOptions)
 	return p.kClient.ListGames(ctx, req)
+}
+
+func (p *kGameAdminServiceClient) ListMatches(ctx context.Context, req *v1.ListMatchesReq, callOptions ...callopt.Option) (r *v1.MatchesResp, err error) {
+	ctx = client.NewCtxWithCallOptions(ctx, callOptions)
+	return p.kClient.ListMatches(ctx, req)
 }
 
 func (p *kGameAdminServiceClient) GetLive(ctx context.Context, req *v1.EmptyReq, callOptions ...callopt.Option) (r *v1.LiveResp, err error) {

@@ -1532,6 +1532,448 @@ var fieldIDToName_GamesResp = map[int16]string{
 	3: "data",
 }
 
+type ListMatchesReq struct {
+	Page      *int32  `thrift:"page,1,optional" frugal:"1,optional,i32" json:"page,omitempty"`
+	PageSize  *int32  `thrift:"page_size,2,optional" frugal:"2,optional,i32" json:"page_size,omitempty"`
+	Query     *string `thrift:"query,3,optional" frugal:"3,optional,string" json:"query,omitempty"`
+	GameType  *string `thrift:"game_type,4,optional" frugal:"4,optional,string" json:"game_type,omitempty"`
+	EndReason *string `thrift:"end_reason,5,optional" frugal:"5,optional,string" json:"end_reason,omitempty"`
+}
+
+func NewListMatchesReq() *ListMatchesReq {
+	return &ListMatchesReq{}
+}
+
+func (p *ListMatchesReq) InitDefault() {
+}
+
+var ListMatchesReq_Page_DEFAULT int32
+
+func (p *ListMatchesReq) GetPage() (v int32) {
+	if !p.IsSetPage() {
+		return ListMatchesReq_Page_DEFAULT
+	}
+	return *p.Page
+}
+
+var ListMatchesReq_PageSize_DEFAULT int32
+
+func (p *ListMatchesReq) GetPageSize() (v int32) {
+	if !p.IsSetPageSize() {
+		return ListMatchesReq_PageSize_DEFAULT
+	}
+	return *p.PageSize
+}
+
+var ListMatchesReq_Query_DEFAULT string
+
+func (p *ListMatchesReq) GetQuery() (v string) {
+	if !p.IsSetQuery() {
+		return ListMatchesReq_Query_DEFAULT
+	}
+	return *p.Query
+}
+
+var ListMatchesReq_GameType_DEFAULT string
+
+func (p *ListMatchesReq) GetGameType() (v string) {
+	if !p.IsSetGameType() {
+		return ListMatchesReq_GameType_DEFAULT
+	}
+	return *p.GameType
+}
+
+var ListMatchesReq_EndReason_DEFAULT string
+
+func (p *ListMatchesReq) GetEndReason() (v string) {
+	if !p.IsSetEndReason() {
+		return ListMatchesReq_EndReason_DEFAULT
+	}
+	return *p.EndReason
+}
+func (p *ListMatchesReq) SetPage(val *int32) {
+	p.Page = val
+}
+func (p *ListMatchesReq) SetPageSize(val *int32) {
+	p.PageSize = val
+}
+func (p *ListMatchesReq) SetQuery(val *string) {
+	p.Query = val
+}
+func (p *ListMatchesReq) SetGameType(val *string) {
+	p.GameType = val
+}
+func (p *ListMatchesReq) SetEndReason(val *string) {
+	p.EndReason = val
+}
+
+func (p *ListMatchesReq) IsSetPage() bool {
+	return p.Page != nil
+}
+
+func (p *ListMatchesReq) IsSetPageSize() bool {
+	return p.PageSize != nil
+}
+
+func (p *ListMatchesReq) IsSetQuery() bool {
+	return p.Query != nil
+}
+
+func (p *ListMatchesReq) IsSetGameType() bool {
+	return p.GameType != nil
+}
+
+func (p *ListMatchesReq) IsSetEndReason() bool {
+	return p.EndReason != nil
+}
+
+func (p *ListMatchesReq) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("ListMatchesReq(%+v)", *p)
+}
+
+var fieldIDToName_ListMatchesReq = map[int16]string{
+	1: "page",
+	2: "page_size",
+	3: "query",
+	4: "game_type",
+	5: "end_reason",
+}
+
+type MatchPlayerSummary struct {
+	UserId      *string `thrift:"user_id,1,optional" frugal:"1,optional,string" json:"user_id,omitempty"`
+	PlayerId    string  `thrift:"player_id,2,required" frugal:"2,required,string" json:"player_id"`
+	DisplayName string  `thrift:"display_name,3,required" frugal:"3,required,string" json:"display_name"`
+	SeatIndex   int32   `thrift:"seat_index,4,required" frugal:"4,required,i32" json:"seat_index"`
+	IsAi        bool    `thrift:"is_ai,5,required" frugal:"5,required,bool" json:"is_ai"`
+	FinalRank   *int32  `thrift:"final_rank,6,optional" frugal:"6,optional,i32" json:"final_rank,omitempty"`
+	IsWinner    bool    `thrift:"is_winner,7,required" frugal:"7,required,bool" json:"is_winner"`
+}
+
+func NewMatchPlayerSummary() *MatchPlayerSummary {
+	return &MatchPlayerSummary{}
+}
+
+func (p *MatchPlayerSummary) InitDefault() {
+}
+
+var MatchPlayerSummary_UserId_DEFAULT string
+
+func (p *MatchPlayerSummary) GetUserId() (v string) {
+	if !p.IsSetUserId() {
+		return MatchPlayerSummary_UserId_DEFAULT
+	}
+	return *p.UserId
+}
+
+func (p *MatchPlayerSummary) GetPlayerId() (v string) {
+	return p.PlayerId
+}
+
+func (p *MatchPlayerSummary) GetDisplayName() (v string) {
+	return p.DisplayName
+}
+
+func (p *MatchPlayerSummary) GetSeatIndex() (v int32) {
+	return p.SeatIndex
+}
+
+func (p *MatchPlayerSummary) GetIsAi() (v bool) {
+	return p.IsAi
+}
+
+var MatchPlayerSummary_FinalRank_DEFAULT int32
+
+func (p *MatchPlayerSummary) GetFinalRank() (v int32) {
+	if !p.IsSetFinalRank() {
+		return MatchPlayerSummary_FinalRank_DEFAULT
+	}
+	return *p.FinalRank
+}
+
+func (p *MatchPlayerSummary) GetIsWinner() (v bool) {
+	return p.IsWinner
+}
+func (p *MatchPlayerSummary) SetUserId(val *string) {
+	p.UserId = val
+}
+func (p *MatchPlayerSummary) SetPlayerId(val string) {
+	p.PlayerId = val
+}
+func (p *MatchPlayerSummary) SetDisplayName(val string) {
+	p.DisplayName = val
+}
+func (p *MatchPlayerSummary) SetSeatIndex(val int32) {
+	p.SeatIndex = val
+}
+func (p *MatchPlayerSummary) SetIsAi(val bool) {
+	p.IsAi = val
+}
+func (p *MatchPlayerSummary) SetFinalRank(val *int32) {
+	p.FinalRank = val
+}
+func (p *MatchPlayerSummary) SetIsWinner(val bool) {
+	p.IsWinner = val
+}
+
+func (p *MatchPlayerSummary) IsSetUserId() bool {
+	return p.UserId != nil
+}
+
+func (p *MatchPlayerSummary) IsSetFinalRank() bool {
+	return p.FinalRank != nil
+}
+
+func (p *MatchPlayerSummary) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("MatchPlayerSummary(%+v)", *p)
+}
+
+var fieldIDToName_MatchPlayerSummary = map[int16]string{
+	1: "user_id",
+	2: "player_id",
+	3: "display_name",
+	4: "seat_index",
+	5: "is_ai",
+	6: "final_rank",
+	7: "is_winner",
+}
+
+type MatchSummary struct {
+	GameId          string                `thrift:"game_id,1,required" frugal:"1,required,string" json:"game_id"`
+	RoomId          string                `thrift:"room_id,2,required" frugal:"2,required,string" json:"room_id"`
+	MatchId         *string               `thrift:"match_id,3,optional" frugal:"3,optional,string" json:"match_id,omitempty"`
+	GameType        string                `thrift:"game_type,4,required" frugal:"4,required,string" json:"game_type"`
+	StartedAtUnix   int64                 `thrift:"started_at_unix,5,required" frugal:"5,required,i64" json:"started_at_unix"`
+	EndedAtUnix     int64                 `thrift:"ended_at_unix,6,required" frugal:"6,required,i64" json:"ended_at_unix"`
+	DurationSeconds int64                 `thrift:"duration_seconds,7,required" frugal:"7,required,i64" json:"duration_seconds"`
+	EndReason       string                `thrift:"end_reason,8,required" frugal:"8,required,string" json:"end_reason"`
+	MaxPlayers      int32                 `thrift:"max_players,9,required" frugal:"9,required,i32" json:"max_players"`
+	Players         []*MatchPlayerSummary `thrift:"players,10,required" frugal:"10,required,list<MatchPlayerSummary>" json:"players"`
+}
+
+func NewMatchSummary() *MatchSummary {
+	return &MatchSummary{}
+}
+
+func (p *MatchSummary) InitDefault() {
+}
+
+func (p *MatchSummary) GetGameId() (v string) {
+	return p.GameId
+}
+
+func (p *MatchSummary) GetRoomId() (v string) {
+	return p.RoomId
+}
+
+var MatchSummary_MatchId_DEFAULT string
+
+func (p *MatchSummary) GetMatchId() (v string) {
+	if !p.IsSetMatchId() {
+		return MatchSummary_MatchId_DEFAULT
+	}
+	return *p.MatchId
+}
+
+func (p *MatchSummary) GetGameType() (v string) {
+	return p.GameType
+}
+
+func (p *MatchSummary) GetStartedAtUnix() (v int64) {
+	return p.StartedAtUnix
+}
+
+func (p *MatchSummary) GetEndedAtUnix() (v int64) {
+	return p.EndedAtUnix
+}
+
+func (p *MatchSummary) GetDurationSeconds() (v int64) {
+	return p.DurationSeconds
+}
+
+func (p *MatchSummary) GetEndReason() (v string) {
+	return p.EndReason
+}
+
+func (p *MatchSummary) GetMaxPlayers() (v int32) {
+	return p.MaxPlayers
+}
+
+func (p *MatchSummary) GetPlayers() (v []*MatchPlayerSummary) {
+	return p.Players
+}
+func (p *MatchSummary) SetGameId(val string) {
+	p.GameId = val
+}
+func (p *MatchSummary) SetRoomId(val string) {
+	p.RoomId = val
+}
+func (p *MatchSummary) SetMatchId(val *string) {
+	p.MatchId = val
+}
+func (p *MatchSummary) SetGameType(val string) {
+	p.GameType = val
+}
+func (p *MatchSummary) SetStartedAtUnix(val int64) {
+	p.StartedAtUnix = val
+}
+func (p *MatchSummary) SetEndedAtUnix(val int64) {
+	p.EndedAtUnix = val
+}
+func (p *MatchSummary) SetDurationSeconds(val int64) {
+	p.DurationSeconds = val
+}
+func (p *MatchSummary) SetEndReason(val string) {
+	p.EndReason = val
+}
+func (p *MatchSummary) SetMaxPlayers(val int32) {
+	p.MaxPlayers = val
+}
+func (p *MatchSummary) SetPlayers(val []*MatchPlayerSummary) {
+	p.Players = val
+}
+
+func (p *MatchSummary) IsSetMatchId() bool {
+	return p.MatchId != nil
+}
+
+func (p *MatchSummary) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("MatchSummary(%+v)", *p)
+}
+
+var fieldIDToName_MatchSummary = map[int16]string{
+	1:  "game_id",
+	2:  "room_id",
+	3:  "match_id",
+	4:  "game_type",
+	5:  "started_at_unix",
+	6:  "ended_at_unix",
+	7:  "duration_seconds",
+	8:  "end_reason",
+	9:  "max_players",
+	10: "players",
+}
+
+type MatchesData struct {
+	Matches  []*MatchSummary `thrift:"matches,1,required" frugal:"1,required,list<MatchSummary>" json:"matches"`
+	Page     int32           `thrift:"page,2,required" frugal:"2,required,i32" json:"page"`
+	PageSize int32           `thrift:"page_size,3,required" frugal:"3,required,i32" json:"page_size"`
+	Total    int64           `thrift:"total,4,required" frugal:"4,required,i64" json:"total"`
+}
+
+func NewMatchesData() *MatchesData {
+	return &MatchesData{}
+}
+
+func (p *MatchesData) InitDefault() {
+}
+
+func (p *MatchesData) GetMatches() (v []*MatchSummary) {
+	return p.Matches
+}
+
+func (p *MatchesData) GetPage() (v int32) {
+	return p.Page
+}
+
+func (p *MatchesData) GetPageSize() (v int32) {
+	return p.PageSize
+}
+
+func (p *MatchesData) GetTotal() (v int64) {
+	return p.Total
+}
+func (p *MatchesData) SetMatches(val []*MatchSummary) {
+	p.Matches = val
+}
+func (p *MatchesData) SetPage(val int32) {
+	p.Page = val
+}
+func (p *MatchesData) SetPageSize(val int32) {
+	p.PageSize = val
+}
+func (p *MatchesData) SetTotal(val int64) {
+	p.Total = val
+}
+
+func (p *MatchesData) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("MatchesData(%+v)", *p)
+}
+
+var fieldIDToName_MatchesData = map[int16]string{
+	1: "matches",
+	2: "page",
+	3: "page_size",
+	4: "total",
+}
+
+type MatchesResp struct {
+	StatusCode int32        `thrift:"status_code,1,required" frugal:"1,required,i32" json:"status_code"`
+	Message    string       `thrift:"message,2,required" frugal:"2,required,string" json:"message"`
+	Data       *MatchesData `thrift:"data,3,required" frugal:"3,required,MatchesData" json:"data"`
+}
+
+func NewMatchesResp() *MatchesResp {
+	return &MatchesResp{}
+}
+
+func (p *MatchesResp) InitDefault() {
+}
+
+func (p *MatchesResp) GetStatusCode() (v int32) {
+	return p.StatusCode
+}
+
+func (p *MatchesResp) GetMessage() (v string) {
+	return p.Message
+}
+
+var MatchesResp_Data_DEFAULT *MatchesData
+
+func (p *MatchesResp) GetData() (v *MatchesData) {
+	if !p.IsSetData() {
+		return MatchesResp_Data_DEFAULT
+	}
+	return p.Data
+}
+func (p *MatchesResp) SetStatusCode(val int32) {
+	p.StatusCode = val
+}
+func (p *MatchesResp) SetMessage(val string) {
+	p.Message = val
+}
+func (p *MatchesResp) SetData(val *MatchesData) {
+	p.Data = val
+}
+
+func (p *MatchesResp) IsSetData() bool {
+	return p.Data != nil
+}
+
+func (p *MatchesResp) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("MatchesResp(%+v)", *p)
+}
+
+var fieldIDToName_MatchesResp = map[int16]string{
+	1: "status_code",
+	2: "message",
+	3: "data",
+}
+
 type LiveGameSummary struct {
 	GameType      string `thrift:"game_type,1,required" frugal:"1,required,string" json:"game_type"`
 	ActiveRooms   int64  `thrift:"active_rooms,2,required" frugal:"2,required,i64" json:"active_rooms"`

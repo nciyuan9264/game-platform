@@ -41,6 +41,13 @@ var serviceMethods = map[string]kitex.MethodInfo{
 		false,
 		kitex.WithStreamingMode(kitex.StreamingNone),
 	),
+	"ListMatches": kitex.NewMethodInfo(
+		listMatchesHandler,
+		newGameAdminServiceListMatchesArgs,
+		newGameAdminServiceListMatchesResult,
+		false,
+		kitex.WithStreamingMode(kitex.StreamingNone),
+	),
 	"GetLive": kitex.NewMethodInfo(
 		getLiveHandler,
 		newGameAdminServiceGetLiveArgs,
@@ -210,6 +217,30 @@ func newGameAdminServiceListGamesResult() interface{} {
 	return v1.NewGameAdminServiceListGamesResult()
 }
 
+func listMatchesHandler(ctx context.Context, handler interface{}, arg, result interface{}) error {
+	realArg := arg.(*v1.GameAdminServiceListMatchesArgs)
+	realResult := result.(*v1.GameAdminServiceListMatchesResult)
+	success, err := handler.(v1.GameAdminService).ListMatches(ctx, realArg.Req)
+	if err != nil {
+		switch v := err.(type) {
+		case *v1.GameAdminError:
+			realResult.Err = v
+		default:
+			return err
+		}
+	} else {
+		realResult.Success = success
+	}
+	return nil
+}
+func newGameAdminServiceListMatchesArgs() interface{} {
+	return v1.NewGameAdminServiceListMatchesArgs()
+}
+
+func newGameAdminServiceListMatchesResult() interface{} {
+	return v1.NewGameAdminServiceListMatchesResult()
+}
+
 func getLiveHandler(ctx context.Context, handler interface{}, arg, result interface{}) error {
 	realArg := arg.(*v1.GameAdminServiceGetLiveArgs)
 	realResult := result.(*v1.GameAdminServiceGetLiveResult)
@@ -291,6 +322,20 @@ func (p *kClient) ListGames(ctx context.Context, req *v1.GamesReq) (r *v1.GamesR
 	_args.Req = req
 	var _result v1.GameAdminServiceListGamesResult
 	if err = p.c.Call(ctx, "ListGames", &_args, &_result); err != nil {
+		return
+	}
+	switch {
+	case _result.Err != nil:
+		return r, _result.Err
+	}
+	return _result.GetSuccess(), nil
+}
+
+func (p *kClient) ListMatches(ctx context.Context, req *v1.ListMatchesReq) (r *v1.MatchesResp, err error) {
+	var _args v1.GameAdminServiceListMatchesArgs
+	_args.Req = req
+	var _result v1.GameAdminServiceListMatchesResult
+	if err = p.c.Call(ctx, "ListMatches", &_args, &_result); err != nil {
 		return
 	}
 	switch {

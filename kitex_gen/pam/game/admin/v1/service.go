@@ -16,6 +16,8 @@ type GameAdminService interface {
 
 	ListGames(ctx context.Context, req *GamesReq) (r *GamesResp, err error)
 
+	ListMatches(ctx context.Context, req *ListMatchesReq) (r *MatchesResp, err error)
+
 	GetLive(ctx context.Context, req *EmptyReq) (r *LiveResp, err error)
 }
 
@@ -391,6 +393,100 @@ func (p *GameAdminServiceListGamesResult) String() string {
 }
 
 var fieldIDToName_GameAdminServiceListGamesResult = map[int16]string{
+	0: "success",
+	1: "err",
+}
+
+type GameAdminServiceListMatchesArgs struct {
+	Req *ListMatchesReq `thrift:"req,1,required" frugal:"1,required,ListMatchesReq" json:"req"`
+}
+
+func NewGameAdminServiceListMatchesArgs() *GameAdminServiceListMatchesArgs {
+	return &GameAdminServiceListMatchesArgs{}
+}
+
+func (p *GameAdminServiceListMatchesArgs) InitDefault() {
+}
+
+var GameAdminServiceListMatchesArgs_Req_DEFAULT *ListMatchesReq
+
+func (p *GameAdminServiceListMatchesArgs) GetReq() (v *ListMatchesReq) {
+	if !p.IsSetReq() {
+		return GameAdminServiceListMatchesArgs_Req_DEFAULT
+	}
+	return p.Req
+}
+func (p *GameAdminServiceListMatchesArgs) SetReq(val *ListMatchesReq) {
+	p.Req = val
+}
+
+func (p *GameAdminServiceListMatchesArgs) IsSetReq() bool {
+	return p.Req != nil
+}
+
+func (p *GameAdminServiceListMatchesArgs) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("GameAdminServiceListMatchesArgs(%+v)", *p)
+}
+
+var fieldIDToName_GameAdminServiceListMatchesArgs = map[int16]string{
+	1: "req",
+}
+
+type GameAdminServiceListMatchesResult struct {
+	Success *MatchesResp    `thrift:"success,0,optional" frugal:"0,optional,MatchesResp" json:"success,omitempty"`
+	Err     *GameAdminError `thrift:"err,1,optional" frugal:"1,optional,GameAdminError" json:"err,omitempty"`
+}
+
+func NewGameAdminServiceListMatchesResult() *GameAdminServiceListMatchesResult {
+	return &GameAdminServiceListMatchesResult{}
+}
+
+func (p *GameAdminServiceListMatchesResult) InitDefault() {
+}
+
+var GameAdminServiceListMatchesResult_Success_DEFAULT *MatchesResp
+
+func (p *GameAdminServiceListMatchesResult) GetSuccess() (v *MatchesResp) {
+	if !p.IsSetSuccess() {
+		return GameAdminServiceListMatchesResult_Success_DEFAULT
+	}
+	return p.Success
+}
+
+var GameAdminServiceListMatchesResult_Err_DEFAULT *GameAdminError
+
+func (p *GameAdminServiceListMatchesResult) GetErr() (v *GameAdminError) {
+	if !p.IsSetErr() {
+		return GameAdminServiceListMatchesResult_Err_DEFAULT
+	}
+	return p.Err
+}
+func (p *GameAdminServiceListMatchesResult) SetSuccess(x interface{}) {
+	p.Success = x.(*MatchesResp)
+}
+func (p *GameAdminServiceListMatchesResult) SetErr(val *GameAdminError) {
+	p.Err = val
+}
+
+func (p *GameAdminServiceListMatchesResult) IsSetSuccess() bool {
+	return p.Success != nil
+}
+
+func (p *GameAdminServiceListMatchesResult) IsSetErr() bool {
+	return p.Err != nil
+}
+
+func (p *GameAdminServiceListMatchesResult) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("GameAdminServiceListMatchesResult(%+v)", *p)
+}
+
+var fieldIDToName_GameAdminServiceListMatchesResult = map[int16]string{
 	0: "success",
 	1: "err",
 }

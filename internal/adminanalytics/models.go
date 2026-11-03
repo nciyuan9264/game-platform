@@ -135,6 +135,44 @@ type Games struct {
 	Games  []GameActivity
 }
 
+type MatchQuery struct {
+	Page      int
+	PageSize  int
+	Query     string
+	GameType  string
+	EndReason string
+}
+
+type MatchPlayer struct {
+	UserID      *int64
+	PlayerID    string
+	DisplayName string
+	SeatIndex   int
+	IsAI        bool
+	FinalRank   *int
+	IsWinner    bool
+}
+
+type Match struct {
+	ID              int64
+	RoomID          string
+	MatchID         string
+	GameType        string
+	StartedAt       time.Time
+	EndedAt         time.Time
+	DurationSeconds int64
+	EndReason       string
+	MaxPlayers      int
+	Players         []MatchPlayer
+}
+
+type MatchesPage struct {
+	Matches  []Match
+	Page     int
+	PageSize int
+	Total    int64
+}
+
 type LiveGame struct {
 	GameType      string
 	ActiveRooms   int64

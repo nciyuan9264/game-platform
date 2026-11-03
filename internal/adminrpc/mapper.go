@@ -126,6 +126,37 @@ func mapGames(value adminanalytics.Games) *admin.GamesData {
 	return &admin.GamesData{Window: mapWindow(value.Window), Games: games}
 }
 
+func mapMatches(value adminanalytics.MatchesPage) *admin.MatchesData {
+	matches := make([]*admin.MatchSummary, 0, len(value.Matches))
+	for _, item := range value.Matches {
+		players := make([]*admin.MatchPlayerSummary, 0, len(item.Players))
+		for _, player := range item.Players {
+			mapped := &admin.MatchPlayerSummary{
+				PlayerId: player.PlayerID, DisplayName: player.DisplayName,
+				SeatIndex: int32(player.SeatIndex), IsAi: player.IsAI, IsWinner: player.IsWinner,
+			}
+			if player.UserID != nil {
+				userID := formatUserID(*player.UserID)
+				mapped.UserId = &userID
+			}
+			if player.FinalRank != nil {
+				rank := int32(*player.FinalRank)
+				mapped.FinalRank = &rank
+			}
+			players = append(players, mapped)
+		}
+		matches = append(matches, &admin.MatchSummary{
+			GameId: formatUserID(item.ID), RoomId: item.RoomID, MatchId: optionalString(item.MatchID),
+			GameType: item.GameType, StartedAtUnix: item.StartedAt.Unix(), EndedAtUnix: item.EndedAt.Unix(),
+			DurationSeconds: item.DurationSeconds, EndReason: item.EndReason,
+			MaxPlayers: int32(item.MaxPlayers), Players: players,
+		})
+	}
+	return &admin.MatchesData{
+		Matches: matches, Page: int32(value.Page), PageSize: int32(value.PageSize), Total: value.Total,
+	}
+}
+
 func mapLive(value adminanalytics.Live) *admin.LiveData {
 	games := make([]*admin.LiveGameSummary, 0, len(value.Games))
 	for _, item := range value.Games {

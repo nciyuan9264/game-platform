@@ -16,6 +16,7 @@ type analyticsService interface {
 	Users(context.Context, adminanalytics.UserQuery) (adminanalytics.UsersPage, error)
 	UserActivity(context.Context, int64) (adminanalytics.UserActivity, error)
 	Games(context.Context, adminanalytics.GamesQuery) (adminanalytics.Games, error)
+	Matches(context.Context, adminanalytics.MatchQuery) (adminanalytics.MatchesPage, error)
 	Live(context.Context) (adminanalytics.Live, error)
 }
 
@@ -95,6 +96,23 @@ func (h *Handler) ListGames(ctx context.Context, req *admin.GamesReq) (*admin.Ga
 		return nil, mapAnalyticsError(err)
 	}
 	return &admin.GamesResp{StatusCode: http.StatusOK, Message: "ok", Data: mapGames(result)}, nil
+}
+
+func (h *Handler) ListMatches(ctx context.Context, req *admin.ListMatchesReq) (*admin.MatchesResp, error) {
+	if req == nil {
+		return nil, adminError("invalid_request", errors.New("request is required"))
+	}
+	result, err := h.analytics.Matches(ctx, adminanalytics.MatchQuery{
+		Page:      int(req.GetPage()),
+		PageSize:  int(req.GetPageSize()),
+		Query:     req.GetQuery(),
+		GameType:  req.GetGameType(),
+		EndReason: req.GetEndReason(),
+	})
+	if err != nil {
+		return nil, mapAnalyticsError(err)
+	}
+	return &admin.MatchesResp{StatusCode: http.StatusOK, Message: "ok", Data: mapMatches(result)}, nil
 }
 
 func (h *Handler) GetLive(ctx context.Context, req *admin.EmptyReq) (*admin.LiveResp, error) {
