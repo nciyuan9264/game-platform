@@ -64,6 +64,11 @@ type DateRangeQuery struct {
 	EndDate   string
 }
 
+type OverviewQuery struct {
+	DateRange DateRangeQuery
+	AllTime   bool
+}
+
 type GamesQuery struct {
 	DateRange DateRangeQuery
 	AllTime   bool

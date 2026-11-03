@@ -16,12 +16,12 @@ type authOverview struct {
 	recentIDs  []int64
 }
 
-func (s *Service) Overview(ctx context.Context, query DateRangeQuery) (Overview, error) {
-	window, err := s.reportingWindowFor(query)
-	if err != nil {
-		return Overview{}, err
+func (s *Service) Overview(ctx context.Context, query OverviewQuery) (Overview, error) {
+	window, windowErr := s.reportingWindowForOverview(ctx, query)
+	if windowErr != nil {
+		return Overview{}, windowErr
 	}
-	key := fmt.Sprintf("overview:%s:%s", window.StartDate(), window.EndDate())
+	key := fmt.Sprintf("overview:%t:%s:%s", query.AllTime, window.StartDate(), window.EndDate())
 	return cachedValue(ctx, s, key, func(ctx context.Context) (Overview, error) {
 		authData, err := s.loadAuthOverview(ctx, window)
 		if err != nil {

@@ -12,12 +12,12 @@ import (
 type fakeAnalytics struct {
 	overview      adminanalytics.Overview
 	overviewError error
-	overviewQuery *adminanalytics.DateRangeQuery
+	overviewQuery *adminanalytics.OverviewQuery
 	gamesQuery    *adminanalytics.GamesQuery
 	live          adminanalytics.Live
 }
 
-func (f fakeAnalytics) Overview(_ context.Context, query adminanalytics.DateRangeQuery) (adminanalytics.Overview, error) {
+func (f fakeAnalytics) Overview(_ context.Context, query adminanalytics.OverviewQuery) (adminanalytics.Overview, error) {
 	if f.overviewQuery != nil {
 		*f.overviewQuery = query
 	}
@@ -49,7 +49,7 @@ func TestGetOverviewMapsAnalyticsResponse(t *testing.T) {
 		t.Fatal(err)
 	}
 	end := time.Date(2026, 11, 2, 0, 0, 0, 0, location)
-	var query adminanalytics.DateRangeQuery
+	var query adminanalytics.OverviewQuery
 	handler := NewHandler(fakeAnalytics{overviewQuery: &query, overview: adminanalytics.Overview{
 		Window: adminanalytics.Window{
 			Start:       end.AddDate(0, 0, -29),
@@ -86,7 +86,20 @@ func TestGetOverviewMapsAnalyticsResponse(t *testing.T) {
 	if got := response.GetData().GetDaily()[0].GetGamesAbandoned(); got != 1 {
 		t.Fatalf("daily abandoned games = %d", got)
 	}
-	if query.StartDate != "2026-10-27" || query.EndDate != "2026-11-02" {
+	if query.DateRange.StartDate != "2026-10-27" || query.DateRange.EndDate != "2026-11-02" || query.AllTime {
+		t.Fatalf("query = %+v", query)
+	}
+}
+
+func TestGetOverviewForwardsAllTime(t *testing.T) {
+	allTime := true
+	var query adminanalytics.OverviewQuery
+	handler := NewHandler(fakeAnalytics{overviewQuery: &query})
+	_, err := handler.GetOverview(context.Background(), &admin.OverviewReq{AllTime: &allTime})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !query.AllTime || query.DateRange.StartDate != "" || query.DateRange.EndDate != "" {
 		t.Fatalf("query = %+v", query)
 	}
 }

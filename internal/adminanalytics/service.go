@@ -102,6 +102,65 @@ func (s *Service) reportingWindow() Window {
 	return window
 }
 
+func (s *Service) reportingWindowForOverview(ctx context.Context, query OverviewQuery) (Window, error) {
+	if !query.AllTime {
+		return s.reportingWindowFor(query.DateRange)
+	}
+	generatedAt := s.now()
+	localNow := generatedAt.In(s.location)
+	end := time.Date(localNow.Year(), localNow.Month(), localNow.Day(), 0, 0, 0, 0, s.location)
+	start := end
+	sources := []struct {
+		db    *sql.DB
+		query string
+	}{
+		{
+			db: s.authDB,
+			query: `SELECT (created_at AT TIME ZONE 'Asia/Shanghai')::date
+				FROM public.users
+				WHERE created_at IS NOT NULL AND created_at < $1
+				ORDER BY created_at
+				LIMIT 1`,
+		},
+		{
+			db: s.gameDB,
+			query: `SELECT (started_at AT TIME ZONE 'Asia/Shanghai')::date
+				FROM games
+				WHERE started_at < $1
+				ORDER BY started_at
+				LIMIT 1`,
+		},
+	}
+	for _, source := range sources {
+		var earliest time.Time
+		err := source.db.QueryRowContext(ctx, source.query, end.AddDate(0, 0, 1).UTC()).Scan(&earliest)
+		if errors.Is(err, sql.ErrNoRows) {
+			continue
+		}
+		if err != nil {
+			return Window{}, fmt.Errorf("query earliest analytics date: %w", err)
+		}
+		candidate := time.Date(
+			earliest.Year(),
+			earliest.Month(),
+			earliest.Day(),
+			0, 0, 0, 0,
+			s.location,
+		)
+		if candidate.Before(start) {
+			start = candidate
+		}
+	}
+	return Window{
+		Start:       start,
+		End:         end,
+		StartUTC:    start.UTC(),
+		EndUTC:      end.AddDate(0, 0, 1).UTC(),
+		Days:        int(end.Sub(start).Hours()/24) + 1,
+		GeneratedAt: generatedAt.UTC(),
+	}, nil
+}
+
 func (s *Service) reportingWindowForGames(query GamesQuery) (Window, error) {
 	if !query.AllTime {
 		return s.reportingWindowFor(query.DateRange)

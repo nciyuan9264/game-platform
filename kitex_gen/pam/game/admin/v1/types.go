@@ -30,6 +30,7 @@ var fieldIDToName_EmptyReq = map[int16]string{}
 type OverviewReq struct {
 	StartDate *ISODate `thrift:"start_date,1,optional" frugal:"1,optional,string" json:"start_date,omitempty"`
 	EndDate   *ISODate `thrift:"end_date,2,optional" frugal:"2,optional,string" json:"end_date,omitempty"`
+	AllTime   *bool    `thrift:"all_time,3,optional" frugal:"3,optional,bool" json:"all_time,omitempty"`
 }
 
 func NewOverviewReq() *OverviewReq {
@@ -56,11 +57,23 @@ func (p *OverviewReq) GetEndDate() (v ISODate) {
 	}
 	return *p.EndDate
 }
+
+var OverviewReq_AllTime_DEFAULT bool
+
+func (p *OverviewReq) GetAllTime() (v bool) {
+	if !p.IsSetAllTime() {
+		return OverviewReq_AllTime_DEFAULT
+	}
+	return *p.AllTime
+}
 func (p *OverviewReq) SetStartDate(val *ISODate) {
 	p.StartDate = val
 }
 func (p *OverviewReq) SetEndDate(val *ISODate) {
 	p.EndDate = val
+}
+func (p *OverviewReq) SetAllTime(val *bool) {
+	p.AllTime = val
 }
 
 func (p *OverviewReq) IsSetStartDate() bool {
@@ -69,6 +82,10 @@ func (p *OverviewReq) IsSetStartDate() bool {
 
 func (p *OverviewReq) IsSetEndDate() bool {
 	return p.EndDate != nil
+}
+
+func (p *OverviewReq) IsSetAllTime() bool {
+	return p.AllTime != nil
 }
 
 func (p *OverviewReq) String() string {
@@ -81,6 +98,7 @@ func (p *OverviewReq) String() string {
 var fieldIDToName_OverviewReq = map[int16]string{
 	1: "start_date",
 	2: "end_date",
+	3: "all_time",
 }
 
 type AnalyticsWindow struct {

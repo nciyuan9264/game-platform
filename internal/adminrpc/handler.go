@@ -12,7 +12,7 @@ import (
 )
 
 type analyticsService interface {
-	Overview(context.Context, adminanalytics.DateRangeQuery) (adminanalytics.Overview, error)
+	Overview(context.Context, adminanalytics.OverviewQuery) (adminanalytics.Overview, error)
 	Users(context.Context, adminanalytics.UserQuery) (adminanalytics.UsersPage, error)
 	UserActivity(context.Context, int64) (adminanalytics.UserActivity, error)
 	Games(context.Context, adminanalytics.GamesQuery) (adminanalytics.Games, error)
@@ -31,9 +31,12 @@ func (h *Handler) GetOverview(ctx context.Context, req *admin.OverviewReq) (*adm
 	if req == nil {
 		return nil, adminError("invalid_request", errors.New("request is required"))
 	}
-	result, err := h.analytics.Overview(ctx, adminanalytics.DateRangeQuery{
-		StartDate: req.GetStartDate(),
-		EndDate:   req.GetEndDate(),
+	result, err := h.analytics.Overview(ctx, adminanalytics.OverviewQuery{
+		DateRange: adminanalytics.DateRangeQuery{
+			StartDate: req.GetStartDate(),
+			EndDate:   req.GetEndDate(),
+		},
+		AllTime: req.GetAllTime(),
 	})
 	if err != nil {
 		return nil, mapAnalyticsError(err)
