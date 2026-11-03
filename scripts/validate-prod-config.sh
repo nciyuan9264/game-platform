@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
+scope="${1:-all}"
 
 if docker compose version >/dev/null 2>&1; then
   compose=(docker compose)
@@ -13,7 +14,26 @@ else
   exit 1
 fi
 
-config="$("${compose[@]}" -f docker-compose.prod.yml config)"
+case "$scope" in
+  center)
+    compose_files=(-f docker-compose.center.prod.yml)
+    source_files=(docker-compose.center.prod.yml)
+    ;;
+  games)
+    compose_files=(-f docker-compose.games.prod.yml)
+    source_files=(docker-compose.games.prod.yml)
+    ;;
+  all)
+    compose_files=(-f docker-compose.center.prod.yml -f docker-compose.games.prod.yml)
+    source_files=(docker-compose.center.prod.yml docker-compose.games.prod.yml)
+    ;;
+  *)
+    printf 'usage: %s [center|games|all]\n' "$0" >&2
+    exit 2
+    ;;
+esac
+
+config="$("${compose[@]}" "${compose_files[@]}" config)"
 
 reject() {
   local pattern="$1"
@@ -36,7 +56,7 @@ require() {
 require_source() {
   local pattern="$1"
   local message="$2"
-  if ! grep -Eq -- "$pattern" docker-compose.prod.yml; then
+  if ! grep -Eq -- "$pattern" "${source_files[@]}"; then
     printf 'production config rejected: %s\n' "$message" >&2
     exit 1
   fi
@@ -61,6 +81,10 @@ reject '^[[:space:]]{2}roomhost:[[:space:]]*$' 'legacy all-games RoomHost must n
 require 'POSTGRES_DSN:.*\.rds\.aliyuncs\.com(:5432)?/gamebus_prod\?[^[:space:]]*sslmode=require' 'PostgreSQL must use the shared Alibaba Cloud RDS gamebus_prod database with TLS'
 require 'REDIS_ADDR:[[:space:]]*global-redis:6379' 'shared Redis must use global-redis'
 require 'NATS_URL:[[:space:]]*nats://global-nats:4222' 'shared NATS must use global-nats'
+if [[ "$scope" == "center" ]]; then
+  reject 'ROOMHOST_[AB]_(IMAGE|VERSION)' 'center config must not depend on game RoomHost artifacts'
+fi
+if [[ "$scope" != "games" ]]; then
 require 'platform-rpc:' 'platform-rpc service is required'
 require 'GAME_PLATFORM_RPC_PSM:[[:space:]]*game\.platform\.rpc' 'platform-rpc PSM must be game.platform.rpc'
 require 'admin-rpc:' 'admin-rpc service is required'
@@ -72,7 +96,13 @@ require 'AUTH_RPC_TIMEOUT:[[:space:]]*[0-9]+(ms|s|m)' 'Auth RPC timeout must be 
 require 'PROFILE_REFRESH_INTERVAL:[[:space:]]*[0-9]+(ms|s|m)' 'gateway profile refresh interval must be explicit'
 require '^[[:space:]]{2}gateway:[[:space:]]*$' 'one realtime gateway instance is required'
 require 'game-platform-gateway' 'realtime gateway global-network alias is required'
+fi
 
+if [[ "$scope" == "games" ]]; then
+  reject '^[[:space:]]{2}(schema-migrate|control-plane|platform-rpc|admin-rpc|gateway):[[:space:]]*$' \
+    'games config must not define center services'
+fi
+if [[ "$scope" != "center" ]]; then
 for game in acquire davinci splendor yinsh othello fugitive warchest quoridor hex loveletter sixnimmt forsale onitama hive cantstop; do
   for slot in a b; do
     service="roomhost-${game}-${slot}"
@@ -118,6 +148,7 @@ for prefix in ACQUIRE DAVINCI SPLENDOR YINSH OTHELLO FUGITIVE WARCHEST QUORIDOR 
       "${prefix} ${slot} must advertise an independent artifact version"
   done
 done
+fi
 
 duplicate_node_ids="$(
   grep -E '^[[:space:]]+NODE_ID:' <<<"$config" |

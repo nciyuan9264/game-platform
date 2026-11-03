@@ -45,8 +45,15 @@ assert_case \
   internal/contracts/types.go
 
 assert_case \
+  '{"center":["admin-rpc","control-plane","gateway","migrate-schema","platform-rpc"],"games":[],"productionChange":true,"docsOnly":false}' \
+  docker-compose.center.prod.yml
+
+assert_case \
+  '{"center":[],"games":["acquire","cantstop","davinci","forsale","fugitive","hex","hive","loveletter","onitama","othello","quoridor","sixnimmt","splendor","warchest","yinsh"],"productionChange":true,"docsOnly":false}' \
+  docker-compose.games.prod.yml
+
+assert_case \
   '{"center":["admin-rpc","control-plane","gateway","migrate-schema","platform-rpc"],"games":["acquire","cantstop","davinci","forsale","fugitive","hex","hive","loveletter","onitama","othello","quoridor","sixnimmt","splendor","warchest","yinsh"],"productionChange":true,"docsOnly":false}' \
-  docker-compose.prod.yml \
   .github/workflows/deploy.yml
 
 assert_case \

@@ -97,7 +97,7 @@ fi
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
-COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
+COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.games.prod.yml}"
 ENV_FILE="${ENV_FILE:-.env}"
 GAME_RELEASE_BIN="${GAME_RELEASE_BIN:-game-release}"
 GAME_RELEASE_IMAGE="${GAME_RELEASE_IMAGE:-}"

@@ -9,10 +9,12 @@ Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=/opt/game-platform
 EnvironmentFile=/etc/game-platform/game-platform.env
-ExecStartPre=/opt/game-platform/scripts/validate-prod-config.sh
-ExecStart=/usr/bin/docker compose -f docker-compose.prod.yml up -d --remove-orphans
-ExecReload=/usr/bin/docker compose -f docker-compose.prod.yml up -d --remove-orphans
-ExecStop=/usr/bin/docker compose -f docker-compose.prod.yml down
+ExecStartPre=/opt/game-platform/scripts/validate-prod-config.sh all
+ExecStart=/usr/bin/docker compose -f docker-compose.center.prod.yml up -d
+ExecStart=/usr/bin/docker compose -f docker-compose.games.prod.yml up -d
+ExecReload=/usr/bin/docker compose -f docker-compose.center.prod.yml up -d
+ExecReload=/usr/bin/docker compose -f docker-compose.games.prod.yml up -d
+ExecStop=/usr/bin/docker compose -f docker-compose.center.prod.yml -f docker-compose.games.prod.yml down
 TimeoutStartSec=0
 TimeoutStopSec=120
 

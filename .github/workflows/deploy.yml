@@ -11,6 +11,7 @@ on:
         options:
           - auto
           - center
+          - admin-rpc
           - acquire
           - davinci
           - splendor
@@ -71,6 +72,10 @@ jobs:
           center="$(jq -c '.center' <<<"${matrix}")"
           games="$(jq -c '.games' <<<"${matrix}")"
           case "${COMPONENT_OVERRIDE}" in
+            admin-rpc)
+              center='["admin-rpc"]'
+              games='[]'
+              ;;
             center)
               center='["admin-rpc","control-plane","gateway","migrate-schema","platform-rpc"]'
               games='[]'
@@ -189,7 +194,7 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: docker-compose.prod.yml,scripts/validate-prod-config.sh
+          source: docker-compose.center.prod.yml,scripts/validate-prod-config.sh
           target: /home/game-platform
       - name: Roll out changed center services
         uses: appleboy/ssh-action@v1.2.0
@@ -214,70 +219,10 @@ jobs:
             registry="${TCR_LOGIN_SERVER}/tengxuntcr"
             export GAME_PLATFORM_IMAGE_REGISTRY="${registry}"
             export GAME_PLATFORM_IMAGE_TAG="${IMAGE_TAG}"
-            export ACQUIRE_ROOMHOST_A_IMAGE="${ACQUIRE_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-acquire:${IMAGE_TAG}}"
-            export ACQUIRE_ROOMHOST_B_IMAGE="${ACQUIRE_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-acquire:${IMAGE_TAG}}"
-            export ACQUIRE_ROOMHOST_A_VERSION="${ACQUIRE_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
-            export ACQUIRE_ROOMHOST_B_VERSION="${ACQUIRE_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
-            export DAVINCI_ROOMHOST_A_IMAGE="${DAVINCI_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-davinci:${IMAGE_TAG}}"
-            export DAVINCI_ROOMHOST_B_IMAGE="${DAVINCI_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-davinci:${IMAGE_TAG}}"
-            export DAVINCI_ROOMHOST_A_VERSION="${DAVINCI_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
-            export DAVINCI_ROOMHOST_B_VERSION="${DAVINCI_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
-            export SPLENDOR_ROOMHOST_A_IMAGE="${SPLENDOR_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-splendor:${IMAGE_TAG}}"
-            export SPLENDOR_ROOMHOST_B_IMAGE="${SPLENDOR_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-splendor:${IMAGE_TAG}}"
-            export SPLENDOR_ROOMHOST_A_VERSION="${SPLENDOR_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
-            export SPLENDOR_ROOMHOST_B_VERSION="${SPLENDOR_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
-            export YINSH_ROOMHOST_A_IMAGE="${YINSH_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-yinsh:${IMAGE_TAG}}"
-            export YINSH_ROOMHOST_B_IMAGE="${YINSH_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-yinsh:${IMAGE_TAG}}"
-            export YINSH_ROOMHOST_A_VERSION="${YINSH_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
-            export YINSH_ROOMHOST_B_VERSION="${YINSH_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
-            export OTHELLO_ROOMHOST_A_IMAGE="${OTHELLO_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-othello:${IMAGE_TAG}}"
-            export OTHELLO_ROOMHOST_B_IMAGE="${OTHELLO_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-othello:${IMAGE_TAG}}"
-            export OTHELLO_ROOMHOST_A_VERSION="${OTHELLO_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
-            export OTHELLO_ROOMHOST_B_VERSION="${OTHELLO_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
-            export FUGITIVE_ROOMHOST_A_IMAGE="${FUGITIVE_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-fugitive:${IMAGE_TAG}}"
-            export FUGITIVE_ROOMHOST_B_IMAGE="${FUGITIVE_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-fugitive:${IMAGE_TAG}}"
-            export FUGITIVE_ROOMHOST_A_VERSION="${FUGITIVE_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
-            export FUGITIVE_ROOMHOST_B_VERSION="${FUGITIVE_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
-            export WARCHEST_ROOMHOST_A_IMAGE="${WARCHEST_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-warchest:${IMAGE_TAG}}"
-            export WARCHEST_ROOMHOST_B_IMAGE="${WARCHEST_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-warchest:${IMAGE_TAG}}"
-            export WARCHEST_ROOMHOST_A_VERSION="${WARCHEST_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
-            export WARCHEST_ROOMHOST_B_VERSION="${WARCHEST_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
-            export QUORIDOR_ROOMHOST_A_IMAGE="${QUORIDOR_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-quoridor:${IMAGE_TAG}}"
-            export QUORIDOR_ROOMHOST_B_IMAGE="${QUORIDOR_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-quoridor:${IMAGE_TAG}}"
-            export QUORIDOR_ROOMHOST_A_VERSION="${QUORIDOR_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
-            export QUORIDOR_ROOMHOST_B_VERSION="${QUORIDOR_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
-            export HEX_ROOMHOST_A_IMAGE="${HEX_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-hex:${IMAGE_TAG}}"
-            export HEX_ROOMHOST_B_IMAGE="${HEX_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-hex:${IMAGE_TAG}}"
-            export HEX_ROOMHOST_A_VERSION="${HEX_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
-            export HEX_ROOMHOST_B_VERSION="${HEX_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
-            export LOVELETTER_ROOMHOST_A_IMAGE="${LOVELETTER_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-loveletter:${IMAGE_TAG}}"
-            export LOVELETTER_ROOMHOST_B_IMAGE="${LOVELETTER_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-loveletter:${IMAGE_TAG}}"
-            export LOVELETTER_ROOMHOST_A_VERSION="${LOVELETTER_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
-            export LOVELETTER_ROOMHOST_B_VERSION="${LOVELETTER_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
-            export SIXNIMMT_ROOMHOST_A_IMAGE="${SIXNIMMT_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-sixnimmt:${IMAGE_TAG}}"
-            export SIXNIMMT_ROOMHOST_B_IMAGE="${SIXNIMMT_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-sixnimmt:${IMAGE_TAG}}"
-            export SIXNIMMT_ROOMHOST_A_VERSION="${SIXNIMMT_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
-            export SIXNIMMT_ROOMHOST_B_VERSION="${SIXNIMMT_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
-            export FORSALE_ROOMHOST_A_IMAGE="${FORSALE_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-forsale:${IMAGE_TAG}}"
-            export FORSALE_ROOMHOST_B_IMAGE="${FORSALE_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-forsale:${IMAGE_TAG}}"
-            export FORSALE_ROOMHOST_A_VERSION="${FORSALE_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
-            export FORSALE_ROOMHOST_B_VERSION="${FORSALE_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
-            export ONITAMA_ROOMHOST_A_IMAGE="${ONITAMA_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-onitama:${IMAGE_TAG}}"
-            export ONITAMA_ROOMHOST_B_IMAGE="${ONITAMA_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-onitama:${IMAGE_TAG}}"
-            export ONITAMA_ROOMHOST_A_VERSION="${ONITAMA_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
-            export ONITAMA_ROOMHOST_B_VERSION="${ONITAMA_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
-            export HIVE_ROOMHOST_A_IMAGE="${HIVE_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-hive:${IMAGE_TAG}}"
-            export HIVE_ROOMHOST_B_IMAGE="${HIVE_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-hive:${IMAGE_TAG}}"
-            export HIVE_ROOMHOST_A_VERSION="${HIVE_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
-            export HIVE_ROOMHOST_B_VERSION="${HIVE_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
-            export CANTSTOP_ROOMHOST_A_IMAGE="${CANTSTOP_ROOMHOST_A_IMAGE:-${registry}/game-platform-roomhost-cantstop:${IMAGE_TAG}}"
-            export CANTSTOP_ROOMHOST_B_IMAGE="${CANTSTOP_ROOMHOST_B_IMAGE:-${registry}/game-platform-roomhost-cantstop:${IMAGE_TAG}}"
-            export CANTSTOP_ROOMHOST_A_VERSION="${CANTSTOP_ROOMHOST_A_VERSION:-${IMAGE_TAG}}"
-            export CANTSTOP_ROOMHOST_B_VERSION="${CANTSTOP_ROOMHOST_B_VERSION:-${IMAGE_TAG}}"
             printf '%s' "${TCR_PASSWORD}" | docker login "${TCR_LOGIN_SERVER}" \
               --username "${TCR_USERNAME}" --password-stdin
             chmod +x scripts/validate-prod-config.sh
-            ./scripts/validate-prod-config.sh
+            ./scripts/validate-prod-config.sh center
             services="$(printf '%s' "${CENTER_SERVICES}" | jq -r '.[]')"
             compose_services="$(
               printf '%s\n' "${services}" |
@@ -294,9 +239,9 @@ jobs:
                 attempt=$((attempt + 1))
               done
             }
-            retry_pull docker compose -f docker-compose.prod.yml pull ${compose_services}
+            retry_pull docker compose -f docker-compose.center.prod.yml pull ${compose_services}
             if printf '%s\n' "${services}" | grep -Fxq migrate-schema; then
-              docker compose -f docker-compose.prod.yml run --rm --no-deps schema-migrate
+              docker compose -f docker-compose.center.prod.yml run --rm --no-deps schema-migrate
             fi
             runtime_services="$(
               printf '%s\n' "${services}" |
@@ -304,7 +249,7 @@ jobs:
                 tr '\n' ' '
             )"
             if [ -n "${runtime_services}" ]; then
-              docker compose -f docker-compose.prod.yml \
+              docker compose -f docker-compose.center.prod.yml \
                 up -d --no-deps ${runtime_services}
             fi
             if printf '%s\n' "${services}" | grep -Fxq platform-rpc; then
@@ -348,7 +293,7 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: docker-compose.prod.yml,scripts/deploy-game-slot.sh,scripts/validate-prod-config.sh
+          source: docker-compose.games.prod.yml,scripts/deploy-game-slot.sh,scripts/validate-prod-config.sh
           target: /home/game-platform
       - name: Deploy game slot
         uses: appleboy/ssh-action@v1.2.0
@@ -434,7 +379,7 @@ jobs:
             printf '%s' "${TCR_PASSWORD}" | docker login "${TCR_LOGIN_SERVER}" \
               --username "${TCR_USERNAME}" --password-stdin
             chmod +x scripts/deploy-game-slot.sh scripts/validate-prod-config.sh
-            ./scripts/validate-prod-config.sh
+            ./scripts/validate-prod-config.sh games
             export GAME_RELEASE_IMAGE="${registry}/game-platform-game-release:${IMAGE_TAG}"
             target_image="${registry}/game-platform-roomhost-${GAME}:${IMAGE_TAG}"
             retry_pull() {

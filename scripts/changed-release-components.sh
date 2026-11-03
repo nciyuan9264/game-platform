@@ -135,7 +135,13 @@ for path in "${files[@]}"; do
     cmd/migrate-schema/*)
       centers[migrate-schema]=1
       ;;
-    docker-compose.prod.yml|.github/workflows/deploy.yml|scripts/deploy-game-slot.sh)
+    docker-compose.center.prod.yml)
+      mark_all_centers
+      ;;
+    docker-compose.games.prod.yml|scripts/deploy-game-slot.sh)
+      mark_all_games
+      ;;
+    .github/workflows/deploy.yml)
       mark_all
       ;;
     cmd/game-release/*|cmd/backfill-replay/*|scripts/*|docker-compose*.yml|.github/workflows/*|.env.example)

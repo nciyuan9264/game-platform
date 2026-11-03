@@ -138,20 +138,19 @@ RPC 代码从固定版本的 `pam-idl` 生成。修改 IDL 后运行 `scripts/ge
 
 ## 生产部署
 
-仓库只维护 [`docker-compose.prod.yml`](docker-compose.prod.yml)。它包含：
+生产配置按发布边界拆分：
 
-- 一次性 `schema-migrate`；
-- `control-plane`、`platform-rpc`、`gateway`；
-- Acquire、DaVinci、Splendor、YINSH、Othello、Fugitive、War Chest、
-  Quoridor、Love Letter、6 nimmt!、For Sale、Onitama 和 HIVE 各自的 A/B RoomHost slot。
+- [`docker-compose.center.prod.yml`](docker-compose.center.prod.yml)：`schema-migrate`、`control-plane`、`platform-rpc`、`admin-rpc` 和 `gateway`；
+- [`docker-compose.games.prod.yml`](docker-compose.games.prod.yml)：每款游戏独立的 A/B RoomHost slot。
 
-共享 Redis、NATS、etcd 和 OpenTelemetry Collector 由相邻 `infra/docker-compose.yml` 管理，PostgreSQL 使用远端 RDS。部署前必须设置 `.env` 中的 RDS DSN、WebSocket Origin allowlist 和各游戏 slot 的镜像与版本。
+共享 Redis、NATS、etcd 和 OpenTelemetry Collector 由相邻 `infra/docker-compose.yml` 管理，PostgreSQL 使用远端 RDS。中心服务发布不读取游戏镜像变量；游戏发布只使用 RoomHost 配置。
 
 ```bash
 docker network inspect global-network >/dev/null 2>&1 || docker network create global-network
 docker compose -f ../infra/docker-compose.yml up -d redis nats etcd otel-collector
-./scripts/validate-prod-config.sh
-docker compose -f docker-compose.prod.yml up -d
+./scripts/validate-prod-config.sh all
+docker compose -f docker-compose.center.prod.yml up -d
+docker compose -f docker-compose.games.prod.yml up -d
 ```
 
 `validate-prod-config.sh` 会拒绝本地数据库、非 TLS RDS、旧 Platform API、通用 RoomHost、编号副本和内部负载均衡等失效拓扑。
