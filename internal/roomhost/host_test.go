@@ -124,6 +124,107 @@ func (e *countingEngine) BuildPlayerView(ctx context.Context, state game.State, 
 	return state, nil
 }
 
+type backgroundState struct {
+	Active    string `json:"active"`
+	Completed string `json:"completed"`
+}
+
+type backgroundEngine struct {
+	completed chan string
+}
+
+func (e *backgroundEngine) GameType() string { return "background" }
+
+func (e *backgroundEngine) Version() string { return "background-v1" }
+
+func (e *backgroundEngine) InitRoom(
+	context.Context,
+	game.RoomConfig,
+) (game.State, error) {
+	return &backgroundState{}, nil
+}
+
+func (e *backgroundEngine) EncodeState(
+	_ context.Context,
+	state game.State,
+) ([]byte, error) {
+	return json.Marshal(state)
+}
+
+func (e *backgroundEngine) DecodeState(
+	_ context.Context,
+	data []byte,
+) (game.State, error) {
+	var state backgroundState
+	if err := json.Unmarshal(data, &state); err != nil {
+		return nil, err
+	}
+	return &state, nil
+}
+
+func (e *backgroundEngine) ApplyCommand(
+	_ context.Context,
+	state game.State,
+	cmd contracts.RoomCommand,
+) (game.ApplyResult, error) {
+	typed := state.(*backgroundState)
+	payload, _ := cmd.Payload.(map[string]any)
+	requestID, _ := payload["requestID"].(string)
+	switch cmd.Type {
+	case "trigger_background":
+		typed.Active = requestID
+		snapshot := *typed
+		return game.ApplyResult{
+			BackgroundRequests: []game.BackgroundRequest{{
+				Kind:      "analysis",
+				RequestID: requestID,
+				State:     &snapshot,
+				Timeout:   time.Second,
+			}},
+		}, nil
+	case "background_complete":
+		if requestID == "" || requestID != typed.Active {
+			return game.ApplyResult{}, errors.New("stale background result")
+		}
+		typed.Completed = requestID
+		if e.completed != nil {
+			e.completed <- requestID
+		}
+		return game.ApplyResult{}, nil
+	case "finish":
+		return game.ApplyResult{Finished: true}, nil
+	default:
+		return game.ApplyResult{}, fmt.Errorf("unknown command %q", cmd.Type)
+	}
+}
+
+func (e *backgroundEngine) BuildPlayerView(
+	context.Context,
+	game.State,
+	game.ViewRequest,
+) (any, error) {
+	return map[string]any{}, nil
+}
+
+type controlledBackgroundPlanner struct {
+	started chan string
+}
+
+func (p *controlledBackgroundPlanner) Run(
+	ctx context.Context,
+	req game.BackgroundRequest,
+) (contracts.RoomCommand, error) {
+	p.started <- req.RequestID
+	if req.RequestID == "first" {
+		<-ctx.Done()
+		return contracts.RoomCommand{}, ctx.Err()
+	}
+	return contracts.RoomCommand{
+		Type:    "background_complete",
+		Payload: map[string]any{"requestID": req.RequestID},
+	}, nil
+}
+
 type automationResetEngine struct {
 	countingEngine
 	resetCount int
@@ -577,6 +678,150 @@ func (r *fakeRoomhostRouter) ListCommandLog(matchID string, afterSeq int64) ([]c
 func (r *fakeRoomhostRouter) Deliver(out contracts.OutboundMessage) error {
 	r.delivered = append(r.delivered, out)
 	return r.deliverErr
+}
+
+func TestBackgroundRequestsCancelStaleAndPersistLatestResult(t *testing.T) {
+	store := &fakeRoomhostStore{}
+	router := &fakeRoomhostRouter{}
+	engine := &backgroundEngine{completed: make(chan string, 1)}
+	planner := &controlledBackgroundPlanner{started: make(chan string)}
+	host := &Host{
+		nodeID: "roomhost-a",
+		store:  store,
+		router: router,
+	}
+	actor := &RoomActor{
+		host: host,
+		record: contracts.RoomRecord{
+			RoomID:        "background-room",
+			GameType:      "background",
+			OwnerNode:     "roomhost-a",
+			Epoch:         3,
+			EngineVersion: "background-v1",
+		},
+		match: contracts.MatchRecord{
+			MatchID: "background-room-r1",
+			Status:  contracts.MatchStatusRunning,
+		},
+		definition: game.Definition{
+			GameType:   "background",
+			Version:    "background-v1",
+			Engine:     engine,
+			Background: planner,
+		},
+		state:     &backgroundState{},
+		processed: map[string]contracts.CommandAck{},
+	}
+	actor.ctx, actor.cancel = context.WithCancel(context.Background())
+	t.Cleanup(actor.shutdown)
+
+	command := func(commandID, requestID string) contracts.RoomCommand {
+		return contracts.RoomCommand{
+			CommandID: commandID,
+			RoomID:    "background-room",
+			MatchID:   "background-room-r1",
+			GameType:  "background",
+			Epoch:     3,
+			PlayerID:  "player-1",
+			Type:      "trigger_background",
+			Payload:   map[string]any{"requestID": requestID},
+			SentAt:    time.Now().UTC(),
+		}
+	}
+	if ack := actor.Apply(
+		context.Background(),
+		command("trigger-first", "first"),
+	); !ack.Accepted {
+		t.Fatalf("first trigger rejected: %+v", ack)
+	}
+	select {
+	case requestID := <-planner.started:
+		if requestID != "first" {
+			t.Fatalf("first request = %q", requestID)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("first background request did not start")
+	}
+
+	if ack := actor.Apply(
+		context.Background(),
+		command("trigger-second", "second"),
+	); !ack.Accepted {
+		t.Fatalf("second trigger rejected: %+v", ack)
+	}
+	select {
+	case requestID := <-planner.started:
+		if requestID != "second" {
+			t.Fatalf("second request = %q", requestID)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("second background request did not start")
+	}
+	select {
+	case requestID := <-engine.completed:
+		if requestID != "second" {
+			t.Fatalf("completed request = %q", requestID)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("latest background result was not applied")
+	}
+
+	deadline := time.After(time.Second)
+	ticker := time.NewTicker(time.Millisecond)
+	defer ticker.Stop()
+	for {
+		actor.mu.Lock()
+		seq := actor.seq
+		state := *actor.state.(*backgroundState)
+		actor.mu.Unlock()
+		if seq == 3 {
+			if state.Active != "second" || state.Completed != "second" {
+				t.Fatalf("background state = %+v", state)
+			}
+			break
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("actor seq = %d, want 3", seq)
+		case <-ticker.C:
+		}
+	}
+	if len(router.appended) != 3 {
+		t.Fatalf("appended commands = %+v", router.appended)
+	}
+	if router.appended[2].Type != "background_complete" {
+		t.Fatalf("background command = %+v", router.appended[2])
+	}
+	for _, record := range router.appended {
+		if payload, ok := record.Payload.(map[string]any); ok &&
+			payload["requestID"] == "first" &&
+			record.Type == "background_complete" {
+			t.Fatalf("stale result was persisted: %+v", record)
+		}
+	}
+
+	backgroundCtx, backgroundCancel := context.WithCancel(context.Background())
+	cancelled := make(chan struct{})
+	go func() {
+		<-backgroundCtx.Done()
+		close(cancelled)
+	}()
+	actor.mu.Lock()
+	actor.background["terminal"] = backgroundRun{
+		requestID: "terminal-request",
+		cancel:    backgroundCancel,
+	}
+	actor.mu.Unlock()
+	finish := command("finish", "")
+	finish.Type = "finish"
+	if ack := actor.Apply(context.Background(), finish); !ack.Accepted {
+		t.Fatalf("finish rejected: %+v", ack)
+	}
+	select {
+	case <-cancelled:
+	case <-time.After(time.Second):
+		t.Fatal("finished match did not cancel background work")
+	}
 }
 
 func TestRetryDirtyProjectionsHistoryConvergesWithoutChangingLiveState(t *testing.T) {

@@ -68,11 +68,22 @@ type AIRequest struct {
 	Timeout         time.Duration
 }
 
+type BackgroundRequest struct {
+	Kind            string
+	RequestID       string
+	RoomID          string
+	GameType        string
+	State           State
+	Timeout         time.Duration
+	FallbackCommand *contracts.RoomCommand
+}
+
 type ApplyResult struct {
-	Status     string
-	Finished   bool
-	AIRequests []AIRequest
-	Effects    []DeliveryEffect
+	Status             string
+	Finished           bool
+	AIRequests         []AIRequest
+	BackgroundRequests []BackgroundRequest
+	Effects            []DeliveryEffect
 }
 
 type ScheduledCommand struct {
@@ -141,6 +152,17 @@ type RandomSeedProvider interface {
 
 type AIPlanner interface {
 	Decide(ctx context.Context, req AIRequest) (contracts.RoomCommand, error)
+}
+
+type BackgroundPlanner interface {
+	Run(ctx context.Context, req BackgroundRequest) (contracts.RoomCommand, error)
+}
+
+type BackgroundScheduler interface {
+	PendingBackgroundRequests(
+		ctx context.Context,
+		state State,
+	) ([]BackgroundRequest, error)
 }
 
 type Scheduler interface {
@@ -258,6 +280,7 @@ type Definition struct {
 	DefaultMaxPlayers int
 	Engine            Engine
 	AI                AIPlanner
+	Background        BackgroundPlanner
 	Scheduler         Scheduler
 	History           HistoryProvider
 	LegacyReplay      LegacyReplayProvider

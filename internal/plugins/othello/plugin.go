@@ -14,7 +14,7 @@ import (
 
 const (
 	GameType            = "othello"
-	EngineVersion       = "othello-v3"
+	EngineVersion       = "othello-v4"
 	ReplaySchemaVersion = 1
 	defaultMaxPlayers   = 2
 	maxNoHumanChecks    = 3
@@ -35,16 +35,19 @@ const (
 	aiMaxDelay  = 2 * time.Second
 )
 
-type Plugin struct{}
+type Plugin struct {
+	analyzer positionAnalyzer
+}
 
 func Definition() game.Definition {
-	plugin := &Plugin{}
+	plugin := &Plugin{analyzer: newEdaxAnalyzer()}
 	return game.Definition{
 		GameType:          GameType,
 		Version:           EngineVersion,
 		DefaultMaxPlayers: defaultMaxPlayers,
 		Engine:            plugin,
 		AI:                plugin,
+		Background:        plugin,
 		Scheduler:         plugin,
 		History:           plugin,
 		LegacyReplay:      plugin,
@@ -217,11 +220,14 @@ func (p *Plugin) ApplyCommand(
 	if err != nil {
 		return game.ApplyResult{}, err
 	}
+	previousPositionKey := positionKey(typed)
 	payload, err := json.Marshal(command.Payload)
 	if err != nil {
 		return game.ApplyResult{}, err
 	}
 	removedPlayerID := ""
+	analysisCommand := command.Type == CommandAnalysisResult ||
+		command.Type == CommandAnalysisUnavailable
 	switch command.Type {
 	case "connect":
 		err = connect(typed, command.PlayerID)
@@ -273,6 +279,24 @@ func (p *Plugin) ApplyCommand(
 		} else {
 			err = applyTimeout(ctx, typed, command.PlayerID)
 		}
+	case CommandAnalysisResult:
+		if command.ConnectionRef.Valid() {
+			err = errors.New("client cannot submit analysis results")
+			break
+		}
+		var value analysisResultPayload
+		if err = decodePayload(payload, &value); err == nil {
+			err = applyAnalysisResult(typed, value)
+		}
+	case CommandAnalysisUnavailable:
+		if command.ConnectionRef.Valid() {
+			err = errors.New("client cannot submit analysis results")
+			break
+		}
+		var value analysisUnavailablePayload
+		if err = decodePayload(payload, &value); err == nil {
+			err = applyAnalysisUnavailable(typed, value)
+		}
 	case "game_restart_game":
 		err = errors.New("finished rooms must start a new match")
 	default:
@@ -281,10 +305,23 @@ func (p *Plugin) ApplyCommand(
 	if err != nil {
 		return game.ApplyResult{}, err
 	}
-	updateTurnDeadline(typed, command.SentAt)
+	if !analysisCommand {
+		updateTurnDeadline(typed, command.SentAt)
+	}
 	result := game.ApplyResult{
 		Status:   typed.Status,
 		Finished: typed.Status == StatusEnd,
+	}
+	if !analysisCommand {
+		if typed.Status == StatusEnd {
+			setFinalAnalysis(typed)
+		} else if key := positionKey(typed); key != "" &&
+			key != previousPositionKey {
+			result.BackgroundRequests = append(
+				result.BackgroundRequests,
+				prepareAnalysis(typed),
+			)
+		}
 	}
 	if removedPlayerID != "" {
 		result.Effects = append(result.Effects, game.DeliveryEffect{
@@ -299,8 +336,10 @@ func (p *Plugin) ApplyCommand(
 			},
 		})
 	}
-	if request := nextAIRequest(typed); request != nil {
-		result.AIRequests = append(result.AIRequests, *request)
+	if !analysisCommand {
+		if request := nextAIRequest(typed); request != nil {
+			result.AIRequests = append(result.AIRequests, *request)
+		}
 	}
 	return result, nil
 }
@@ -404,6 +443,25 @@ func roomView(
 	if state.Status == StatusEnd {
 		result = resultView(state)
 	}
+	roomData := map[string]any{
+		"board":         boardView(state.Board),
+		"currentPlayer": state.CurrentPlayer,
+		"currentSide":   currentSide(state),
+		"blackPlayerID": state.BlackPlayerID,
+		"whitePlayerID": state.WhitePlayerID,
+		"roundNo":       state.RoundNo,
+		"gameStatus":    state.Status,
+		"legalMoves":    legal,
+		"moveLog":       state.Log,
+		"lastData":      lastAction,
+		"turnDeadline":  deadlineValue(state.TurnDeadline),
+		"turnTimeoutMs": state.TurnTimeout.Milliseconds(),
+		"players":       players,
+		"playerOrder":   state.PlayerOrder,
+	}
+	if analysis := analysisView(state.Analysis); analysis != nil {
+		roomData["analysis"] = analysis
+	}
 	return map[string]any{
 		"type":       contracts.MessageTypeRoomSync,
 		"roomID":     state.RoomID,
@@ -414,22 +472,7 @@ func roomView(
 		"visibility": state.Visibility,
 		"playerData": playerData,
 		"result":     result,
-		"roomData": map[string]any{
-			"board":         boardView(state.Board),
-			"currentPlayer": state.CurrentPlayer,
-			"currentSide":   currentSide(state),
-			"blackPlayerID": state.BlackPlayerID,
-			"whitePlayerID": state.WhitePlayerID,
-			"roundNo":       state.RoundNo,
-			"gameStatus":    state.Status,
-			"legalMoves":    legal,
-			"moveLog":       state.Log,
-			"lastData":      lastAction,
-			"turnDeadline":  deadlineValue(state.TurnDeadline),
-			"turnTimeoutMs": state.TurnTimeout.Milliseconds(),
-			"players":       players,
-			"playerOrder":   state.PlayerOrder,
-		},
+		"roomData":   roomData,
 	}
 }
 
@@ -651,6 +694,7 @@ func beginMatch(state *State, actorID string) error {
 	state.WinnerID = ""
 	state.WinnerSide = ""
 	state.EndReason = ""
+	state.Analysis = nil
 	state.CurrentPlayer = state.BlackPlayerID
 	state.Status = StatusWaiting
 	return nil

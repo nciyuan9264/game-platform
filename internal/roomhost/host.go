@@ -29,6 +29,7 @@ import (
 
 const snapshotEverySeq = 5
 const aiDecisionTimeout = 2 * time.Second
+const backgroundTaskTimeout = 5 * time.Second
 
 var ErrEngineVersionMismatch = errors.New("engine version mismatch")
 
@@ -989,6 +990,7 @@ type RoomActor struct {
 	timer          *time.Timer
 	timerKey       string
 	timerGen       uint64
+	background     map[string]backgroundRun
 	historyID      int64
 	historySeq     int
 	historyRebuild bool
@@ -998,6 +1000,11 @@ type RoomActor struct {
 	snapshotDirty  bool
 	spectatorDirty bool
 	metadataDirty  bool
+}
+
+type backgroundRun struct {
+	requestID string
+	cancel    context.CancelFunc
 }
 
 type commandLogSink struct {
@@ -1059,6 +1066,7 @@ func (r *RoomActor) shutdown() {
 	if r.cancel != nil {
 		r.cancel()
 	}
+	r.cancelBackgroundLocked()
 	r.stopTimerLocked()
 }
 
@@ -1163,6 +1171,7 @@ func (r *RoomActor) StartMatch(ctx context.Context, matchID string) error {
 	if r.cancel != nil {
 		r.cancel()
 	}
+	r.cancelBackgroundLocked()
 	r.stopTimerLocked()
 	r.ctx, r.cancel = context.WithCancel(context.Background())
 	r.state = state
@@ -1378,6 +1387,7 @@ func (r *RoomActor) Close(ctx context.Context, cmd contracts.RoomCommand) contra
 	if r.cancel != nil {
 		r.cancel()
 	}
+	r.cancelBackgroundLocked()
 	r.stopTimerLocked()
 	ack := contracts.CommandAck{CommandID: cmd.CommandID, RoomID: cmd.RoomID, MatchID: r.match.MatchID, Accepted: true, Seq: r.seq}
 	_ = r.persistAck(ctx, ack)
@@ -1497,6 +1507,7 @@ func (r *RoomActor) restore(ctx context.Context) error {
 		return fmt.Errorf("reset automation state after restore: %w", err)
 	}
 	r.rearmScheduledLocked(ctx, "restore")
+	r.rearmBackgroundLocked(ctx, "restore")
 	r.mu.Unlock()
 	return nil
 }
@@ -1596,6 +1607,10 @@ func (r *RoomActor) syncRoomMetadataLocked(ctx context.Context) error {
 func (r *RoomActor) Apply(ctx context.Context, cmd contracts.RoomCommand) contracts.CommandAck {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	return r.applyLocked(ctx, cmd)
+}
+
+func (r *RoomActor) applyLocked(ctx context.Context, cmd contracts.RoomCommand) contracts.CommandAck {
 	if r.closed {
 		return contracts.CommandAck{CommandID: cmd.CommandID, RoomID: cmd.RoomID, MatchID: cmd.MatchID, Accepted: false, ErrorCode: "room_closed", Message: "room actor is closed"}
 	}
@@ -1784,6 +1799,7 @@ func (r *RoomActor) Apply(ctx context.Context, cmd contracts.RoomCommand) contra
 		r.outboundDirty = false
 	}
 	if result.Finished {
+		r.cancelBackgroundLocked()
 		r.match.Status = contracts.MatchStatusEnded
 		if err := r.host.store.FinishMatch(
 			ctx,
@@ -1804,6 +1820,9 @@ func (r *RoomActor) Apply(ctx context.Context, cmd contracts.RoomCommand) contra
 	for _, req := range result.AIRequests {
 		go r.runAI(r.ctx, req, cmd.TraceID)
 	}
+	for _, req := range result.BackgroundRequests {
+		r.scheduleBackgroundLocked(req, cmd.TraceID)
+	}
 	return ack
 }
 
@@ -1812,6 +1831,7 @@ func (r *RoomActor) failClosedLocked() {
 	if r.cancel != nil {
 		r.cancel()
 	}
+	r.cancelBackgroundLocked()
 	r.stopTimerLocked()
 }
 
@@ -2289,6 +2309,80 @@ func (r *RoomActor) stopTimerLocked() {
 	}
 }
 
+func (r *RoomActor) cancelBackgroundLocked() {
+	for kind, active := range r.background {
+		active.cancel()
+		delete(r.background, kind)
+	}
+}
+
+func (r *RoomActor) scheduleBackgroundLocked(
+	req game.BackgroundRequest,
+	traceID string,
+) {
+	if r.definition.Background == nil ||
+		req.Kind == "" ||
+		req.RequestID == "" ||
+		r.closed {
+		return
+	}
+	if r.background == nil {
+		r.background = map[string]backgroundRun{}
+	}
+	if active, ok := r.background[req.Kind]; ok {
+		active.cancel()
+		delete(r.background, req.Kind)
+		observability.Info(
+			"background request cancelled",
+			"roomID", r.record.RoomID,
+			"kind", req.Kind,
+			"requestID", active.requestID,
+		)
+	}
+	if req.RoomID == "" {
+		req.RoomID = r.record.RoomID
+	}
+	if req.GameType == "" {
+		req.GameType = r.record.GameType
+	}
+	runCtx, cancel := context.WithCancel(r.ctx)
+	r.background[req.Kind] = backgroundRun{
+		requestID: req.RequestID,
+		cancel:    cancel,
+	}
+	matchID := r.match.MatchID
+	epoch := r.record.Epoch
+	observability.Info(
+		"background request scheduled",
+		"roomID", req.RoomID,
+		"kind", req.Kind,
+		"requestID", req.RequestID,
+	)
+	go r.runBackground(runCtx, req, traceID, matchID, epoch)
+}
+
+func (r *RoomActor) rearmBackgroundLocked(
+	ctx context.Context,
+	traceID string,
+) {
+	scheduler, ok := r.definition.Engine.(game.BackgroundScheduler)
+	if !ok || r.definition.Background == nil {
+		return
+	}
+	pending, err := scheduler.PendingBackgroundRequests(ctx, r.state)
+	if err != nil {
+		observability.Warn(
+			"read pending background requests failed",
+			"roomID", r.record.RoomID,
+			"error", err,
+		)
+		return
+	}
+	for _, req := range pending {
+		r.scheduleBackgroundLocked(req, traceID)
+	}
+}
+
 func (r *RoomActor) rearmScheduledLocked(ctx context.Context, traceID string) {
 	r.stopTimerLocked()
 	if r.definition.Scheduler == nil {
@@ -2437,6 +2531,203 @@ func realtimeEffect(payload any) map[string]any {
 		}
 	}
 	return result
+}
+
+func (r *RoomActor) runBackground(
+	parent context.Context,
+	req game.BackgroundRequest,
+	traceID,
+	matchID string,
+	epoch int64,
+) {
+	go r.saveBackgroundRuntimeEvent(
+		matchID,
+		traceID,
+		"background_request_scheduled",
+		"roomhost scheduled background request",
+		req,
+		nil,
+	)
+	timeout := req.Timeout
+	if timeout <= 0 {
+		timeout = backgroundTaskTimeout
+	}
+	ctx, cancel := context.WithTimeout(parent, timeout)
+	defer cancel()
+
+	startedAt := time.Now()
+	cmd, runErr := r.definition.Background.Run(ctx, req)
+	elapsed := time.Since(startedAt)
+	if runErr == nil && cmd.Type == "" {
+		runErr = errors.New("background planner returned an empty command")
+	}
+	if errors.Is(ctx.Err(), context.Canceled) &&
+		!errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		observability.Info(
+			"background request cancelled",
+			"roomID", req.RoomID,
+			"kind", req.Kind,
+			"requestID", req.RequestID,
+			"elapsedMs", elapsed.Milliseconds(),
+		)
+		r.saveBackgroundRuntimeEvent(
+			matchID,
+			traceID,
+			"background_request_cancelled",
+			"roomhost cancelled background request",
+			req,
+			map[string]any{"elapsedMs": elapsed.Milliseconds()},
+		)
+		return
+	}
+	if runErr != nil {
+		reason := "planner_error"
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			reason = "timeout"
+		}
+		observability.Warn(
+			"background request failed",
+			"roomID", req.RoomID,
+			"kind", req.Kind,
+			"requestID", req.RequestID,
+			"elapsedMs", elapsed.Milliseconds(),
+			"error", runErr,
+		)
+		r.saveBackgroundRuntimeEvent(
+			matchID,
+			traceID,
+			"background_request_failed",
+			"roomhost background request failed",
+			req,
+			map[string]any{
+				"elapsedMs": elapsed.Milliseconds(),
+				"reason":    reason,
+			},
+		)
+		if req.FallbackCommand == nil {
+			r.mu.Lock()
+			if active, ok := r.background[req.Kind]; ok &&
+				active.requestID == req.RequestID {
+				active.cancel()
+				delete(r.background, req.Kind)
+			}
+			r.mu.Unlock()
+			return
+		}
+		cmd = *req.FallbackCommand
+	}
+
+	r.mu.Lock()
+	active, ok := r.background[req.Kind]
+	if !ok ||
+		active.requestID != req.RequestID ||
+		r.closed ||
+		r.match.MatchID != matchID ||
+		r.record.Epoch != epoch {
+		r.mu.Unlock()
+		observability.Info(
+			"background result dropped",
+			"roomID", req.RoomID,
+			"kind", req.Kind,
+			"requestID", req.RequestID,
+		)
+		r.saveBackgroundRuntimeEvent(
+			matchID,
+			traceID,
+			"background_result_dropped",
+			"roomhost dropped stale background result",
+			req,
+			nil,
+		)
+		return
+	}
+	active.cancel()
+	delete(r.background, req.Kind)
+	cmd.SchemaVersion = 1
+	cmd.CommandID = uuid.NewString()
+	cmd.TraceID = traceID
+	cmd.RoomID = req.RoomID
+	cmd.MatchID = matchID
+	cmd.GameType = req.GameType
+	cmd.Epoch = epoch
+	cmd.UserID = "system"
+	cmd.PlayerID = "system"
+	cmd.ConnectionRef = contracts.ConnectionRef{}
+	cmd.SentAt = time.Now().UTC()
+	ack := r.applyLocked(r.ctx, cmd)
+	r.mu.Unlock()
+
+	if !ack.Accepted {
+		observability.Warn(
+			"background command rejected",
+			"roomID", req.RoomID,
+			"kind", req.Kind,
+			"requestID", req.RequestID,
+			"type", cmd.Type,
+			"errorCode", ack.ErrorCode,
+			"error", ack.Message,
+		)
+		r.saveBackgroundRuntimeEvent(
+			matchID,
+			traceID,
+			"background_request_failed",
+			"roomhost rejected background command",
+			req,
+			map[string]any{
+				"errorCode": ack.ErrorCode,
+				"reason":    "command_rejected",
+			},
+		)
+		return
+	}
+	observability.Info(
+		"background request completed",
+		"roomID", req.RoomID,
+		"kind", req.Kind,
+		"requestID", req.RequestID,
+		"type", cmd.Type,
+		"elapsedMs", elapsed.Milliseconds(),
+	)
+	r.saveBackgroundRuntimeEvent(
+		matchID,
+		traceID,
+		"background_request_completed",
+		"roomhost completed background request",
+		req,
+		map[string]any{
+			"elapsedMs": elapsed.Milliseconds(),
+			"type":      cmd.Type,
+		},
+	)
+}
+
+func (r *RoomActor) saveBackgroundRuntimeEvent(
+	matchID,
+	traceID,
+	event,
+	message string,
+	req game.BackgroundRequest,
+	extra map[string]any,
+) {
+	payload := map[string]any{
+		"kind":      req.Kind,
+		"requestID": req.RequestID,
+	}
+	for key, value := range extra {
+		payload[key] = value
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	_ = r.host.store.SaveRuntimeEvent(ctx, contracts.RuntimeEvent{
+		RoomID:    req.RoomID,
+		MatchID:   matchID,
+		TraceID:   traceID,
+		NodeID:    r.host.nodeID,
+		Component: "roomhost",
+		Event:     event,
+		Message:   message,
+		Payload:   payload,
+	})
 }
 
 func (r *RoomActor) runAI(ctx context.Context, req game.AIRequest, traceID string) {

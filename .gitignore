@@ -22,3 +22,4 @@ build/
 *.md
 !docs/game-release-runbook.md
 !docs/regression-testing.md
+!docs/othello-edax-analysis.md

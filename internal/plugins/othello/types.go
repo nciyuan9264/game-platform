@@ -53,6 +53,20 @@ type Action struct {
 	Automatic bool   `json:"automatic"`
 }
 
+type PositionAnalysis struct {
+	RequestID     string  `json:"requestID"`
+	PositionKey   string  `json:"positionKey"`
+	Status        string  `json:"status"`
+	BlackWinRate  float64 `json:"blackWinRate,omitempty"`
+	DrawRate      float64 `json:"drawRate,omitempty"`
+	WhiteWinRate  float64 `json:"whiteWinRate,omitempty"`
+	Score         int     `json:"score,omitempty"`
+	Depth         int     `json:"depth,omitempty"`
+	ElapsedMs     int64   `json:"elapsedMs,omitempty"`
+	Exact         bool    `json:"exact"`
+	EngineVersion string  `json:"engineVersion"`
+}
+
 type State struct {
 	RoomID      string             `json:"roomID"`
 	OwnerID     string             `json:"ownerID"`
@@ -64,19 +78,20 @@ type State struct {
 	Roster      map[string]*Player `json:"roster"`
 	PlayerOrder []string           `json:"playerOrder"`
 
-	Board         []Disc        `json:"board"`
-	CurrentPlayer string        `json:"currentPlayer,omitempty"`
-	BlackPlayerID string        `json:"blackPlayerID,omitempty"`
-	WhitePlayerID string        `json:"whitePlayerID,omitempty"`
-	LastAction    *Action       `json:"lastAction,omitempty"`
-	Log           []Action      `json:"log"`
-	WinnerID      string        `json:"winnerID,omitempty"`
-	WinnerSide    Side          `json:"winnerSide,omitempty"`
-	EndReason     string        `json:"endReason,omitempty"`
-	GameStartTime time.Time     `json:"gameStartTime,omitempty"`
-	TurnDeadline  time.Time     `json:"turnDeadline,omitempty"`
-	TurnTimeout   time.Duration `json:"turnTimeout,omitempty"`
-	NoHumanChecks int           `json:"noHumanChecks,omitempty"`
+	Board         []Disc            `json:"board"`
+	CurrentPlayer string            `json:"currentPlayer,omitempty"`
+	BlackPlayerID string            `json:"blackPlayerID,omitempty"`
+	WhitePlayerID string            `json:"whitePlayerID,omitempty"`
+	LastAction    *Action           `json:"lastAction,omitempty"`
+	Log           []Action          `json:"log"`
+	WinnerID      string            `json:"winnerID,omitempty"`
+	WinnerSide    Side              `json:"winnerSide,omitempty"`
+	EndReason     string            `json:"endReason,omitempty"`
+	GameStartTime time.Time         `json:"gameStartTime,omitempty"`
+	TurnDeadline  time.Time         `json:"turnDeadline,omitempty"`
+	TurnTimeout   time.Duration     `json:"turnTimeout,omitempty"`
+	NoHumanChecks int               `json:"noHumanChecks,omitempty"`
+	Analysis      *PositionAnalysis `json:"analysis,omitempty"`
 }
 
 func other(side Side) Side {
@@ -122,6 +137,10 @@ func cloneState(state *State) *State {
 	if state.LastAction != nil {
 		action := cloneAction(*state.LastAction)
 		result.LastAction = &action
+	}
+	if state.Analysis != nil {
+		analysis := *state.Analysis
+		result.Analysis = &analysis
 	}
 	return &result
 }

@@ -146,6 +146,7 @@ func finishByCount(state *State) {
 	} else {
 		state.EndReason = "双方均无合法落点，对局提前结束。"
 	}
+	setFinalAnalysis(state)
 }
 
 func playMove(state *State, playerID string, index int, automatic bool) error {
@@ -223,6 +224,7 @@ func resign(state *State, playerID string) error {
 	state.WinnerID = playerForSide(state, state.WinnerSide)
 	state.EndReason = sideName(player.Side) + "主动认输，对局结束。"
 	state.CurrentPlayer = ""
+	setFinalAnalysis(state)
 	return nil
 }
 
