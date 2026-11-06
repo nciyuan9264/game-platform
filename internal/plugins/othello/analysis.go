@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"os"
 	"os/exec"
 	"slices"
 	"strconv"
@@ -30,11 +31,14 @@ const (
 	CommandAnalysisResult      = "analysis_result"
 	CommandAnalysisUnavailable = "analysis_unavailable"
 
-	analysisTimeout  = 2500 * time.Millisecond
-	edaxOutputLimit  = 64 * 1024
-	edaxBinaryPath   = "/opt/edax/bin/edax"
-	edaxEvalFilePath = "/opt/edax/data/eval.dat"
-	edaxBookFilePath = "/tmp/edax-analysis-book.dat"
+	analysisTimeout    = 2500 * time.Millisecond
+	edaxOutputLimit    = 64 * 1024
+	edaxBinaryPath     = "/opt/edax/bin/edax"
+	edaxEvalFilePath   = "/opt/edax/data/eval.dat"
+	edaxBookFilePath   = "/tmp/edax-analysis-book.dat"
+	edaxWorkersEnv     = "OTHELLO_EDAX_WORKERS"
+	defaultEdaxWorkers = 2
+	maxEdaxWorkers     = 2
 )
 
 type positionAnalyzer interface {
@@ -42,6 +46,7 @@ type positionAnalyzer interface {
 }
 
 type EngineAnalysis struct {
+	BestMove  *int
 	Score     int
 	Depth     int
 	ElapsedMs int64
@@ -56,6 +61,7 @@ type edaxAnalyzer struct {
 type analysisResultPayload struct {
 	RequestID    string  `json:"requestID"`
 	PositionKey  string  `json:"positionKey"`
+	BestMove     *int    `json:"bestMove,omitempty"`
 	BlackWinRate float64 `json:"blackWinRate"`
 	DrawRate     float64 `json:"drawRate"`
 	WhiteWinRate float64 `json:"whiteWinRate"`
@@ -73,8 +79,24 @@ func newEdaxAnalyzer() *edaxAnalyzer {
 	return &edaxAnalyzer{
 		binaryPath: edaxBinaryPath,
 		evalPath:   edaxEvalFilePath,
-		slot:       make(chan struct{}, 1),
+		slot:       make(chan struct{}, configuredEdaxWorkers()),
 	}
+}
+
+func configuredEdaxWorkers() int {
+	value := strings.TrimSpace(os.Getenv(edaxWorkersEnv))
+	if value == "" {
+		return defaultEdaxWorkers
+	}
+	workers, err := strconv.Atoi(value)
+	if err != nil || workers < 1 || workers > maxEdaxWorkers {
+		panic(fmt.Sprintf(
+			"%s must be an integer between 1 and %d",
+			edaxWorkersEnv,
+			maxEdaxWorkers,
+		))
+	}
+	return workers
 }
 
 func (p *Plugin) Run(
@@ -120,6 +142,7 @@ func (p *Plugin) Run(
 		Payload: analysisResultPayload{
 			RequestID:    request.RequestID,
 			PositionKey:  state.Analysis.PositionKey,
+			BestMove:     engineResult.BestMove,
 			BlackWinRate: black,
 			DrawRate:     draw,
 			WhiteWinRate: white,
@@ -266,6 +289,8 @@ func applyAnalysisResult(
 		total += rate
 	}
 	if math.Abs(total-1) > 1e-6 ||
+		(payload.BestMove != nil &&
+			(*payload.BestMove < 0 || *payload.BestMove >= 64)) ||
 		payload.Score < -64 ||
 		payload.Score > 64 ||
 		payload.Depth < 0 ||
@@ -277,6 +302,7 @@ func applyAnalysisResult(
 		RequestID:     payload.RequestID,
 		PositionKey:   payload.PositionKey,
 		Status:        analysisStatusReady,
+		BestMove:      payload.BestMove,
 		BlackWinRate:  payload.BlackWinRate,
 		DrawRate:      payload.DrawRate,
 		WhiteWinRate:  payload.WhiteWinRate,
@@ -285,6 +311,7 @@ func applyAnalysisResult(
 		ElapsedMs:     payload.ElapsedMs,
 		EngineVersion: analysisEngineVersion,
 	}
+	resolvePendingHints(state)
 	return nil
 }
 
@@ -305,6 +332,7 @@ func applyAnalysisUnavailable(
 		Status:        analysisStatusFailed,
 		EngineVersion: analysisEngineVersion,
 	}
+	clearPendingHints(state, payload.PositionKey)
 	return nil
 }
 
@@ -438,11 +466,12 @@ func (a *edaxAnalyzer) Analyze(
 			strings.TrimSpace(stderr.String()),
 		)
 	}
-	score, depth, err := parseNBoardSearch(stdout.String())
+	bestMove, score, depth, err := parseNBoardSearch(stdout.String())
 	if err != nil {
 		return EngineAnalysis{}, err
 	}
 	return EngineAnalysis{
+		BestMove:  bestMove,
 		Score:     score,
 		Depth:     depth,
 		ElapsedMs: elapsedMs,
@@ -475,7 +504,9 @@ func nboardInput(state *State) (string, error) {
 	return input.String(), nil
 }
 
-func parseNBoardSearch(output string) (score, depth int, err error) {
+func parseNBoardSearch(
+	output string,
+) (bestMove *int, score, depth int, err error) {
 	var searchLine string
 	for _, line := range strings.Split(output, "\n") {
 		line = strings.TrimSpace(line)
@@ -484,21 +515,41 @@ func parseNBoardSearch(output string) (score, depth int, err error) {
 		}
 	}
 	fields := strings.Fields(searchLine)
-	if len(fields) < 4 {
-		return 0, 0, errors.New("Edax search response is missing")
+	if len(fields) < 5 {
+		return nil, 0, 0, errors.New("Edax search response is missing")
+	}
+	bestMove, err = parseNBoardMove(fields[1])
+	if err != nil {
+		return nil, 0, 0, err
 	}
 	depth, err = strconv.Atoi(fields[len(fields)-1])
 	if err != nil || depth < 0 || depth > 60 {
-		return 0, 0, errors.New("invalid Edax search depth")
+		return nil, 0, 0, errors.New("invalid Edax search depth")
 	}
 	if fields[len(fields)-2] != "0" {
-		return 0, 0, errors.New("invalid Edax search response")
+		return nil, 0, 0, errors.New("invalid Edax search response")
 	}
 	score, err = strconv.Atoi(fields[len(fields)-3])
 	if err != nil || score < -64 || score > 64 {
-		return 0, 0, errors.New("invalid Edax search score")
+		return nil, 0, 0, errors.New("invalid Edax search score")
 	}
-	return score, depth, nil
+	return bestMove, score, depth, nil
+}
+
+func parseNBoardMove(value string) (*int, error) {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "pa" || value == "pass" {
+		return nil, nil
+	}
+	if len(value) != 2 ||
+		value[0] < 'a' ||
+		value[0] > 'h' ||
+		value[1] < '1' ||
+		value[1] > '8' {
+		return nil, errors.New("invalid Edax principal variation")
+	}
+	index := int(value[1]-'1')*8 + int(value[0]-'a')
+	return &index, nil
 }
 
 func validateReplayState(state *State) error {

@@ -1,6 +1,10 @@
 package othello
 
-import "time"
+import (
+	"time"
+
+	"github.com/nciyuan9264/game-platform/internal/game"
+)
 
 type Side string
 
@@ -26,15 +30,20 @@ const (
 )
 
 type Player struct {
-	UserID      string `json:"userID,omitempty"`
-	PlayerID    string `json:"playerID"`
-	DisplayName string `json:"displayName,omitempty"`
-	Online      bool   `json:"online"`
-	Ready       bool   `json:"ready"`
-	GameReady   bool   `json:"gameReady,omitempty"`
-	AI          bool   `json:"ai"`
-	SeatIndex   int    `json:"seatIndex"`
-	Side        Side   `json:"side,omitempty"`
+	UserID          string            `json:"userID,omitempty"`
+	PlayerID        string            `json:"playerID"`
+	DisplayName     string            `json:"displayName,omitempty"`
+	Online          bool              `json:"online"`
+	Ready           bool              `json:"ready"`
+	GameReady       bool              `json:"gameReady,omitempty"`
+	AI              bool              `json:"ai"`
+	AIDifficulty    game.AIDifficulty `json:"aiDifficulty,omitempty"`
+	SeatIndex       int               `json:"seatIndex"`
+	Side            Side              `json:"side,omitempty"`
+	HintsUsed       int               `json:"hintsUsed,omitempty"`
+	HintPending     bool              `json:"hintPending,omitempty"`
+	HintPositionKey string            `json:"hintPositionKey,omitempty"`
+	Hint            *HintAdvice       `json:"hint,omitempty"`
 }
 
 type Move struct {
@@ -57,6 +66,7 @@ type PositionAnalysis struct {
 	RequestID     string  `json:"requestID"`
 	PositionKey   string  `json:"positionKey"`
 	Status        string  `json:"status"`
+	BestMove      *int    `json:"bestMove,omitempty"`
 	BlackWinRate  float64 `json:"blackWinRate,omitempty"`
 	DrawRate      float64 `json:"drawRate,omitempty"`
 	WhiteWinRate  float64 `json:"whiteWinRate,omitempty"`
@@ -65,6 +75,11 @@ type PositionAnalysis struct {
 	ElapsedMs     int64   `json:"elapsedMs,omitempty"`
 	Exact         bool    `json:"exact"`
 	EngineVersion string  `json:"engineVersion"`
+}
+
+type HintAdvice struct {
+	PositionKey string `json:"positionKey"`
+	Index       int    `json:"index"`
 }
 
 type State struct {
@@ -128,6 +143,10 @@ func cloneState(state *State) *State {
 			continue
 		}
 		copyPlayer := *player
+		if player.Hint != nil {
+			hint := *player.Hint
+			copyPlayer.Hint = &hint
+		}
 		result.Roster[id] = &copyPlayer
 	}
 	result.Log = make([]Action, len(state.Log))
@@ -140,6 +159,10 @@ func cloneState(state *State) *State {
 	}
 	if state.Analysis != nil {
 		analysis := *state.Analysis
+		if state.Analysis.BestMove != nil {
+			bestMove := *state.Analysis.BestMove
+			analysis.BestMove = &bestMove
+		}
 		result.Analysis = &analysis
 	}
 	return &result

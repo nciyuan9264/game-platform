@@ -361,6 +361,21 @@ func TestClientCommandPayload(t *testing.T) {
 		if _, ok := got.(map[string]any); !ok {
 			t.Fatalf("pass payload = %#v", got)
 		}
+		got, err = clientCommandPayload(
+			contracts.GameOthello,
+			"game_request_hint",
+			map[string]any{
+				"othello": map[string]any{
+					"requestHint": map[string]any{},
+				},
+			},
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := got.(map[string]any); !ok {
+			t.Fatalf("hint payload = %#v", got)
+		}
 	})
 
 	t.Run("fugitive move payload", func(t *testing.T) {

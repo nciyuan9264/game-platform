@@ -21,6 +21,7 @@ import (
 	acquiregame "github.com/nciyuan9264/game-platform/internal/plugins/acquire"
 	acquiredomain "github.com/nciyuan9264/game-platform/internal/plugins/acquire/domain/domain"
 	davincigame "github.com/nciyuan9264/game-platform/internal/plugins/davinci"
+	othellogame "github.com/nciyuan9264/game-platform/internal/plugins/othello"
 	splendorgame "github.com/nciyuan9264/game-platform/internal/plugins/splendor"
 	yinshgame "github.com/nciyuan9264/game-platform/internal/plugins/yinsh"
 	"github.com/nciyuan9264/game-platform/internal/transport"
@@ -1393,6 +1394,7 @@ func TestStartMatchRestoresRosterAcrossGames(t *testing.T) {
 	definitions := []game.Definition{
 		acquiregame.Definition(),
 		davincigame.Definition(),
+		othellogame.Definition(),
 		splendorgame.Definition(),
 		yinshgame.Definition(),
 	}
@@ -1447,7 +1449,12 @@ func TestStartMatchRestoresRosterAcrossGames(t *testing.T) {
 				}
 				if scenario.setupAI {
 					applySetup(contracts.RoomCommand{
-						Type: "match_add_ai", PlayerID: owner, Payload: map[string]any{"seatIndex": 1},
+						Type:     "match_add_ai",
+						PlayerID: owner,
+						Payload: map[string]any{
+							"seatIndex":    1,
+							"aiDifficulty": "hard",
+						},
 					})
 				}
 
@@ -1519,6 +1526,13 @@ func TestStartMatchRestoresRosterAcrossGames(t *testing.T) {
 					}
 					if player.IsAI {
 						aiCount++
+						if definition.GameType == contracts.GameOthello &&
+							player.AIDifficulty != "hard" {
+							t.Fatalf(
+								"restored Othello AI difficulty = %q",
+								player.AIDifficulty,
+							)
+						}
 					}
 				}
 				if aiCount != scenario.expectedAI {

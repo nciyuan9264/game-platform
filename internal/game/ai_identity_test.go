@@ -15,9 +15,10 @@ func TestDecodeAddAIRequest(t *testing.T) {
 	}{
 		{name: "empty"},
 		{name: "null", payload: "null"},
-		{name: "object", payload: `{"seatIndex":4,"restorePlayerID":"ai_002"}`, want: AddAIRequest{
+		{name: "object", payload: `{"seatIndex":4,"restorePlayerID":"ai_002","aiDifficulty":"hard"}`, want: AddAIRequest{
 			SeatIndex:       &seat,
 			RestorePlayerID: "ai_002",
+			AIDifficulty:    "hard",
 		}},
 		{name: "invalid", payload: `{`, wantErr: true},
 	}
@@ -29,6 +30,13 @@ func TestDecodeAddAIRequest(t *testing.T) {
 			}
 			if got.RestorePlayerID != tt.want.RestorePlayerID {
 				t.Fatalf("RestorePlayerID = %q, want %q", got.RestorePlayerID, tt.want.RestorePlayerID)
+			}
+			if got.AIDifficulty != tt.want.AIDifficulty {
+				t.Fatalf(
+					"AIDifficulty = %q, want %q",
+					got.AIDifficulty,
+					tt.want.AIDifficulty,
+				)
 			}
 			if (got.SeatIndex == nil) != (tt.want.SeatIndex == nil) {
 				t.Fatalf("SeatIndex = %v, want %v", got.SeatIndex, tt.want.SeatIndex)

@@ -111,6 +111,14 @@ for game in acquire davinci splendor yinsh othello fugitive warchest quoridor he
   done
 done
 
+othello_edax_worker_configs="$(
+  grep -Eic 'OTHELLO_EDAX_WORKERS:[[:space:]]*"?2"?' <<<"$config"
+)"
+if [[ "$othello_edax_worker_configs" -ne 2 ]]; then
+  printf 'production config rejected: both Othello slots must use exactly 2 Edax workers\n' >&2
+  exit 1
+fi
+
 require_source '\$\{ACQUIRE_ROOMHOST_A_IMAGE:\?' 'Acquire A must use a complete independent image reference'
 require_source '\$\{ACQUIRE_ROOMHOST_B_IMAGE:\?' 'Acquire B must use a complete independent image reference'
 require_source '\$\{DAVINCI_ROOMHOST_A_IMAGE:\?' 'DaVinci A must use a complete independent image reference'

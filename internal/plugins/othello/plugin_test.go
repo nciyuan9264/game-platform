@@ -189,6 +189,253 @@ func TestMetadataProgressPresenceAndSpectator(t *testing.T) {
 	}
 }
 
+func TestPendingHintCompletesPrivatelyWithoutResettingDeadline(t *testing.T) {
+	state := startPreparedMatch(t, 1)
+	plugin := &Plugin{}
+	deadline := state.TurnDeadline
+	result, err := plugin.ApplyCommand(
+		context.Background(),
+		state,
+		contracts.RoomCommand{
+			Type:     CommandRequestHint,
+			PlayerID: state.CurrentPlayer,
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	player := state.Roster[state.CurrentPlayer]
+	if !player.HintPending ||
+		player.HintsUsed != 0 ||
+		len(result.BackgroundRequests) != 0 {
+		t.Fatalf("pending hint state = %+v, result = %+v", player, result)
+	}
+	if !state.TurnDeadline.Equal(deadline) {
+		t.Fatalf("hint request changed deadline: %s", state.TurnDeadline)
+	}
+
+	bestMove := legalMoves(state.Board, currentSide(state))[0].Index
+	result, err = plugin.ApplyCommand(
+		context.Background(),
+		state,
+		internalAnalysisResultCommand(state, bestMove),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if player.HintPending ||
+		player.HintsUsed != 1 ||
+		player.Hint == nil ||
+		player.Hint.Index != bestMove {
+		t.Fatalf("completed hint state = %+v", player)
+	}
+	if len(result.BackgroundRequests) != 0 || len(result.AIRequests) != 0 {
+		t.Fatalf("hint completion scheduled work: %+v", result)
+	}
+	if !state.TurnDeadline.Equal(deadline) {
+		t.Fatalf("analysis completion changed deadline: %s", state.TurnDeadline)
+	}
+
+	ownerViewRaw, err := plugin.BuildPlayerView(
+		context.Background(),
+		state,
+		game.ViewRequest{PlayerID: "owner"},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ownerView := ownerViewRaw.(map[string]any)
+	hint := ownerView["hint"].(map[string]any)
+	if hint["index"] != bestMove ||
+		hint["remaining"] != 0 ||
+		hint["pending"] != false {
+		t.Fatalf("owner hint view = %+v", hint)
+	}
+	opponentViewRaw, err := plugin.BuildPlayerView(
+		context.Background(),
+		state,
+		game.ViewRequest{PlayerID: "ai_001"},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := opponentViewRaw.(map[string]any)["hint"]; ok {
+		t.Fatalf("opponent received private hint: %+v", opponentViewRaw)
+	}
+	spectatorViewRaw, err := plugin.BuildSpectatorView(
+		context.Background(),
+		state,
+		1,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := spectatorViewRaw.(map[string]any)["hint"]; ok {
+		t.Fatalf("spectator received private hint: %+v", spectatorViewRaw)
+	}
+
+	if _, err := plugin.ApplyCommand(
+		context.Background(),
+		state,
+		contracts.RoomCommand{
+			Type:     CommandPlaceDisc,
+			PlayerID: "owner",
+			Payload:  map[string]any{"index": bestMove},
+		},
+	); err != nil {
+		t.Fatal(err)
+	}
+	if player.Hint != nil || player.HintPending {
+		t.Fatalf("hint survived position change: %+v", player)
+	}
+}
+
+func TestHintUnavailableRefundsAttemptAndReadyAnalysisCompletesImmediately(
+	t *testing.T,
+) {
+	t.Run("unavailable refunds", func(t *testing.T) {
+		state := startPreparedMatch(t, 1)
+		plugin := &Plugin{}
+		if _, err := plugin.ApplyCommand(
+			context.Background(),
+			state,
+			contracts.RoomCommand{
+				Type:     CommandRequestHint,
+				PlayerID: "owner",
+			},
+		); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := plugin.ApplyCommand(
+			context.Background(),
+			state,
+			contracts.RoomCommand{
+				Type: CommandAnalysisUnavailable,
+				Payload: analysisUnavailablePayload{
+					RequestID:   state.Analysis.RequestID,
+					PositionKey: state.Analysis.PositionKey,
+				},
+			},
+		); err != nil {
+			t.Fatal(err)
+		}
+		player := state.Roster["owner"]
+		if player.HintsUsed != 0 || player.HintPending || player.Hint != nil {
+			t.Fatalf("failed analysis consumed hint: %+v", player)
+		}
+	})
+
+	t.Run("ready completes immediately", func(t *testing.T) {
+		state := startPreparedMatch(t, 1)
+		plugin := &Plugin{}
+		bestMove := legalMoves(state.Board, currentSide(state))[0].Index
+		if _, err := plugin.ApplyCommand(
+			context.Background(),
+			state,
+			internalAnalysisResultCommand(state, bestMove),
+		); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := plugin.ApplyCommand(
+			context.Background(),
+			state,
+			contracts.RoomCommand{
+				Type:     CommandRequestHint,
+				PlayerID: "owner",
+			},
+		); err != nil {
+			t.Fatal(err)
+		}
+		player := state.Roster["owner"]
+		if player.HintsUsed != 1 ||
+			player.Hint == nil ||
+			player.Hint.Index != bestMove {
+			t.Fatalf("immediate hint = %+v", player)
+		}
+		if _, err := plugin.ApplyCommand(
+			context.Background(),
+			state,
+			contracts.RoomCommand{
+				Type:     CommandRequestHint,
+				PlayerID: "owner",
+			},
+		); err == nil {
+			t.Fatal("second hint request was accepted")
+		}
+	})
+}
+
+func TestAIDifficultyDefaultsValidatesAndProjects(t *testing.T) {
+	plugin := &Plugin{}
+	newState := func() *State {
+		raw, err := plugin.InitRoom(context.Background(), game.RoomConfig{
+			RoomID:        "difficulty-room",
+			OwnerPlayerID: "owner",
+			RandomSeed:    42,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		state := raw.(*State)
+		if _, err := plugin.ApplyCommand(
+			context.Background(),
+			state,
+			contracts.RoomCommand{Type: "connect", PlayerID: "owner"},
+		); err != nil {
+			t.Fatal(err)
+		}
+		return state
+	}
+
+	defaultState := newState()
+	if _, err := plugin.ApplyCommand(
+		context.Background(),
+		defaultState,
+		contracts.RoomCommand{
+			Type:     "match_add_ai",
+			PlayerID: "owner",
+		},
+	); err != nil {
+		t.Fatal(err)
+	}
+	if got := defaultState.Roster["ai_001"].AIDifficulty; got != game.AIDifficultyMedium {
+		t.Fatalf("default difficulty = %q", got)
+	}
+
+	hardState := newState()
+	if _, err := plugin.ApplyCommand(
+		context.Background(),
+		hardState,
+		contracts.RoomCommand{
+			Type:     "match_add_ai",
+			PlayerID: "owner",
+			Payload:  map[string]any{"aiDifficulty": "hard"},
+		},
+	); err != nil {
+		t.Fatal(err)
+	}
+	roster, err := plugin.Roster(context.Background(), hardState)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if roster[1].AIDifficulty != "hard" {
+		t.Fatalf("hard roster = %+v", roster)
+	}
+
+	invalidState := newState()
+	if _, err := plugin.ApplyCommand(
+		context.Background(),
+		invalidState,
+		contracts.RoomCommand{
+			Type:     "match_add_ai",
+			PlayerID: "owner",
+			Payload:  map[string]any{"aiDifficulty": "expert"},
+		},
+	); err == nil {
+		t.Fatal("invalid AI difficulty was accepted")
+	}
+}
+
 func startPreparedMatch(t *testing.T, roundNo int) *State {
 	t.Helper()
 	plugin := &Plugin{}

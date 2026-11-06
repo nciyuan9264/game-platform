@@ -191,14 +191,15 @@ type RoomMetadataProvider interface {
 }
 
 type RosterPlayer struct {
-	UserID      string
-	PlayerID    string
-	DisplayName string
-	Online      bool
-	IsAI        bool
-	SeatIndex   int
-	Ready       bool
-	GameRole    string
+	UserID       string
+	PlayerID     string
+	DisplayName  string
+	Online       bool
+	IsAI         bool
+	AIDifficulty string
+	SeatIndex    int
+	Ready        bool
+	GameRole     string
 }
 
 type RosterProvider interface {

@@ -14,25 +14,28 @@ import (
 
 const (
 	GameType            = "othello"
-	EngineVersion       = "othello-v4"
+	EngineVersion       = "othello-v5"
 	ReplaySchemaVersion = 1
 	defaultMaxPlayers   = 2
 	maxNoHumanChecks    = 3
+	defaultHintLimit    = 1
 )
 
 var aiNames = []string{"墨白"}
 
 const (
-	CommandPlaceDisc = "game_place_disc"
-	CommandPass      = "game_pass"
-	CommandResign    = "game_resign"
-	CommandTimeout   = "turn_timeout"
+	CommandPlaceDisc   = "game_place_disc"
+	CommandPass        = "game_pass"
+	CommandResign      = "game_resign"
+	CommandRequestHint = "game_request_hint"
+	CommandTimeout     = "turn_timeout"
 )
 
 const (
 	turnTimeout = 60 * time.Second
 	aiMinDelay  = 1200 * time.Millisecond
 	aiMaxDelay  = 2 * time.Second
+	hardAIDelay = 100 * time.Millisecond
 )
 
 type Plugin struct {
@@ -159,13 +162,14 @@ func (p *Plugin) Roster(
 			displayName = player.DisplayName
 		}
 		result = append(result, game.RosterPlayer{
-			UserID:      player.UserID,
-			PlayerID:    player.PlayerID,
-			DisplayName: displayName,
-			Online:      player.Online,
-			IsAI:        player.AI,
-			SeatIndex:   player.SeatIndex,
-			Ready:       player.Ready,
+			UserID:       player.UserID,
+			PlayerID:     player.PlayerID,
+			DisplayName:  displayName,
+			Online:       player.Online,
+			IsAI:         player.AI,
+			AIDifficulty: string(player.AIDifficulty),
+			SeatIndex:    player.SeatIndex,
+			Ready:        player.Ready,
 		})
 	}
 	return result, nil
@@ -228,6 +232,7 @@ func (p *Plugin) ApplyCommand(
 	removedPlayerID := ""
 	analysisCommand := command.Type == CommandAnalysisResult ||
 		command.Type == CommandAnalysisUnavailable
+	nonTurnCommand := analysisCommand || command.Type == CommandRequestHint
 	switch command.Type {
 	case "connect":
 		err = connect(typed, command.PlayerID)
@@ -273,6 +278,8 @@ func (p *Plugin) ApplyCommand(
 		)
 	case CommandResign:
 		err = resign(typed, command.PlayerID)
+	case CommandRequestHint:
+		err = requestHint(typed, command.PlayerID)
 	case CommandTimeout:
 		if command.ConnectionRef.Valid() {
 			err = errors.New("client cannot submit timeout commands")
@@ -305,17 +312,21 @@ func (p *Plugin) ApplyCommand(
 	if err != nil {
 		return game.ApplyResult{}, err
 	}
-	if !analysisCommand {
+	currentPositionKey := positionKey(typed)
+	if currentPositionKey != previousPositionKey {
+		clearHints(typed)
+	}
+	if !nonTurnCommand {
 		updateTurnDeadline(typed, command.SentAt)
 	}
 	result := game.ApplyResult{
 		Status:   typed.Status,
 		Finished: typed.Status == StatusEnd,
 	}
-	if !analysisCommand {
+	if !nonTurnCommand {
 		if typed.Status == StatusEnd {
 			setFinalAnalysis(typed)
-		} else if key := positionKey(typed); key != "" &&
+		} else if key := currentPositionKey; key != "" &&
 			key != previousPositionKey {
 			result.BackgroundRequests = append(
 				result.BackgroundRequests,
@@ -336,10 +347,8 @@ func (p *Plugin) ApplyCommand(
 			},
 		})
 	}
-	if !analysisCommand {
-		if request := nextAIRequest(typed); request != nil {
-			result.AIRequests = append(result.AIRequests, *request)
-		}
+	if request := nextAIRequest(typed); request != nil {
+		result.AIRequests = append(result.AIRequests, *request)
 	}
 	return result, nil
 }
@@ -462,7 +471,7 @@ func roomView(
 	if analysis := analysisView(state.Analysis); analysis != nil {
 		roomData["analysis"] = analysis
 	}
-	return map[string]any{
+	view := map[string]any{
 		"type":       contracts.MessageTypeRoomSync,
 		"roomID":     state.RoomID,
 		"matchID":    matchID,
@@ -474,6 +483,10 @@ func roomView(
 		"result":     result,
 		"roomData":   roomData,
 	}
+	if hint := hintView(state, playerID); hint != nil {
+		view["hint"] = hint
+	}
+	return view
 }
 
 func boardView(board []Disc) []string {
@@ -531,7 +544,7 @@ func playerViews(
 				displayName = fmt.Sprintf("玩家 %s", playerID)
 			}
 		}
-		result[playerID] = map[string]any{
+		view := map[string]any{
 			"userID":      userID,
 			"playerID":    playerID,
 			"displayName": displayName,
@@ -541,6 +554,10 @@ func playerViews(
 			"ready":       player.Ready,
 			"seatIndex":   player.SeatIndex,
 		}
+		if player.AI {
+			view["aiDifficulty"] = string(player.AIDifficulty)
+		}
+		result[playerID] = view
 	}
 	return result
 }
@@ -601,6 +618,10 @@ func addAI(state *State, actorID string, payload []byte) error {
 	if err != nil {
 		return errors.New("invalid seat")
 	}
+	difficulty, err := normalizeAIDifficulty(request.AIDifficulty)
+	if err != nil {
+		return err
+	}
 	if request.SeatIndex != nil {
 		seatIndex = *request.SeatIndex
 		if seatIndex < 0 ||
@@ -618,13 +639,14 @@ func addAI(state *State, actorID string, payload []byte) error {
 		return err
 	}
 	state.Roster[identity.PlayerID] = &Player{
-		PlayerID:    identity.PlayerID,
-		DisplayName: identity.DisplayName,
-		Online:      true,
-		Ready:       true,
-		GameReady:   true,
-		AI:          true,
-		SeatIndex:   seatIndex,
+		PlayerID:     identity.PlayerID,
+		DisplayName:  identity.DisplayName,
+		Online:       true,
+		Ready:        true,
+		GameReady:    true,
+		AI:           true,
+		AIDifficulty: difficulty,
+		SeatIndex:    seatIndex,
 	}
 	state.PlayerOrder = append(state.PlayerOrder, identity.PlayerID)
 	sortPlayerOrder(state)
@@ -686,6 +708,10 @@ func beginMatch(state *State, actorID string) error {
 		}
 		player.Ready = player.AI
 		player.GameReady = player.AI
+		player.HintsUsed = 0
+		player.HintPending = false
+		player.HintPositionKey = ""
+		player.Hint = nil
 	}
 	assignSides(state)
 	state.Board = freshBoard()
@@ -750,7 +776,7 @@ func applyTimeout(
 	case StatusPass:
 		return passTurn(state, playerID, true)
 	case StatusPlaying:
-		move, ok := bestMove(
+		move, ok := bestMediumMove(
 			ctx,
 			state,
 			sideForPlayer(state, playerID),
@@ -771,11 +797,23 @@ func nextAIRequest(state *State) *game.AIRequest {
 		(state.Status != StatusPlaying && state.Status != StatusPass) {
 		return nil
 	}
-	delayRange := int((aiMaxDelay - aiMinDelay) / time.Millisecond)
-	delayOffset := int(
-		(state.RandomSeed + uint64(len(state.Log))*7919) %
-			uint64(delayRange+1),
-	)
+	delay := hardAIDelay
+	if player.AIDifficulty == game.AIDifficultyHard &&
+		state.Status == StatusPlaying {
+		if state.Analysis == nil ||
+			state.Analysis.PositionKey != positionKey(state) ||
+			state.Analysis.Status == analysisStatusPending {
+			return nil
+		}
+	}
+	if player.AIDifficulty != game.AIDifficultyHard {
+		delayRange := int((aiMaxDelay - aiMinDelay) / time.Millisecond)
+		delayOffset := int(
+			(state.RandomSeed + uint64(len(state.Log))*7919) %
+				uint64(delayRange+1),
+		)
+		delay = aiMinDelay + time.Duration(delayOffset)*time.Millisecond
+	}
 	fallback := contracts.RoomCommand{
 		Type:     CommandTimeout,
 		PlayerID: player.PlayerID,
@@ -785,7 +823,7 @@ func nextAIRequest(state *State) *game.AIRequest {
 		GameType:        GameType,
 		PlayerID:        player.PlayerID,
 		State:           cloneState(state),
-		Delay:           aiMinDelay + time.Duration(delayOffset)*time.Millisecond,
+		Delay:           delay,
 		FallbackCommand: &fallback,
 	}
 }
@@ -845,6 +883,167 @@ func ensureState(state *State) {
 	if state.Log == nil {
 		state.Log = []Action{}
 	}
+	for _, player := range state.Roster {
+		if player == nil {
+			continue
+		}
+		if player.AI {
+			difficulty, err := normalizeAIDifficulty(
+				string(player.AIDifficulty),
+			)
+			if err != nil {
+				difficulty = game.AIDifficultyMedium
+			}
+			player.AIDifficulty = difficulty
+		} else {
+			player.AIDifficulty = ""
+		}
+	}
+}
+
+func normalizeAIDifficulty(value string) (game.AIDifficulty, error) {
+	switch game.AIDifficulty(value) {
+	case "":
+		return game.AIDifficultyMedium, nil
+	case game.AIDifficultyEasy,
+		game.AIDifficultyMedium,
+		game.AIDifficultyHard:
+		return game.AIDifficulty(value), nil
+	default:
+		return "", errors.New("invalid AI difficulty")
+	}
+}
+
+func requestHint(state *State, playerID string) error {
+	if state.Status != StatusPlaying || state.CurrentPlayer != playerID {
+		return errors.New("hint is only available to the active player")
+	}
+	player := state.Roster[playerID]
+	if player == nil || player.AI {
+		return errors.New("hint is only available to human players")
+	}
+	if player.HintsUsed >= defaultHintLimit {
+		return errors.New("no hint attempts remaining")
+	}
+	if player.HintPending {
+		return errors.New("hint analysis is already pending")
+	}
+	key := positionKey(state)
+	if key == "" ||
+		state.Analysis == nil ||
+		state.Analysis.PositionKey != key {
+		return errors.New("hint analysis is unavailable")
+	}
+	player.Hint = nil
+	switch state.Analysis.Status {
+	case analysisStatusReady:
+		if !completeHint(state, player, key, state.Analysis.BestMove) {
+			return errors.New("hint analysis has no legal move")
+		}
+	case analysisStatusPending:
+		player.HintPending = true
+		player.HintPositionKey = key
+	default:
+		return errors.New("hint analysis is unavailable")
+	}
+	return nil
+}
+
+func completeHint(
+	state *State,
+	player *Player,
+	key string,
+	bestMove *int,
+) bool {
+	if state == nil ||
+		player == nil ||
+		player.AI ||
+		state.Status != StatusPlaying ||
+		state.CurrentPlayer != player.PlayerID ||
+		player.HintsUsed >= defaultHintLimit ||
+		key == "" ||
+		key != positionKey(state) ||
+		bestMove == nil {
+		return false
+	}
+	move := moveAt(state.Board, *bestMove, player.Side)
+	if len(move.Flips) == 0 {
+		return false
+	}
+	player.Hint = &HintAdvice{PositionKey: key, Index: *bestMove}
+	player.HintsUsed++
+	player.HintPending = false
+	player.HintPositionKey = ""
+	return true
+}
+
+func resolvePendingHints(state *State) {
+	if state == nil || state.Analysis == nil {
+		return
+	}
+	key := state.Analysis.PositionKey
+	for _, player := range state.Roster {
+		if player == nil ||
+			!player.HintPending ||
+			player.HintPositionKey != key {
+			continue
+		}
+		if !completeHint(state, player, key, state.Analysis.BestMove) {
+			player.HintPending = false
+			player.HintPositionKey = ""
+		}
+	}
+}
+
+func clearPendingHints(state *State, key string) {
+	if state == nil {
+		return
+	}
+	for _, player := range state.Roster {
+		if player == nil ||
+			!player.HintPending ||
+			player.HintPositionKey != key {
+			continue
+		}
+		player.HintPending = false
+		player.HintPositionKey = ""
+		player.Hint = nil
+	}
+}
+
+func clearHints(state *State) {
+	if state == nil {
+		return
+	}
+	for _, player := range state.Roster {
+		if player == nil {
+			continue
+		}
+		player.HintPending = false
+		player.HintPositionKey = ""
+		player.Hint = nil
+	}
+}
+
+func hintView(state *State, playerID string) map[string]any {
+	player := state.Roster[playerID]
+	if player == nil || player.AI {
+		return nil
+	}
+	remaining := defaultHintLimit - player.HintsUsed
+	if remaining < 0 {
+		remaining = 0
+	}
+	key := positionKey(state)
+	result := map[string]any{
+		"remaining": remaining,
+		"pending": player.HintPending &&
+			player.HintPositionKey == key,
+	}
+	if player.Hint != nil && player.Hint.PositionKey == key {
+		result["index"] = player.Hint.Index
+	}
+	return result
 }
 
 func decodePayload(data []byte, target any) error {

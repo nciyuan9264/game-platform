@@ -1268,6 +1268,7 @@ func (r *RoomActor) restoreNextMatchRoster(
 				map[string]any{
 					"seatIndex":       player.SeatIndex,
 					"restorePlayerID": player.PlayerID,
+					"aiDifficulty":    player.AIDifficulty,
 				},
 				commandTime,
 			)

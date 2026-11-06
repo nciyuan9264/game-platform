@@ -63,6 +63,36 @@ func TestWinRatesAreNormalizedSymmetricAndMonotonic(t *testing.T) {
 	}
 }
 
+func TestConfiguredEdaxWorkers(t *testing.T) {
+	t.Run("defaults to two", func(t *testing.T) {
+		t.Setenv(edaxWorkersEnv, "")
+		analyzer := newEdaxAnalyzer()
+		if got := cap(analyzer.slot); got != 2 {
+			t.Fatalf("worker capacity = %d, want 2", got)
+		}
+	})
+
+	t.Run("allows one", func(t *testing.T) {
+		t.Setenv(edaxWorkersEnv, "1")
+		analyzer := newEdaxAnalyzer()
+		if got := cap(analyzer.slot); got != 1 {
+			t.Fatalf("worker capacity = %d, want 1", got)
+		}
+	})
+
+	for _, value := range []string{"0", "3", "invalid"} {
+		t.Run("rejects "+value, func(t *testing.T) {
+			t.Setenv(edaxWorkersEnv, value)
+			defer func() {
+				if recover() == nil {
+					t.Fatalf("worker value %q was accepted", value)
+				}
+			}()
+			_ = newEdaxAnalyzer()
+		})
+	}
+}
+
 func TestParseNBoardSearchUsesLastCompleteResponse(t *testing.T) {
 	output := strings.Join([]string{
 		"status Edax is thinking",
@@ -70,18 +100,30 @@ func TestParseNBoardSearchUsesLastCompleteResponse(t *testing.T) {
 		"search C4 C3 D3 -6 0 12",
 		"status Edax is waiting",
 	}, "\n")
-	score, depth, err := parseNBoardSearch(output)
+	bestMove, score, depth, err := parseNBoardSearch(output)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if score != -6 || depth != 12 {
-		t.Fatalf("parsed score/depth = %d/%d, want -6/12", score, depth)
+	if bestMove == nil || *bestMove != 26 || score != -6 || depth != 12 {
+		t.Fatalf(
+			"parsed move/score/depth = %v/%d/%d, want 26/-6/12",
+			bestMove,
+			score,
+			depth,
+		)
 	}
-	if _, _, err := parseNBoardSearch("status Edax is waiting"); err == nil {
+	if _, _, _, err := parseNBoardSearch("status Edax is waiting"); err == nil {
 		t.Fatal("missing search response was accepted")
 	}
-	if _, _, err := parseNBoardSearch("search D3 65 0 12"); err == nil {
+	if _, _, _, err := parseNBoardSearch("search D3 65 0 12"); err == nil {
 		t.Fatal("out-of-range score was accepted")
+	}
+	pass, _, _, err := parseNBoardSearch("search PA 0 0 12")
+	if err != nil || pass != nil {
+		t.Fatalf("pass response = %v, %v", pass, err)
+	}
+	if _, _, _, err := parseNBoardSearch("search Z9 0 0 12"); err == nil {
+		t.Fatal("malformed principal variation was accepted")
 	}
 }
 
@@ -109,6 +151,7 @@ func TestAnalysisResultPreservesTurnDeadlineAndRejectsStaleResult(t *testing.T) 
 	deadline := state.TurnDeadline
 	requestID := state.Analysis.RequestID
 	positionKey := state.Analysis.PositionKey
+	bestMove := 19
 	plugin := &Plugin{}
 	result, err := plugin.ApplyCommand(
 		context.Background(),
@@ -118,6 +161,7 @@ func TestAnalysisResultPreservesTurnDeadlineAndRejectsStaleResult(t *testing.T) 
 			Payload: analysisResultPayload{
 				RequestID:    requestID,
 				PositionKey:  positionKey,
+				BestMove:     &bestMove,
 				BlackWinRate: 0.45,
 				DrawRate:     0.1,
 				WhiteWinRate: 0.45,
@@ -131,7 +175,9 @@ func TestAnalysisResultPreservesTurnDeadlineAndRejectsStaleResult(t *testing.T) 
 	}
 	if state.Analysis == nil ||
 		state.Analysis.Status != analysisStatusReady ||
-		state.Analysis.Depth != 10 {
+		state.Analysis.Depth != 10 ||
+		state.Analysis.BestMove == nil ||
+		*state.Analysis.BestMove != bestMove {
 		t.Fatalf("ready analysis = %+v", state.Analysis)
 	}
 	if !state.TurnDeadline.Equal(deadline) {
@@ -185,7 +231,12 @@ func TestBackgroundRunConvertsWhiteScoreToBlackPerspective(t *testing.T) {
 		)
 	}
 	plugin := &Plugin{analyzer: fakePositionAnalyzer{
-		result: EngineAnalysis{Score: 8, Depth: 12, ElapsedMs: 250},
+		result: EngineAnalysis{
+			BestMove:  &move.Index,
+			Score:     8,
+			Depth:     12,
+			ElapsedMs: 250,
+		},
 	}}
 	command, err := plugin.Run(
 		context.Background(),
@@ -197,6 +248,9 @@ func TestBackgroundRunConvertsWhiteScoreToBlackPerspective(t *testing.T) {
 	payload := command.Payload.(analysisResultPayload)
 	if payload.Score != -8 {
 		t.Fatalf("black-perspective score = %d, want -8", payload.Score)
+	}
+	if payload.BestMove == nil || *payload.BestMove != move.Index {
+		t.Fatalf("best move = %v, want %d", payload.BestMove, move.Index)
 	}
 	if math.Abs(
 		payload.BlackWinRate+payload.DrawRate+payload.WhiteWinRate-1,

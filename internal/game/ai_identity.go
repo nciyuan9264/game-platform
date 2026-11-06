@@ -11,6 +11,14 @@ import (
 
 const maxAIOrdinal = 999
 
+type AIDifficulty string
+
+const (
+	AIDifficultyEasy   AIDifficulty = "easy"
+	AIDifficultyMedium AIDifficulty = "medium"
+	AIDifficultyHard   AIDifficulty = "hard"
+)
+
 var (
 	ErrInvalidAIPlayerID = errors.New("invalid AI player ID")
 	ErrAIPlayerIDInUse   = errors.New("AI player ID is already in use")
@@ -21,6 +29,7 @@ var canonicalAIPlayerID = regexp.MustCompile(`^ai_([0-9]{3})$`)
 type AddAIRequest struct {
 	SeatIndex       *int   `json:"seatIndex"`
 	RestorePlayerID string `json:"restorePlayerID,omitempty"`
+	AIDifficulty    string `json:"aiDifficulty,omitempty"`
 }
 
 type AIIdentity struct {

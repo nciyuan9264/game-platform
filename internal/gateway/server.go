@@ -963,6 +963,8 @@ func clientCommandPayload(gameType, commandType string, payload any) (any, error
 		variant = "removeRing"
 	case "game_place_disc":
 		variant = "placeDisc"
+	case "game_request_hint":
+		variant = "requestHint"
 	case "game_place_stone":
 		variant = "placeStone"
 	case "game_swap":

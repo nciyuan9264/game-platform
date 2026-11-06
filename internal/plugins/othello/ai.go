@@ -3,6 +3,8 @@ package othello
 import (
 	"context"
 	"errors"
+	"fmt"
+	"hash/fnv"
 	"sort"
 
 	"github.com/nciyuan9264/game-platform/internal/contracts"
@@ -38,7 +40,21 @@ func (p *Plugin) Decide(
 			PlayerID: request.PlayerID,
 		}, nil
 	case StatusPlaying:
-		move, ok := bestMove(ctx, state, sideForPlayer(state, request.PlayerID))
+		player := state.Roster[request.PlayerID]
+		if player == nil || !player.AI {
+			return contracts.RoomCommand{}, errors.New("AI player is unavailable")
+		}
+		side := sideForPlayer(state, request.PlayerID)
+		var move Move
+		var ok bool
+		switch player.AIDifficulty {
+		case game.AIDifficultyEasy:
+			move, ok = bestEasyMove(state, request.PlayerID, side)
+		case game.AIDifficultyHard:
+			move, ok = bestHardMove(ctx, state, side)
+		default:
+			move, ok = bestMediumMove(ctx, state, side)
+		}
 		if !ok {
 			return contracts.RoomCommand{}, errors.New("AI found no legal move")
 		}
@@ -52,7 +68,24 @@ func (p *Plugin) Decide(
 	}
 }
 
-func bestMove(ctx context.Context, state *State, side Side) (Move, bool) {
+func bestEasyMove(state *State, playerID string, side Side) (Move, bool) {
+	moves := sortedMoves(legalMoves(state.Board, side))
+	if len(moves) == 0 {
+		return Move{}, false
+	}
+	hasher := fnv.New64a()
+	_, _ = fmt.Fprintf(
+		hasher,
+		"%d:%d:%d:%s",
+		state.RandomSeed,
+		state.RoundNo,
+		len(state.Log),
+		playerID,
+	)
+	return moves[int(hasher.Sum64()%uint64(len(moves)))], true
+}
+
+func bestMediumMove(ctx context.Context, state *State, side Side) (Move, bool) {
 	moves := sortedMoves(legalMoves(state.Board, side))
 	if len(moves) == 0 {
 		return Move{}, false
@@ -85,6 +118,19 @@ func bestMove(ctx context.Context, state *State, side Side) (Move, bool) {
 		return scored[i].move.Index < scored[j].move.Index
 	})
 	return scored[0].move, true
+}
+
+func bestHardMove(ctx context.Context, state *State, side Side) (Move, bool) {
+	if state.Analysis != nil &&
+		state.Analysis.Status == analysisStatusReady &&
+		state.Analysis.PositionKey == positionKey(state) &&
+		state.Analysis.BestMove != nil {
+		move := moveAt(state.Board, *state.Analysis.BestMove, side)
+		if len(move.Flips) > 0 {
+			return move, true
+		}
+	}
+	return bestMediumMove(ctx, state, side)
 }
 
 func evaluateBoard(board []Disc, side Side, move Move) int {
