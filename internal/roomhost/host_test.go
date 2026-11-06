@@ -1218,6 +1218,7 @@ func TestValidateGatewayCommandBindsSessionIdentity(t *testing.T) {
 		ConnectionRef: contracts.ConnectionRef{GatewayNode: "gateway-1", SessionID: "session-1"},
 		UserID:        "7",
 		PlayerID:      "7",
+		Roles:         []string{"admin"},
 	}
 	host := NewHost("roomhost-1", &fakeRoomhostStore{session: session}, nil, nil, nil)
 
@@ -1226,20 +1227,24 @@ func TestValidateGatewayCommandBindsSessionIdentity(t *testing.T) {
 		RoomID:        "room-1",
 		UserID:        session.UserID,
 		PlayerID:      session.PlayerID,
+		Roles:         []string{"forged"},
 		Type:          "game_action",
 	}
-	if err := host.validateGatewayCommand(context.Background(), valid); err != nil {
+	if err := host.validateGatewayCommand(context.Background(), &valid); err != nil {
 		t.Fatalf("valid command rejected: %v", err)
+	}
+	if len(valid.Roles) != 1 || valid.Roles[0] != "admin" {
+		t.Fatalf("command roles = %v, want authoritative admin role", valid.Roles)
 	}
 
 	mismatch := valid
 	mismatch.UserID = "attacker"
-	if err := host.validateGatewayCommand(context.Background(), mismatch); err == nil {
+	if err := host.validateGatewayCommand(context.Background(), &mismatch); err == nil {
 		t.Fatal("identity mismatch should be rejected")
 	}
 
 	missingConnection := contracts.RoomCommand{UserID: "user-1", PlayerID: "player-1"}
-	if err := host.validateGatewayCommand(context.Background(), missingConnection); err == nil {
+	if err := host.validateGatewayCommand(context.Background(), &missingConnection); err == nil {
 		t.Fatal("gateway command without connection reference should be rejected")
 	}
 
@@ -1249,27 +1254,27 @@ func TestValidateGatewayCommandBindsSessionIdentity(t *testing.T) {
 		activeFound:      true,
 		activeCurrent:    false,
 	}, nil, nil, nil)
-	if err := staleHost.validateGatewayCommand(context.Background(), valid); err == nil {
+	if err := staleHost.validateGatewayCommand(context.Background(), &valid); err == nil {
 		t.Fatal("replaced gateway session should be rejected")
 	}
 
 	connect := valid
 	connect.Type = "connect"
-	if err := staleHost.validateGatewayCommand(context.Background(), connect); err != nil {
+	if err := staleHost.validateGatewayCommand(context.Background(), &connect); err != nil {
 		t.Fatalf("connect lifecycle command rejected: %v", err)
 	}
 	disconnect := valid
 	disconnect.Type = "disconnect"
-	if err := staleHost.validateGatewayCommand(context.Background(), disconnect); err != nil {
+	if err := staleHost.validateGatewayCommand(context.Background(), &disconnect); err != nil {
 		t.Fatalf("disconnect lifecycle command rejected: %v", err)
 	}
 
 	runtimeCommand := contracts.RoomCommand{Type: contracts.RuntimeCommandRoomClose}
-	if err := host.validateCommandSource(context.Background(), runtimeCommand); err != nil {
+	if err := host.validateCommandSource(context.Background(), &runtimeCommand); err != nil {
 		t.Fatalf("internal runtime command rejected: %v", err)
 	}
 	runtimeCommand.ConnectionRef = session.ConnectionRef
-	if err := host.validateCommandSource(context.Background(), runtimeCommand); err == nil {
+	if err := host.validateCommandSource(context.Background(), &runtimeCommand); err == nil {
 		t.Fatal("gateway session should not be allowed to issue runtime commands")
 	}
 }
@@ -1460,6 +1465,7 @@ func TestStartMatchRestoresRosterAcrossGames(t *testing.T) {
 
 				presences := []contracts.PresenceRecord{{
 					RoomID: roomID, UserID: owner, PlayerID: owner, Online: true,
+					Roles:         []string{"admin"},
 					ConnectionRef: contracts.ConnectionRef{GatewayNode: "gateway-1", SessionID: "owner-session"},
 				}}
 				if scenario.guestOnline {
@@ -1518,6 +1524,12 @@ func TestStartMatchRestoresRosterAcrossGames(t *testing.T) {
 				}
 				if len(roster) != scenario.expectedPlayers {
 					t.Fatalf("restored roster = %+v", roster)
+				}
+				if definition.GameType == contracts.GameOthello {
+					othelloState := actor.state.(*othellogame.State)
+					if !othelloState.Roster[owner].Admin {
+						t.Fatal("restored Othello owner lost admin role")
+					}
 				}
 				aiCount := 0
 				for _, player := range roster {

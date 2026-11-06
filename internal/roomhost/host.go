@@ -205,7 +205,7 @@ func (h *Host) HandleCommand(ctx context.Context, cmd contracts.RoomCommand) con
 			Message:   "roomhost is not accepting new rooms",
 		}
 	}
-	if err := h.validateCommandSource(ctx, cmd); err != nil {
+	if err := h.validateCommandSource(ctx, &cmd); err != nil {
 		return contracts.CommandAck{
 			CommandID: cmd.CommandID,
 			RoomID:    cmd.RoomID,
@@ -355,7 +355,10 @@ func (h *Host) Status() string {
 	return contracts.NodeStatusDraining
 }
 
-func (h *Host) validateCommandSource(ctx context.Context, cmd contracts.RoomCommand) error {
+func (h *Host) validateCommandSource(
+	ctx context.Context,
+	cmd *contracts.RoomCommand,
+) error {
 	switch cmd.Type {
 	case contracts.RuntimeCommandRoomCreate, contracts.RuntimeCommandRoomClose, contracts.RuntimeCommandMatchCreate:
 		if cmd.ConnectionRef.Valid() {
@@ -370,7 +373,10 @@ func (h *Host) validateCommandSource(ctx context.Context, cmd contracts.RoomComm
 	}
 }
 
-func (h *Host) validateGatewayCommand(ctx context.Context, cmd contracts.RoomCommand) error {
+func (h *Host) validateGatewayCommand(
+	ctx context.Context,
+	cmd *contracts.RoomCommand,
+) error {
 	if !cmd.ConnectionRef.Valid() {
 		return errors.New("gateway connection reference is required")
 	}
@@ -387,6 +393,7 @@ func (h *Host) validateGatewayCommand(ctx context.Context, cmd contracts.RoomCom
 		session.UserID == "" || session.PlayerID != session.UserID {
 		return errors.New("human player ID must equal authenticated user ID")
 	}
+	cmd.Roles = append([]string(nil), session.Roles...)
 	if cmd.Type != "connect" && cmd.Type != "disconnect" {
 		current, found, err := h.store.IsPlayerSessionCurrent(
 			ctx,
@@ -1226,6 +1233,7 @@ func (r *RoomActor) connectOnlinePresence(
 		}
 		connected[presence.PlayerID] = true
 		cmd := r.matchSetupCommand(match, presence.UserID, presence.PlayerID, "connect", nil, commandTime)
+		cmd.Roles = append([]string(nil), presence.Roles...)
 		if _, err := r.definition.Engine.ApplyCommand(gamelog.WithSink(ctx, gamelog.NopSink{}), state, cmd); err != nil {
 			return fmt.Errorf("restore lobby player %s: %w", presence.PlayerID, err)
 		}
@@ -1282,6 +1290,7 @@ func (r *RoomActor) restoreNextMatchRoster(
 			continue
 		}
 		cmd := r.matchSetupCommand(match, presence.UserID, player.PlayerID, "connect", nil, commandTime)
+		cmd.Roles = append([]string(nil), presence.Roles...)
 		if _, err := r.definition.Engine.ApplyCommand(gamelog.WithSink(ctx, gamelog.NopSink{}), state, cmd); err != nil {
 			return fmt.Errorf("restore online player %s: %w", player.PlayerID, err)
 		}

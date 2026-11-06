@@ -119,6 +119,22 @@ if [[ "$othello_edax_worker_configs" -ne 2 ]]; then
   exit 1
 fi
 
+othello_hint_limit_configs="$(
+  grep -Eic 'OTHELLO_HINT_LIMIT:[[:space:]]*"?[0-9]+"?[[:space:]]*$' <<<"$config"
+)"
+if [[ "$othello_hint_limit_configs" -ne 2 ]]; then
+  printf 'production config rejected: both Othello slots must configure a numeric hint limit\n' >&2
+  exit 1
+fi
+
+othello_admin_hint_limit_configs="$(
+  grep -Eic 'OTHELLO_ADMIN_HINT_LIMIT:[[:space:]]*"?[0-9]+"?[[:space:]]*$' <<<"$config"
+)"
+if [[ "$othello_admin_hint_limit_configs" -ne 2 ]]; then
+  printf 'production config rejected: both Othello slots must configure a numeric admin hint limit\n' >&2
+  exit 1
+fi
+
 require_source '\$\{ACQUIRE_ROOMHOST_A_IMAGE:\?' 'Acquire A must use a complete independent image reference'
 require_source '\$\{ACQUIRE_ROOMHOST_B_IMAGE:\?' 'Acquire B must use a complete independent image reference'
 require_source '\$\{DAVINCI_ROOMHOST_A_IMAGE:\?' 'DaVinci A must use a complete independent image reference'

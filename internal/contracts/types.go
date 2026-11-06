@@ -170,6 +170,7 @@ type SessionRecord struct {
 	Email       string    `json:"email,omitempty"`
 	Avatar      string    `json:"avatar,omitempty"`
 	DisplayName string    `json:"displayName"`
+	Roles       []string  `json:"roles,omitempty"`
 	ConnectedAt time.Time `json:"connectedAt"`
 	LastSeen    time.Time `json:"lastSeen"`
 	ExpiresAt   time.Time `json:"expiresAt"`
@@ -180,6 +181,7 @@ type PresenceRecord struct {
 	RoomID   string    `json:"roomID"`
 	UserID   string    `json:"userID"`
 	PlayerID string    `json:"playerID"`
+	Roles    []string  `json:"roles,omitempty"`
 	Online   bool      `json:"online"`
 	JoinedAt time.Time `json:"joinedAt"`
 	LastSeen time.Time `json:"lastSeen"`
@@ -272,15 +274,16 @@ type ClientCommand struct {
 }
 
 type RoomCommand struct {
-	SchemaVersion int    `json:"schemaVersion"`
-	CommandID     string `json:"commandID"`
-	TraceID       string `json:"traceID"`
-	RoomID        string `json:"roomID"`
-	MatchID       string `json:"matchID"`
-	GameType      string `json:"gameType"`
-	Epoch         int64  `json:"epoch"`
-	UserID        string `json:"userID"`
-	PlayerID      string `json:"playerID"`
+	SchemaVersion int      `json:"schemaVersion"`
+	CommandID     string   `json:"commandID"`
+	TraceID       string   `json:"traceID"`
+	RoomID        string   `json:"roomID"`
+	MatchID       string   `json:"matchID"`
+	GameType      string   `json:"gameType"`
+	Epoch         int64    `json:"epoch"`
+	UserID        string   `json:"userID"`
+	PlayerID      string   `json:"playerID"`
+	Roles         []string `json:"roles,omitempty"`
 	ConnectionRef
 	Type    string      `json:"type"`
 	Payload interface{} `json:"payload,omitempty"`

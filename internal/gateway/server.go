@@ -427,8 +427,8 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	})
 	now := time.Now().UTC()
 	connRef := contracts.ConnectionRef{GatewayNode: s.nodeID, SessionID: sessionID}
-	session := contracts.SessionRecord{ConnectionRef: connRef, UserID: identity.UserID, PlayerID: playerID, Name: identity.Name, Email: identity.Email, Avatar: identity.Avatar, DisplayName: identity.DisplayName, ConnectedAt: now, LastSeen: now, ExpiresAt: now.Add(gatewaySessionTTL)}
-	presence := contracts.PresenceRecord{ConnectionRef: connRef, RoomID: roomID, UserID: identity.UserID, PlayerID: playerID, Online: true, JoinedAt: now, LastSeen: now}
+	session := contracts.SessionRecord{ConnectionRef: connRef, UserID: identity.UserID, PlayerID: playerID, Name: identity.Name, Email: identity.Email, Avatar: identity.Avatar, DisplayName: identity.DisplayName, Roles: identity.Roles, ConnectedAt: now, LastSeen: now, ExpiresAt: now.Add(gatewaySessionTTL)}
+	presence := contracts.PresenceRecord{ConnectionRef: connRef, RoomID: roomID, UserID: identity.UserID, PlayerID: playerID, Roles: identity.Roles, Online: true, JoinedAt: now, LastSeen: now}
 	_ = s.store.SetSession(ctx, session, gatewaySessionTTL)
 	_ = s.store.SetPresence(ctx, presence, gatewaySessionTTL)
 	_ = s.store.UpsertMatchPlayer(ctx, rec.CurrentMatchID, contracts.MatchPlayerRecord{UserID: identity.UserID, PlayerID: playerID, DisplayName: identity.DisplayName, Name: identity.Name, Email: identity.Email, Avatar: identity.Avatar, GatewayNode: s.nodeID, Online: true, JoinedAt: now, LastSeen: now})
@@ -448,7 +448,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 
 	connectDeadline := time.Now().Add(45 * time.Second)
 	for {
-		connect := contracts.RoomCommand{SchemaVersion: contracts.RealtimeSchemaVersion, CommandID: uuid.NewString(), TraceID: uuid.NewString(), RoomID: roomID, MatchID: rec.CurrentMatchID, GameType: rec.GameType, Epoch: rec.Epoch, UserID: identity.UserID, PlayerID: playerID, ConnectionRef: connRef, Type: "connect", SentAt: time.Now().UTC()}
+		connect := contracts.RoomCommand{SchemaVersion: contracts.RealtimeSchemaVersion, CommandID: uuid.NewString(), TraceID: uuid.NewString(), RoomID: roomID, MatchID: rec.CurrentMatchID, GameType: rec.GameType, Epoch: rec.Epoch, UserID: identity.UserID, PlayerID: playerID, Roles: identity.Roles, ConnectionRef: connRef, Type: "connect", SentAt: time.Now().UTC()}
 		ack, connectErr := s.router.SendRoomCommand(context.Background(), rec.OwnerNode, connect, 3*time.Second)
 		if connectErr == nil && !ack.Accepted {
 			connectErr = errors.New(strings.TrimSpace(ack.ErrorCode + " " + ack.Message))
@@ -579,6 +579,7 @@ func (s *Server) readLoop(client *clientConnection, rec contracts.RoomRecord, se
 				RoomID:        rec.RoomID,
 				UserID:        session.UserID,
 				PlayerID:      playerID,
+				Roles:         session.Roles,
 				Online:        true,
 				JoinedAt:      session.ConnectedAt,
 				LastSeen:      now,
@@ -643,7 +644,7 @@ func (s *Server) readLoop(client *clientConnection, rec contracts.RoomRecord, se
 			}
 			continue
 		}
-		cmd := contracts.RoomCommand{SchemaVersion: contracts.RealtimeSchemaVersion, CommandID: msg.CommandID, TraceID: uuid.NewString(), RoomID: rec.RoomID, MatchID: rec.CurrentMatchID, GameType: rec.GameType, Epoch: rec.Epoch, UserID: session.UserID, PlayerID: playerID, ConnectionRef: session.ConnectionRef, Type: msg.Type, Payload: payload, SentAt: time.Now().UTC()}
+		cmd := contracts.RoomCommand{SchemaVersion: contracts.RealtimeSchemaVersion, CommandID: msg.CommandID, TraceID: uuid.NewString(), RoomID: rec.RoomID, MatchID: rec.CurrentMatchID, GameType: rec.GameType, Epoch: rec.Epoch, UserID: session.UserID, PlayerID: playerID, Roles: session.Roles, ConnectionRef: session.ConnectionRef, Type: msg.Type, Payload: payload, SentAt: time.Now().UTC()}
 		ack, sendErr := s.router.SendRoomCommand(context.Background(), rec.OwnerNode, cmd, 3*time.Second)
 		if roomRouteRefreshRequired(ack, sendErr) {
 			previousOwner := rec.OwnerNode
@@ -861,6 +862,7 @@ func (s *Server) sendPlayerDisconnect(rec contracts.RoomRecord, session contract
 		Epoch:         rec.Epoch,
 		UserID:        session.UserID,
 		PlayerID:      session.PlayerID,
+		Roles:         session.Roles,
 		ConnectionRef: session.ConnectionRef,
 		Type:          "disconnect",
 		SentAt:        time.Now().UTC(),

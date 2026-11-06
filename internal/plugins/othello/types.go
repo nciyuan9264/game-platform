@@ -37,6 +37,7 @@ type Player struct {
 	Ready           bool              `json:"ready"`
 	GameReady       bool              `json:"gameReady,omitempty"`
 	AI              bool              `json:"ai"`
+	Admin           bool              `json:"admin,omitempty"`
 	AIDifficulty    game.AIDifficulty `json:"aiDifficulty,omitempty"`
 	SeatIndex       int               `json:"seatIndex"`
 	Side            Side              `json:"side,omitempty"`

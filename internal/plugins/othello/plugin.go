@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"sort"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/nciyuan9264/game-platform/internal/contracts"
@@ -13,15 +16,23 @@ import (
 )
 
 const (
-	GameType            = "othello"
-	EngineVersion       = "othello-v7"
-	ReplaySchemaVersion = 1
-	defaultMaxPlayers   = 2
-	maxNoHumanChecks    = 3
-	defaultHintLimit    = 3
+	GameType              = "othello"
+	EngineVersion         = "othello-v8"
+	ReplaySchemaVersion   = 1
+	defaultMaxPlayers     = 2
+	maxNoHumanChecks      = 3
+	defaultHintLimit      = 3
+	defaultAdminHintLimit = 50
+	maxHintLimit          = 100
+	hintLimitEnv          = "OTHELLO_HINT_LIMIT"
+	adminHintLimitEnv     = "OTHELLO_ADMIN_HINT_LIMIT"
 )
 
-var aiNames = []string{"墨白"}
+var (
+	aiNames        = []string{"墨白"}
+	hintLimit      = configuredHintLimit()
+	adminHintLimit = configuredAdminHintLimit()
+)
 
 const (
 	CommandPlaceDisc   = "game_place_disc"
@@ -235,7 +246,7 @@ func (p *Plugin) ApplyCommand(
 	nonTurnCommand := analysisCommand || command.Type == CommandRequestHint
 	switch command.Type {
 	case "connect":
-		err = connect(typed, command.PlayerID)
+		err = connect(typed, command.PlayerID, command.Roles)
 	case "disconnect":
 		if player := typed.Roster[command.PlayerID]; player != nil {
 			player.Online = false
@@ -562,9 +573,10 @@ func playerViews(
 	return result
 }
 
-func connect(state *State, playerID string) error {
+func connect(state *State, playerID string, roles []string) error {
 	if player := state.Roster[playerID]; player != nil {
 		player.Online = true
+		player.Admin = hasAdminRole(roles)
 		return nil
 	}
 	if state.Status != StatusMatch {
@@ -577,6 +589,7 @@ func connect(state *State, playerID string) error {
 		UserID:    playerID,
 		PlayerID:  playerID,
 		Online:    true,
+		Admin:     hasAdminRole(roles),
 		Ready:     playerID == state.OwnerID,
 		SeatIndex: firstFreeSeat(state),
 	}
@@ -914,6 +927,49 @@ func normalizeAIDifficulty(value string) (game.AIDifficulty, error) {
 	}
 }
 
+func configuredHintLimit() int {
+	return configuredHintLimitFromEnv(hintLimitEnv, defaultHintLimit)
+}
+
+func configuredAdminHintLimit() int {
+	return configuredHintLimitFromEnv(
+		adminHintLimitEnv,
+		defaultAdminHintLimit,
+	)
+}
+
+func configuredHintLimitFromEnv(name string, fallback int) int {
+	value := strings.TrimSpace(os.Getenv(name))
+	if value == "" {
+		return fallback
+	}
+	limit, err := strconv.Atoi(value)
+	if err != nil || limit < 0 || limit > maxHintLimit {
+		panic(fmt.Sprintf(
+			"%s must be an integer between 0 and %d",
+			name,
+			maxHintLimit,
+		))
+	}
+	return limit
+}
+
+func hasAdminRole(roles []string) bool {
+	for _, role := range roles {
+		if strings.EqualFold(strings.TrimSpace(role), "admin") {
+			return true
+		}
+	}
+	return false
+}
+
+func hintLimitForPlayer(player *Player) int {
+	if player != nil && player.Admin {
+		return adminHintLimit
+	}
+	return hintLimit
+}
+
 func requestHint(state *State, playerID string) error {
 	if state.Status != StatusPlaying || state.CurrentPlayer != playerID {
 		return errors.New("hint is only available to the active player")
@@ -922,7 +978,7 @@ func requestHint(state *State, playerID string) error {
 	if player == nil || player.AI {
 		return errors.New("hint is only available to human players")
 	}
-	if player.HintsUsed >= defaultHintLimit {
+	if player.HintsUsed >= hintLimitForPlayer(player) {
 		return errors.New("no hint attempts remaining")
 	}
 	if player.HintPending {
@@ -963,7 +1019,7 @@ func completeHint(
 		player.AI ||
 		state.Status != StatusPlaying ||
 		state.CurrentPlayer != player.PlayerID ||
-		player.HintsUsed >= defaultHintLimit ||
+		player.HintsUsed >= hintLimitForPlayer(player) ||
 		key == "" ||
 		key != positionKey(state) ||
 		bestMove == nil {
@@ -1033,7 +1089,7 @@ func hintView(state *State, playerID string) map[string]any {
 	if player == nil || player.AI {
 		return nil
 	}
-	remaining := defaultHintLimit - player.HintsUsed
+	remaining := hintLimitForPlayer(player) - player.HintsUsed
 	if remaining < 0 {
 		remaining = 0
 	}

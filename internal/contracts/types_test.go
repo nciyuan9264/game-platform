@@ -38,6 +38,7 @@ func TestRoomCommandConnectionRefJSONCompatibility(t *testing.T) {
 		CommandID:     "c1",
 		RoomID:        "r1",
 		PlayerID:      "p1",
+		Roles:         []string{"admin"},
 		ConnectionRef: ConnectionRef{GatewayNode: "gateway-a", SessionID: "session-a"},
 		Replay:        true,
 	}
@@ -51,6 +52,10 @@ func TestRoomCommandConnectionRefJSONCompatibility(t *testing.T) {
 	}
 	if raw["gatewayNode"] != "gateway-a" || raw["sessionID"] != "session-a" {
 		t.Fatalf("legacy command fields missing: %s", data)
+	}
+	roles, ok := raw["roles"].([]any)
+	if !ok || len(roles) != 1 || roles[0] != "admin" {
+		t.Fatalf("command roles missing: %s", data)
 	}
 	if _, ok := raw["replay"]; ok {
 		t.Fatalf("internal replay flag was serialized: %s", data)

@@ -366,7 +366,7 @@ func TestHintUnavailableRefundsAttemptAndReadyAnalysisCompletesImmediately(
 			t.Fatalf("duplicate request consumed a hint: %+v", player)
 		}
 		player.Hint = nil
-		player.HintsUsed = defaultHintLimit
+		player.HintsUsed = hintLimit
 		if _, err := plugin.ApplyCommand(
 			context.Background(),
 			state,
@@ -448,6 +448,129 @@ func TestAIDifficultyDefaultsValidatesAndProjects(t *testing.T) {
 		},
 	); err == nil {
 		t.Fatal("invalid AI difficulty was accepted")
+	}
+}
+
+func TestConfiguredHintLimit(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+		want  int
+	}{
+		{name: "default", want: 3},
+		{name: "disabled", value: "0", want: 0},
+		{name: "custom", value: "12", want: 12},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv(hintLimitEnv, tt.value)
+			if got := configuredHintLimit(); got != tt.want {
+				t.Fatalf("configuredHintLimit() = %d, want %d", got, tt.want)
+			}
+		})
+	}
+
+	for _, value := range []string{"-1", "101", "invalid"} {
+		t.Run("rejects "+value, func(t *testing.T) {
+			t.Setenv(hintLimitEnv, value)
+			defer func() {
+				if recover() == nil {
+					t.Fatalf("hint limit %q was accepted", value)
+				}
+			}()
+			_ = configuredHintLimit()
+		})
+	}
+
+	t.Run("admin custom", func(t *testing.T) {
+		t.Setenv(adminHintLimitEnv, "9")
+		if got := configuredAdminHintLimit(); got != 9 {
+			t.Fatalf("configuredAdminHintLimit() = %d, want 9", got)
+		}
+	})
+
+	t.Run("admin default", func(t *testing.T) {
+		t.Setenv(adminHintLimitEnv, "")
+		if got := configuredAdminHintLimit(); got != 50 {
+			t.Fatalf("configuredAdminHintLimit() = %d, want 50", got)
+		}
+	})
+}
+
+func TestAdminRoleUsesIndependentHintLimit(t *testing.T) {
+	originalHintLimit := hintLimit
+	originalAdminHintLimit := adminHintLimit
+	hintLimit = 3
+	adminHintLimit = 7
+	t.Cleanup(func() {
+		hintLimit = originalHintLimit
+		adminHintLimit = originalAdminHintLimit
+	})
+
+	state := startPreparedMatch(t, 1)
+	plugin := &Plugin{}
+	if _, err := plugin.ApplyCommand(
+		context.Background(),
+		state,
+		contracts.RoomCommand{
+			Type:     "connect",
+			PlayerID: "owner",
+			Roles:    []string{"member", "ADMIN"},
+		},
+	); err != nil {
+		t.Fatal(err)
+	}
+	player := state.Roster["owner"]
+	if !player.Admin {
+		t.Fatal("admin role was not persisted on the Othello player")
+	}
+	view := hintView(state, "owner")
+	if view["remaining"] != 7 {
+		t.Fatalf("admin hint view = %+v, want 7 remaining", view)
+	}
+
+	bestMove := legalMoves(state.Board, currentSide(state))[0].Index
+	if _, err := plugin.ApplyCommand(
+		context.Background(),
+		state,
+		internalAnalysisResultCommand(state, bestMove),
+	); err != nil {
+		t.Fatal(err)
+	}
+	player.HintsUsed = 6
+	if _, err := plugin.ApplyCommand(
+		context.Background(),
+		state,
+		contracts.RoomCommand{
+			Type:     CommandRequestHint,
+			PlayerID: "owner",
+		},
+	); err != nil {
+		t.Fatal(err)
+	}
+	if player.HintsUsed != 7 {
+		t.Fatalf("admin hint usage = %d, want 7", player.HintsUsed)
+	}
+
+	player.HintsUsed = 0
+	player.Hint = nil
+	if _, err := plugin.ApplyCommand(
+		context.Background(),
+		state,
+		contracts.RoomCommand{
+			Type:     "connect",
+			PlayerID: "owner",
+			Roles:    []string{"member"},
+		},
+	); err != nil {
+		t.Fatal(err)
+	}
+	if player.Admin {
+		t.Fatal("removed admin role remained on the Othello player")
+	}
+	view = hintView(state, "owner")
+	if view["remaining"] != 3 {
+		t.Fatalf("member hint view = %+v, want 3 remaining", view)
 	}
 }
 
