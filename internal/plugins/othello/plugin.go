@@ -14,11 +14,11 @@ import (
 
 const (
 	GameType            = "othello"
-	EngineVersion       = "othello-v6"
+	EngineVersion       = "othello-v7"
 	ReplaySchemaVersion = 1
 	defaultMaxPlayers   = 2
 	maxNoHumanChecks    = 3
-	defaultHintLimit    = 1
+	defaultHintLimit    = 3
 )
 
 var aiNames = []string{"墨白"}
@@ -933,6 +933,9 @@ func requestHint(state *State, playerID string) error {
 		state.Analysis == nil ||
 		state.Analysis.PositionKey != key {
 		return errors.New("hint analysis is unavailable")
+	}
+	if player.Hint != nil && player.Hint.PositionKey == key {
+		return errors.New("hint is already available for the current position")
 	}
 	player.Hint = nil
 	switch state.Analysis.Status {

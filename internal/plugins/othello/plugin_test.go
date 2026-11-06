@@ -247,7 +247,7 @@ func TestPendingHintCompletesPrivatelyWithoutResettingDeadline(t *testing.T) {
 	ownerView := ownerViewRaw.(map[string]any)
 	hint := ownerView["hint"].(map[string]any)
 	if hint["index"] != bestMove ||
-		hint["remaining"] != 0 ||
+		hint["remaining"] != 2 ||
 		hint["pending"] != false {
 		t.Fatalf("owner hint view = %+v", hint)
 	}
@@ -360,7 +360,22 @@ func TestHintUnavailableRefundsAttemptAndReadyAnalysisCompletesImmediately(
 				PlayerID: "owner",
 			},
 		); err == nil {
-			t.Fatal("second hint request was accepted")
+			t.Fatal("duplicate hint request for the same position was accepted")
+		}
+		if player.HintsUsed != 1 {
+			t.Fatalf("duplicate request consumed a hint: %+v", player)
+		}
+		player.Hint = nil
+		player.HintsUsed = defaultHintLimit
+		if _, err := plugin.ApplyCommand(
+			context.Background(),
+			state,
+			contracts.RoomCommand{
+				Type:     CommandRequestHint,
+				PlayerID: "owner",
+			},
+		); err == nil {
+			t.Fatal("hint request beyond the per-match limit was accepted")
 		}
 	})
 }
