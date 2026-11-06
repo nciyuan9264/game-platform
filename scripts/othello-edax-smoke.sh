@@ -33,7 +33,7 @@ docker run --rm --entrypoint sh "$image" -ceu "
   printf '%s\\n' \"\$analysis\" |
     awk '/^search / {
       move = tolower(\$2)
-      if (move ~ /^[a-h][1-8]$/ &&
+      if (substr(move, 1, 2) ~ /^[a-h][1-8]$/ &&
           \$(NF-1) == 0 &&
           \$NF >= 0 &&
           \$NF <= 60) found = 1

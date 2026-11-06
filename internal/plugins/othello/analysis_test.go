@@ -97,7 +97,7 @@ func TestParseNBoardSearchUsesLastCompleteResponse(t *testing.T) {
 	output := strings.Join([]string{
 		"status Edax is thinking",
 		"search D3 C3 2 0 8",
-		"search C4 C3 D3 -6 0 12",
+		"search C4c3D3 -6 0 12",
 		"status Edax is waiting",
 	}, "\n")
 	bestMove, score, depth, err := parseNBoardSearch(output)

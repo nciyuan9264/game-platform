@@ -541,7 +541,7 @@ func parseNBoardMove(value string) (*int, error) {
 	if value == "pa" || value == "pass" {
 		return nil, nil
 	}
-	if len(value) != 2 ||
+	if len(value) < 2 ||
 		value[0] < 'a' ||
 		value[0] > 'h' ||
 		value[1] < '1' ||
