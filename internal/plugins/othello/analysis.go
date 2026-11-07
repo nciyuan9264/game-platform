@@ -2,6 +2,7 @@ package othello
 
 import (
 	"bytes"
+	"container/list"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -14,6 +15,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/nciyuan9264/game-platform/internal/contracts"
@@ -31,19 +33,27 @@ const (
 	CommandAnalysisResult      = "analysis_result"
 	CommandAnalysisUnavailable = "analysis_unavailable"
 
-	analysisTimeout    = 2500 * time.Millisecond
-	edaxOutputLimit    = 64 * 1024
-	edaxBinaryPath     = "/opt/edax/bin/edax"
-	edaxEvalFilePath   = "/opt/edax/data/eval.dat"
-	edaxBookFilePath   = "/tmp/edax-analysis-book.dat"
-	edaxWorkersEnv     = "OTHELLO_EDAX_WORKERS"
-	defaultEdaxWorkers = 2
-	maxEdaxWorkers     = 2
+	humanAnalysisTimeout = 3 * time.Second
+	aiAnalysisTimeout    = 15 * time.Second
+	edaxOutputLimit      = 64 * 1024
+	edaxBinaryPath       = "/opt/edax/bin/edax"
+	edaxEvalFilePath     = "/opt/edax/data/eval.dat"
+	edaxBookFilePath     = "/tmp/edax-analysis-book.dat"
+	edaxWorkersEnv       = "OTHELLO_EDAX_WORKERS"
+	defaultEdaxWorkers   = 2
+	maxEdaxWorkers       = 2
 )
 
 type positionAnalyzer interface {
 	Analyze(context.Context, *State) (EngineAnalysis, error)
 }
+
+type analysisPriority uint8
+
+const (
+	analysisPriorityAI analysisPriority = iota
+	analysisPriorityHuman
+)
 
 type EngineAnalysis struct {
 	BestMove  *int
@@ -55,7 +65,21 @@ type EngineAnalysis struct {
 type edaxAnalyzer struct {
 	binaryPath string
 	evalPath   string
-	slot       chan struct{}
+	gate       *edaxPriorityGate
+}
+
+type edaxPriorityGate struct {
+	mu         sync.Mutex
+	limit      int
+	active     int
+	humanQueue list.List
+	aiQueue    list.List
+}
+
+type edaxWaiter struct {
+	ready   chan struct{}
+	element *list.Element
+	granted bool
 }
 
 type analysisResultPayload struct {
@@ -79,8 +103,91 @@ func newEdaxAnalyzer() *edaxAnalyzer {
 	return &edaxAnalyzer{
 		binaryPath: edaxBinaryPath,
 		evalPath:   edaxEvalFilePath,
-		slot:       make(chan struct{}, configuredEdaxWorkers()),
+		gate:       newEdaxPriorityGate(configuredEdaxWorkers()),
 	}
+}
+
+func newEdaxPriorityGate(limit int) *edaxPriorityGate {
+	if limit < 1 {
+		panic("Edax gate limit must be positive")
+	}
+	return &edaxPriorityGate{limit: limit}
+}
+
+func (g *edaxPriorityGate) acquire(
+	ctx context.Context,
+	priority analysisPriority,
+) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	waiter := &edaxWaiter{
+		ready: make(chan struct{}),
+	}
+	g.mu.Lock()
+	if priority == analysisPriorityHuman {
+		waiter.element = g.humanQueue.PushBack(waiter)
+	} else {
+		waiter.element = g.aiQueue.PushBack(waiter)
+	}
+	g.dispatchLocked()
+	g.mu.Unlock()
+
+	select {
+	case <-waiter.ready:
+		if err := ctx.Err(); err != nil {
+			g.release()
+			return err
+		}
+		return nil
+	case <-ctx.Done():
+		g.mu.Lock()
+		if waiter.granted {
+			g.active--
+			g.dispatchLocked()
+		} else if waiter.element != nil {
+			g.queue(priority).Remove(waiter.element)
+			waiter.element = nil
+		}
+		g.mu.Unlock()
+		return ctx.Err()
+	}
+}
+
+func (g *edaxPriorityGate) release() {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.active <= 0 {
+		panic("released an inactive Edax gate")
+	}
+	g.active--
+	g.dispatchLocked()
+}
+
+func (g *edaxPriorityGate) dispatchLocked() {
+	for g.active < g.limit {
+		queue := &g.humanQueue
+		if queue.Len() == 0 {
+			queue = &g.aiQueue
+		}
+		element := queue.Front()
+		if element == nil {
+			return
+		}
+		waiter := element.Value.(*edaxWaiter)
+		queue.Remove(element)
+		waiter.element = nil
+		waiter.granted = true
+		g.active++
+		close(waiter.ready)
+	}
+}
+
+func (g *edaxPriorityGate) queue(priority analysisPriority) *list.List {
+	if priority == analysisPriorityHuman {
+		return &g.humanQueue
+	}
+	return &g.aiQueue
 }
 
 func configuredEdaxWorkers() int {
@@ -195,9 +302,31 @@ func analysisRequest(state *State) game.BackgroundRequest {
 		RoomID:          state.RoomID,
 		GameType:        GameType,
 		State:           cloneState(state),
-		Timeout:         analysisTimeout,
+		Timeout:         analysisTimeoutFor(state),
 		FallbackCommand: &fallback,
 	}
+}
+
+func analysisTimeoutFor(state *State) time.Duration {
+	if isAITurn(state) {
+		return aiAnalysisTimeout
+	}
+	return humanAnalysisTimeout
+}
+
+func analysisPriorityFor(state *State) analysisPriority {
+	if isAITurn(state) {
+		return analysisPriorityAI
+	}
+	return analysisPriorityHuman
+}
+
+func isAITurn(state *State) bool {
+	if state == nil {
+		return false
+	}
+	player := state.Roster[state.CurrentPlayer]
+	return player != nil && player.AI
 }
 
 func positionKey(state *State) string {
@@ -414,12 +543,10 @@ func (a *edaxAnalyzer) Analyze(
 	if err := validateReplayState(state); err != nil {
 		return EngineAnalysis{}, err
 	}
-	select {
-	case a.slot <- struct{}{}:
-		defer func() { <-a.slot }()
-	case <-ctx.Done():
-		return EngineAnalysis{}, ctx.Err()
+	if err := a.gate.acquire(ctx, analysisPriorityFor(state)); err != nil {
+		return EngineAnalysis{}, err
 	}
+	defer a.gate.release()
 
 	input, err := nboardInput(state)
 	if err != nil {

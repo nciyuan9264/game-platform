@@ -2,6 +2,7 @@ package othello
 
 import (
 	"context"
+	"errors"
 	"math"
 	"os"
 	"strings"
@@ -67,7 +68,7 @@ func TestConfiguredEdaxWorkers(t *testing.T) {
 	t.Run("defaults to two", func(t *testing.T) {
 		t.Setenv(edaxWorkersEnv, "")
 		analyzer := newEdaxAnalyzer()
-		if got := cap(analyzer.slot); got != 2 {
+		if got := analyzer.gate.limit; got != 2 {
 			t.Fatalf("worker capacity = %d, want 2", got)
 		}
 	})
@@ -75,7 +76,7 @@ func TestConfiguredEdaxWorkers(t *testing.T) {
 	t.Run("allows one", func(t *testing.T) {
 		t.Setenv(edaxWorkersEnv, "1")
 		analyzer := newEdaxAnalyzer()
-		if got := cap(analyzer.slot); got != 1 {
+		if got := analyzer.gate.limit; got != 1 {
 			t.Fatalf("worker capacity = %d, want 1", got)
 		}
 	})
@@ -90,6 +91,208 @@ func TestConfiguredEdaxWorkers(t *testing.T) {
 			}()
 			_ = newEdaxAnalyzer()
 		})
+	}
+}
+
+func TestAnalysisRequestTimeoutMatchesCurrentPlayer(t *testing.T) {
+	humanState := startPreparedMatch(t, 1)
+	if isAITurn(humanState) {
+		t.Fatal("round one unexpectedly started with an AI turn")
+	}
+	if got := analysisRequest(humanState).Timeout; got != humanAnalysisTimeout {
+		t.Fatalf(
+			"human analysis timeout = %s, want %s",
+			got,
+			humanAnalysisTimeout,
+		)
+	}
+	if got := analysisPriorityFor(humanState); got != analysisPriorityHuman {
+		t.Fatalf("human analysis priority = %d", got)
+	}
+
+	aiState := startPreparedMatch(t, 2)
+	if !isAITurn(aiState) {
+		t.Fatal("round two unexpectedly started with a human turn")
+	}
+	if got := analysisRequest(aiState).Timeout; got != aiAnalysisTimeout {
+		t.Fatalf(
+			"AI analysis timeout = %s, want %s",
+			got,
+			aiAnalysisTimeout,
+		)
+	}
+	if got := analysisPriorityFor(aiState); got != analysisPriorityAI {
+		t.Fatalf("AI analysis priority = %d", got)
+	}
+}
+
+func TestEdaxPriorityGatePrioritizesHumansAndPreservesFIFO(t *testing.T) {
+	gate := newEdaxPriorityGate(1)
+	if err := gate.acquire(
+		context.Background(),
+		analysisPriorityAI,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	type acquireResult struct {
+		label string
+		err   error
+	}
+	results := make(chan acquireResult, 4)
+	releases := map[string]chan struct{}{
+		"ai-1":    make(chan struct{}),
+		"ai-2":    make(chan struct{}),
+		"human-1": make(chan struct{}),
+		"human-2": make(chan struct{}),
+	}
+	start := func(label string, priority analysisPriority) {
+		go func() {
+			err := gate.acquire(context.Background(), priority)
+			results <- acquireResult{label: label, err: err}
+			if err == nil {
+				<-releases[label]
+				gate.release()
+			}
+		}()
+	}
+
+	start("ai-1", analysisPriorityAI)
+	waitForEdaxGate(t, gate, 1, 0, 1)
+	start("ai-2", analysisPriorityAI)
+	waitForEdaxGate(t, gate, 1, 0, 2)
+	start("human-1", analysisPriorityHuman)
+	waitForEdaxGate(t, gate, 1, 1, 2)
+	start("human-2", analysisPriorityHuman)
+	waitForEdaxGate(t, gate, 1, 2, 2)
+
+	gate.release()
+	for _, want := range []string{"human-1", "human-2", "ai-1", "ai-2"} {
+		select {
+		case result := <-results:
+			if result.err != nil {
+				t.Fatalf("%s acquire failed: %v", result.label, result.err)
+			}
+			if result.label != want {
+				t.Fatalf("acquired %s, want %s", result.label, want)
+			}
+			close(releases[result.label])
+		case <-time.After(time.Second):
+			t.Fatalf("timed out waiting for %s", want)
+		}
+	}
+	waitForEdaxGate(t, gate, 0, 0, 0)
+}
+
+func TestEdaxPriorityGateCancellationDoesNotLeakSlot(t *testing.T) {
+	gate := newEdaxPriorityGate(1)
+	if err := gate.acquire(
+		context.Background(),
+		analysisPriorityAI,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	result := make(chan error, 1)
+	go func() {
+		result <- gate.acquire(ctx, analysisPriorityHuman)
+	}()
+	waitForEdaxGate(t, gate, 1, 1, 0)
+	cancel()
+	select {
+	case err := <-result:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("cancelled acquire error = %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("cancelled acquire did not return")
+	}
+	waitForEdaxGate(t, gate, 1, 0, 0)
+
+	gate.release()
+	retryCtx, retryCancel := context.WithTimeout(
+		context.Background(),
+		time.Second,
+	)
+	defer retryCancel()
+	if err := gate.acquire(retryCtx, analysisPriorityHuman); err != nil {
+		t.Fatalf("acquire after cancellation failed: %v", err)
+	}
+	gate.release()
+}
+
+func TestEdaxPriorityGateLimitsConcurrency(t *testing.T) {
+	gate := newEdaxPriorityGate(2)
+	for range 2 {
+		if err := gate.acquire(
+			context.Background(),
+			analysisPriorityAI,
+		); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	acquired := make(chan error, 1)
+	go func() {
+		acquired <- gate.acquire(
+			context.Background(),
+			analysisPriorityHuman,
+		)
+	}()
+	waitForEdaxGate(t, gate, 2, 1, 0)
+	select {
+	case err := <-acquired:
+		t.Fatalf("third task acquired before release: %v", err)
+	default:
+	}
+
+	gate.release()
+	select {
+	case err := <-acquired:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("third task did not acquire released slot")
+	}
+	gate.release()
+	gate.release()
+	waitForEdaxGate(t, gate, 0, 0, 0)
+}
+
+func waitForEdaxGate(
+	t *testing.T,
+	gate *edaxPriorityGate,
+	active,
+	humanQueued,
+	aiQueued int,
+) {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for {
+		gate.mu.Lock()
+		gotActive := gate.active
+		gotHumanQueued := gate.humanQueue.Len()
+		gotAIQueued := gate.aiQueue.Len()
+		gate.mu.Unlock()
+		if gotActive == active &&
+			gotHumanQueued == humanQueued &&
+			gotAIQueued == aiQueued {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf(
+				"gate state = active:%d human:%d AI:%d, want %d/%d/%d",
+				gotActive,
+				gotHumanQueued,
+				gotAIQueued,
+				active,
+				humanQueued,
+				aiQueued,
+			)
+		}
+		time.Sleep(time.Millisecond)
 	}
 }
 
@@ -112,10 +315,14 @@ func TestParseNBoardSearchUsesLastCompleteResponse(t *testing.T) {
 			depth,
 		)
 	}
-	if _, _, _, err := parseNBoardSearch("status Edax is waiting"); err == nil {
+	if _, _, _, parseErr := parseNBoardSearch(
+		"status Edax is waiting",
+	); parseErr == nil {
 		t.Fatal("missing search response was accepted")
 	}
-	if _, _, _, err := parseNBoardSearch("search D3 65 0 12"); err == nil {
+	if _, _, _, parseErr := parseNBoardSearch(
+		"search D3 65 0 12",
+	); parseErr == nil {
 		t.Fatal("out-of-range score was accepted")
 	}
 	pass, _, _, err := parseNBoardSearch("search PA 0 0 12")
@@ -283,7 +490,7 @@ func TestEdaxAnalyzerIntegration(t *testing.T) {
 	analyzer := &edaxAnalyzer{
 		binaryPath: binaryPath,
 		evalPath:   evalPath,
-		slot:       make(chan struct{}, 1),
+		gate:       newEdaxPriorityGate(1),
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
