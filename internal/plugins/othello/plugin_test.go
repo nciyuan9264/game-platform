@@ -150,6 +150,56 @@ func TestHumanTimeoutAndAIRequestAreRecoverable(t *testing.T) {
 	}
 }
 
+func TestConnectionLifecyclePreservesTurnDeadline(t *testing.T) {
+	state := startPreparedMatch(t, 1)
+	plugin := &Plugin{}
+	deadline := state.TurnDeadline
+
+	for _, command := range []contracts.RoomCommand{
+		{
+			Type:     "disconnect",
+			PlayerID: state.CurrentPlayer,
+			SentAt:   deadline.Add(-45 * time.Second),
+		},
+		{
+			Type:     "connect",
+			PlayerID: state.CurrentPlayer,
+			SentAt:   deadline.Add(-30 * time.Second),
+		},
+		{
+			Type:     "game_ready",
+			PlayerID: state.CurrentPlayer,
+			SentAt:   deadline.Add(-20 * time.Second),
+		},
+	} {
+		if _, err := plugin.ApplyCommand(
+			context.Background(),
+			state,
+			command,
+		); err != nil {
+			t.Fatalf("%s: %v", command.Type, err)
+		}
+		if !state.TurnDeadline.Equal(deadline) {
+			t.Fatalf(
+				"%s changed deadline from %s to %s",
+				command.Type,
+				deadline,
+				state.TurnDeadline,
+			)
+		}
+	}
+
+	pending, err := plugin.PendingCommands(context.Background(), state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pending) != 1 ||
+		pending[0].Type != CommandTimeout ||
+		!pending[0].ExecuteAt.Equal(deadline) {
+		t.Fatalf("pending = %+v", pending)
+	}
+}
+
 func TestMetadataProgressPresenceAndSpectator(t *testing.T) {
 	state := startPreparedMatch(t, 1)
 	plugin := &Plugin{}

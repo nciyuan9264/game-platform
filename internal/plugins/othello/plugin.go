@@ -241,9 +241,7 @@ func (p *Plugin) ApplyCommand(
 		return game.ApplyResult{}, err
 	}
 	removedPlayerID := ""
-	analysisCommand := command.Type == CommandAnalysisResult ||
-		command.Type == CommandAnalysisUnavailable
-	nonTurnCommand := analysisCommand || command.Type == CommandRequestHint
+	advanceTurn := false
 	switch command.Type {
 	case "connect":
 		err = connect(typed, command.PlayerID, command.Roles)
@@ -262,7 +260,13 @@ func (p *Plugin) ApplyCommand(
 	case "match_begin":
 		err = beginMatch(typed, command.PlayerID)
 	case "game_ready":
+		wasActive := typed.Status == StatusPlaying ||
+			typed.Status == StatusPass
 		err = gameReady(typed, command.PlayerID, command.SentAt)
+		advanceTurn = err == nil &&
+			!wasActive &&
+			(typed.Status == StatusPlaying ||
+				typed.Status == StatusPass)
 	case CommandPlaceDisc:
 		var value struct {
 			Index *int `json:"index"`
@@ -279,6 +283,7 @@ func (p *Plugin) ApplyCommand(
 				*value.Index,
 				player != nil && player.AI,
 			)
+			advanceTurn = err == nil
 		}
 	case CommandPass:
 		player := typed.Roster[command.PlayerID]
@@ -287,8 +292,10 @@ func (p *Plugin) ApplyCommand(
 			command.PlayerID,
 			player != nil && player.AI,
 		)
+		advanceTurn = err == nil
 	case CommandResign:
 		err = resign(typed, command.PlayerID)
+		advanceTurn = err == nil
 	case CommandRequestHint:
 		err = requestHint(typed, command.PlayerID)
 	case CommandTimeout:
@@ -296,6 +303,7 @@ func (p *Plugin) ApplyCommand(
 			err = errors.New("client cannot submit timeout commands")
 		} else {
 			err = applyTimeout(ctx, typed, command.PlayerID)
+			advanceTurn = err == nil
 		}
 	case CommandAnalysisResult:
 		if command.ConnectionRef.Valid() {
@@ -324,26 +332,24 @@ func (p *Plugin) ApplyCommand(
 		return game.ApplyResult{}, err
 	}
 	currentPositionKey := positionKey(typed)
-	if currentPositionKey != previousPositionKey {
+	positionChanged := currentPositionKey != previousPositionKey
+	if positionChanged {
 		clearHints(typed)
 	}
-	if !nonTurnCommand {
+	if advanceTurn {
 		updateTurnDeadline(typed, command.SentAt)
 	}
 	result := game.ApplyResult{
 		Status:   typed.Status,
 		Finished: typed.Status == StatusEnd,
 	}
-	if !nonTurnCommand {
-		if typed.Status == StatusEnd {
-			setFinalAnalysis(typed)
-		} else if key := currentPositionKey; key != "" &&
-			key != previousPositionKey {
-			result.BackgroundRequests = append(
-				result.BackgroundRequests,
-				prepareAnalysis(typed),
-			)
-		}
+	if advanceTurn && typed.Status == StatusEnd {
+		setFinalAnalysis(typed)
+	} else if positionChanged && currentPositionKey != "" {
+		result.BackgroundRequests = append(
+			result.BackgroundRequests,
+			prepareAnalysis(typed),
+		)
 	}
 	if removedPlayerID != "" {
 		result.Effects = append(result.Effects, game.DeliveryEffect{
