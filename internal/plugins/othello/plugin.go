@@ -17,7 +17,7 @@ import (
 
 const (
 	GameType              = "othello"
-	EngineVersion         = "othello-v10"
+	EngineVersion         = "othello-v11"
 	ReplaySchemaVersion   = 1
 	defaultMaxPlayers     = 2
 	maxNoHumanChecks      = 3
@@ -54,7 +54,7 @@ type Plugin struct {
 }
 
 func Definition() game.Definition {
-	plugin := &Plugin{analyzer: newEdaxAnalyzer()}
+	plugin := &Plugin{analyzer: configuredPositionAnalyzer()}
 	return game.Definition{
 		GameType:          GameType,
 		Version:           EngineVersion,

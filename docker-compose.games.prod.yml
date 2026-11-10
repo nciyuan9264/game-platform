@@ -104,7 +104,8 @@ services:
       NODE_ID: roomhost-othello-a
       PUBLIC_ADDR: roomhost-othello-a:9000
       SERVICE_VERSION: ${OTHELLO_ROOMHOST_A_VERSION:?set Othello RoomHost A artifact version}
-      OTHELLO_EDAX_WORKERS: ${OTHELLO_EDAX_WORKERS:-2}
+      OTHELLO_EDAX_URL: ${OTHELLO_EDAX_URL:?set Othello Edax service URL}
+      OTHELLO_EDAX_SHARED_SECRET: ${OTHELLO_EDAX_SHARED_SECRET:?set Othello Edax shared secret}
       OTHELLO_HINT_LIMIT: ${OTHELLO_HINT_LIMIT:-3}
       OTHELLO_ADMIN_HINT_LIMIT: ${OTHELLO_ADMIN_HINT_LIMIT:-50}
 
@@ -116,7 +117,8 @@ services:
       NODE_ID: roomhost-othello-b
       PUBLIC_ADDR: roomhost-othello-b:9000
       SERVICE_VERSION: ${OTHELLO_ROOMHOST_B_VERSION:?set Othello RoomHost B artifact version}
-      OTHELLO_EDAX_WORKERS: ${OTHELLO_EDAX_WORKERS:-2}
+      OTHELLO_EDAX_URL: ${OTHELLO_EDAX_URL:?set Othello Edax service URL}
+      OTHELLO_EDAX_SHARED_SECRET: ${OTHELLO_EDAX_SHARED_SECRET:?set Othello Edax shared secret}
       OTHELLO_HINT_LIMIT: ${OTHELLO_HINT_LIMIT:-3}
       OTHELLO_ADMIN_HINT_LIMIT: ${OTHELLO_ADMIN_HINT_LIMIT:-50}
 

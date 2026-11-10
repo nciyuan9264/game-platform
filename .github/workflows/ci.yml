@@ -83,6 +83,7 @@ jobs:
             roomhost-splendor
             roomhost-yinsh
             roomhost-othello
+            othello-edax-service
             roomhost-fugitive
             roomhost-warchest
             roomhost-quoridor
@@ -110,12 +111,21 @@ jobs:
         working-directory: game-platform
         run: |
           docker build \
+            --build-arg SERVICE=othello-edax-service \
+            -f deployments/Dockerfile \
+            -t game-platform-othello-edax-service:ci \
+            .
+          ./scripts/othello-edax-smoke.sh \
+            game-platform-othello-edax-service:ci
+
+          docker build \
             --build-arg SERVICE=roomhost-othello \
             -f deployments/Dockerfile \
             -t game-platform-roomhost-othello:ci \
             .
-          ./scripts/othello-edax-smoke.sh \
-            game-platform-roomhost-othello:ci
+          docker run --rm --entrypoint sh \
+            game-platform-roomhost-othello:ci \
+            -ceu 'test ! -e /opt/edax/bin/edax'
 
           docker build \
             --build-arg SERVICE=roomhost-hex \
@@ -152,6 +162,8 @@ jobs:
           OTHELLO_ROOMHOST_B_IMAGE: registry.example.com/game-platform-roomhost-othello:ci-b
           OTHELLO_ROOMHOST_A_VERSION: ci-a
           OTHELLO_ROOMHOST_B_VERSION: ci-b
+          OTHELLO_EDAX_URL: https://othello-edax.example.com
+          OTHELLO_EDAX_SHARED_SECRET: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
           FUGITIVE_ROOMHOST_A_IMAGE: registry.example.com/game-platform-roomhost-fugitive:ci-a
           FUGITIVE_ROOMHOST_B_IMAGE: registry.example.com/game-platform-roomhost-fugitive:ci-b
           FUGITIVE_ROOMHOST_A_VERSION: ci-a

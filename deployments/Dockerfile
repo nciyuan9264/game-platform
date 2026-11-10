@@ -17,7 +17,7 @@ ARG EDAX_COMMIT=6c6991bee9a3d31d04f87934b04a7fd23c279f2b
 ARG EDAX_EVAL_SHA256=f8b2299612d9fa4414157e70e932636e33111c2602d0c2fc382a7d90ef21b792
 RUN set -eux; \
     mkdir -p /out/edax; \
-    if [ "${SERVICE}" = "roomhost-othello" ]; then \
+    if [ "${SERVICE}" = "othello-edax-service" ]; then \
       apt-get update; \
       apt-get install -y --no-install-recommends ca-certificates gcc git make; \
       rm -rf /var/lib/apt/lists/*; \

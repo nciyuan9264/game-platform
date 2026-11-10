@@ -111,11 +111,19 @@ for game in acquire davinci splendor yinsh othello fugitive warchest quoridor he
   done
 done
 
-othello_edax_worker_configs="$(
-  grep -Eic 'OTHELLO_EDAX_WORKERS:[[:space:]]*"?2"?' <<<"$config"
+othello_edax_url_configs="$(
+  grep -Eic 'OTHELLO_EDAX_URL:[[:space:]]*"?https://[^[:space:]"]+"?[[:space:]]*$' <<<"$config"
 )"
-if [[ "$othello_edax_worker_configs" -ne 2 ]]; then
-  printf 'production config rejected: both Othello slots must use exactly 2 Edax workers\n' >&2
+if [[ "$othello_edax_url_configs" -ne 2 ]]; then
+  printf 'production config rejected: both Othello slots must configure the HTTPS Edax service URL\n' >&2
+  exit 1
+fi
+
+othello_edax_secret_configs="$(
+  grep -Eic 'OTHELLO_EDAX_SHARED_SECRET:[[:space:]]*"?[0-9a-fA-F]{64}"?[[:space:]]*$' <<<"$config"
+)"
+if [[ "$othello_edax_secret_configs" -ne 2 ]]; then
+  printf 'production config rejected: both Othello slots must configure the 64-character Edax shared secret\n' >&2
   exit 1
 fi
 
