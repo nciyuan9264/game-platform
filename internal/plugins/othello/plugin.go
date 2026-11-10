@@ -17,7 +17,7 @@ import (
 
 const (
 	GameType              = "othello"
-	EngineVersion         = "othello-v14"
+	EngineVersion         = "othello-v15"
 	ReplaySchemaVersion   = 1
 	defaultMaxPlayers     = 2
 	maxNoHumanChecks      = 3
@@ -44,9 +44,9 @@ const (
 
 const (
 	turnTimeout = 60 * time.Second
-	aiMinDelay  = 1200 * time.Millisecond
-	aiMaxDelay  = 2 * time.Second
-	hardAIDelay = 100 * time.Millisecond
+	aiMinDelay  = 3 * time.Second
+	aiMaxDelay  = 8 * time.Second
+	aiPassDelay = 100 * time.Millisecond
 )
 
 type Plugin struct {
@@ -819,7 +819,10 @@ func nextAIRequest(state *State) *game.AIRequest {
 		(state.Status != StatusPlaying && state.Status != StatusPass) {
 		return nil
 	}
-	delay := hardAIDelay
+	delay := aiThinkDelay(state)
+	if state.Status == StatusPass {
+		delay = aiPassDelay
+	}
 	if player.AIDifficulty == game.AIDifficultyHard &&
 		state.Status == StatusPlaying {
 		if state.Analysis == nil ||
@@ -827,14 +830,8 @@ func nextAIRequest(state *State) *game.AIRequest {
 			state.Analysis.Status == analysisStatusPending {
 			return nil
 		}
-	}
-	if player.AIDifficulty != game.AIDifficultyHard {
-		delayRange := int((aiMaxDelay - aiMinDelay) / time.Millisecond)
-		delayOffset := int(
-			(state.RandomSeed + uint64(len(state.Log))*7919) %
-				uint64(delayRange+1),
-		)
-		delay = aiMinDelay + time.Duration(delayOffset)*time.Millisecond
+		analysisElapsed := time.Duration(state.Analysis.ElapsedMs) * time.Millisecond
+		delay = max(delay-analysisElapsed, time.Millisecond)
 	}
 	fallback := contracts.RoomCommand{
 		Type:     CommandTimeout,
@@ -848,6 +845,15 @@ func nextAIRequest(state *State) *game.AIRequest {
 		Delay:           delay,
 		FallbackCommand: &fallback,
 	}
+}
+
+func aiThinkDelay(state *State) time.Duration {
+	delayRange := int((aiMaxDelay - aiMinDelay) / time.Millisecond)
+	delayOffset := int(
+		(state.RandomSeed + uint64(len(state.Log))*7919) %
+			uint64(delayRange+1),
+	)
+	return aiMinDelay + time.Duration(delayOffset)*time.Millisecond
 }
 
 func updateTurnDeadline(state *State, commandTime time.Time) {

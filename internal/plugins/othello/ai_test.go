@@ -3,6 +3,7 @@ package othello
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/nciyuan9264/game-platform/internal/contracts"
 	"github.com/nciyuan9264/game-platform/internal/game"
@@ -75,8 +76,9 @@ func TestHardAIWaitsForExistingAnalysis(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	expectedDelay := aiThinkDelay(state) - 200*time.Millisecond
 	if len(result.AIRequests) != 1 ||
-		result.AIRequests[0].Delay != hardAIDelay {
+		result.AIRequests[0].Delay != expectedDelay {
 		t.Fatalf("hard AI requests = %+v", result.AIRequests)
 	}
 }

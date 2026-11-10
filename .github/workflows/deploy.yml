@@ -196,7 +196,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: docker-compose.center.prod.yml,scripts/validate-prod-config.sh
           target: /home/game-platform
-      - name: Roll out changed center services
+      - name: Pull changed center images
         uses: appleboy/ssh-action@v1.2.0
         env:
           TCR_LOGIN_SERVER: ${{ secrets.TCR_LOGIN_SERVER }}
@@ -208,6 +208,7 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 30m
           envs: TCR_LOGIN_SERVER,TCR_USERNAME,TCR_PASSWORD,IMAGE_TAG,CENTER_SERVICES
           script: |
             set -eu
@@ -224,22 +225,55 @@ jobs:
             chmod +x scripts/validate-prod-config.sh
             ./scripts/validate-prod-config.sh center
             services="$(printf '%s' "${CENTER_SERVICES}" | jq -r '.[]')"
-            compose_services="$(
-              printf '%s\n' "${services}" |
-                sed 's/^migrate-schema$/schema-migrate/' |
-                tr '\n' ' '
-            )"
             retry_pull() {
               attempt=1
-              while ! "$@"; do
+              while true; do
+                if "$@"; then
+                  return 0
+                fi
                 if [ "${attempt}" -ge 3 ]; then
                   return 1
                 fi
+                printf 'image pull attempt %s failed; retrying\n' "${attempt}" >&2
                 sleep $((attempt * 5))
                 attempt=$((attempt + 1))
               done
             }
-            retry_pull docker compose -f docker-compose.center.prod.yml pull ${compose_services}
+            for service in ${services}; do
+              compose_service="${service}"
+              if [ "${compose_service}" = "migrate-schema" ]; then
+                compose_service="schema-migrate"
+              fi
+              retry_pull \
+                timeout --signal=TERM --kill-after=30s 8m \
+                docker compose -f docker-compose.center.prod.yml \
+                pull "${compose_service}"
+            done
+      - name: Roll out changed center services
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          TCR_LOGIN_SERVER: ${{ secrets.TCR_LOGIN_SERVER }}
+          IMAGE_TAG: ${{ github.sha }}
+          CENTER_SERVICES: ${{ needs.detect.outputs.center }}
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 30m
+          envs: TCR_LOGIN_SERVER,IMAGE_TAG,CENTER_SERVICES
+          script: |
+            set -eu
+            cd /home/game-platform
+            test -f .env
+            set -a
+            . ./.env
+            set +a
+            registry="${TCR_LOGIN_SERVER}/tengxuntcr"
+            export GAME_PLATFORM_IMAGE_REGISTRY="${registry}"
+            export GAME_PLATFORM_IMAGE_TAG="${IMAGE_TAG}"
+            chmod +x scripts/validate-prod-config.sh
+            ./scripts/validate-prod-config.sh center
+            services="$(printf '%s' "${CENTER_SERVICES}" | jq -r '.[]')"
             if printf '%s\n' "${services}" | grep -Fxq migrate-schema; then
               docker compose -f docker-compose.center.prod.yml run --rm --no-deps schema-migrate
             fi
