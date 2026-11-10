@@ -17,7 +17,7 @@ import (
 
 const (
 	GameType              = "othello"
-	EngineVersion         = "othello-v13"
+	EngineVersion         = "othello-v14"
 	ReplaySchemaVersion   = 1
 	defaultMaxPlayers     = 2
 	maxNoHumanChecks      = 3
@@ -335,6 +335,9 @@ func (p *Plugin) ApplyCommand(
 	positionChanged := currentPositionKey != previousPositionKey
 	if positionChanged {
 		clearHints(typed)
+		if currentPositionKey == "" {
+			typed.Analysis = nil
+		}
 	}
 	if advanceTurn {
 		updateTurnDeadline(typed, command.SentAt)

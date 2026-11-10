@@ -332,7 +332,7 @@ func isAITurn(state *State) bool {
 func positionKey(state *State) string {
 	if state == nil ||
 		len(state.Board) != 64 ||
-		(state.Status != StatusPlaying && state.Status != StatusPass) {
+		state.Status != StatusPlaying {
 		return ""
 	}
 	canonical := struct {

@@ -126,6 +126,51 @@ func TestAnalysisRequestTimeoutMatchesCurrentPlayer(t *testing.T) {
 	}
 }
 
+func TestPassPositionDoesNotScheduleAnalysis(t *testing.T) {
+	board := make([]Disc, 64)
+	for index := range board {
+		board[index] = DiscWhite
+	}
+	board[0] = DiscEmpty
+	board[1] = DiscBlack
+	board[63] = DiscEmpty
+	state := &State{
+		Status:        StatusPlaying,
+		Board:         board,
+		CurrentPlayer: "black",
+		BlackPlayerID: "black",
+		WhitePlayerID: "white",
+		Roster: map[string]*Player{
+			"black": {PlayerID: "black", Side: SideBlack},
+			"white": {PlayerID: "white", Side: SideWhite},
+		},
+		Log: []Action{},
+	}
+	settle(state)
+	if state.Status != StatusPass {
+		t.Fatalf("status = %s, want pass", state.Status)
+	}
+	if key := positionKey(state); key != "" {
+		t.Fatalf("pass position key = %q, want empty", key)
+	}
+	state.Analysis = &PositionAnalysis{
+		RequestID:     "stale-pass-analysis",
+		PositionKey:   "stale-pass-position",
+		Status:        analysisStatusPending,
+		EngineVersion: analysisEngineVersion,
+	}
+	requests, err := (&Plugin{}).PendingBackgroundRequests(
+		context.Background(),
+		state,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(requests) != 0 {
+		t.Fatalf("pass analysis requests = %+v", requests)
+	}
+}
+
 func TestEdaxPriorityGatePrioritizesHumansAndPreservesFIFO(t *testing.T) {
 	gate := newEdaxPriorityGate(1)
 	if err := gate.acquire(
