@@ -22,6 +22,8 @@ type Client interface {
 	Logout(ctx context.Context, req *v1.LogoutReq, callOptions ...callopt.Option) (r *v1.BaseResp, err error)
 	GetProfile(ctx context.Context, req *v1.GetProfileReq, callOptions ...callopt.Option) (r *v1.UserResp, err error)
 	UpdateUser(ctx context.Context, req *v1.UpdateUserReq, callOptions ...callopt.Option) (r *v1.UserResp, err error)
+	GetAcquisitionSurvey(ctx context.Context, req *v1.GetAcquisitionSurveyReq, callOptions ...callopt.Option) (r *v1.AcquisitionSurveyResp, err error)
+	SubmitAcquisitionSurvey(ctx context.Context, req *v1.SubmitAcquisitionSurveyReq, callOptions ...callopt.Option) (r *v1.AcquisitionSurveyResp, err error)
 	UploadAvatar(ctx context.Context, req *v1.UploadAvatarReq, callOptions ...callopt.Option) (r *v1.UploadAvatarResp, err error)
 	ListAvatarPresets(ctx context.Context, req *v1.ListAvatarPresetsReq, callOptions ...callopt.Option) (r *v1.ListAvatarPresetsResp, err error)
 	ListPasskeys(ctx context.Context, req *v1.ListPasskeysReq, callOptions ...callopt.Option) (r *v1.ListPasskeysResp, err error)
@@ -120,6 +122,16 @@ func (p *kAuthServiceClient) GetProfile(ctx context.Context, req *v1.GetProfileR
 func (p *kAuthServiceClient) UpdateUser(ctx context.Context, req *v1.UpdateUserReq, callOptions ...callopt.Option) (r *v1.UserResp, err error) {
 	ctx = client.NewCtxWithCallOptions(ctx, callOptions)
 	return p.kClient.UpdateUser(ctx, req)
+}
+
+func (p *kAuthServiceClient) GetAcquisitionSurvey(ctx context.Context, req *v1.GetAcquisitionSurveyReq, callOptions ...callopt.Option) (r *v1.AcquisitionSurveyResp, err error) {
+	ctx = client.NewCtxWithCallOptions(ctx, callOptions)
+	return p.kClient.GetAcquisitionSurvey(ctx, req)
+}
+
+func (p *kAuthServiceClient) SubmitAcquisitionSurvey(ctx context.Context, req *v1.SubmitAcquisitionSurveyReq, callOptions ...callopt.Option) (r *v1.AcquisitionSurveyResp, err error) {
+	ctx = client.NewCtxWithCallOptions(ctx, callOptions)
+	return p.kClient.SubmitAcquisitionSurvey(ctx, req)
 }
 
 func (p *kAuthServiceClient) UploadAvatar(ctx context.Context, req *v1.UploadAvatarReq, callOptions ...callopt.Option) (r *v1.UploadAvatarResp, err error) {

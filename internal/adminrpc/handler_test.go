@@ -72,6 +72,9 @@ func TestGetOverviewMapsAnalyticsResponse(t *testing.T) {
 		Daily: []adminanalytics.DailyOverview{{
 			Date: "2026-11-02", NewUsers: 2, GamesCompleted: 1, GamesAbandoned: 1,
 		}},
+		AcquisitionSources: []adminanalytics.AcquisitionSourceMetric{{
+			Source: "friend", Label: "朋友推荐", Users: 2,
+		}},
 	}})
 	response, err := handler.GetOverview(context.Background(), &admin.OverviewReq{
 		StartDate: optionalString("2026-10-27"),
@@ -94,6 +97,10 @@ func TestGetOverviewMapsAnalyticsResponse(t *testing.T) {
 	}
 	if got := response.GetData().GetDaily()[0].GetGamesAbandoned(); got != 1 {
 		t.Fatalf("daily abandoned games = %d", got)
+	}
+	if sources := response.GetData().GetAcquisitionSources(); len(sources) != 1 ||
+		sources[0].GetSource() != "friend" || sources[0].GetUsers() != 2 {
+		t.Fatalf("acquisition sources = %+v", sources)
 	}
 	if query.DateRange.StartDate != "2026-10-27" || query.DateRange.EndDate != "2026-11-02" || query.AllTime {
 		t.Fatalf("query = %+v", query)

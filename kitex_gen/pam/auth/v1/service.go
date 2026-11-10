@@ -30,6 +30,10 @@ type AuthService interface {
 
 	UpdateUser(ctx context.Context, req *UpdateUserReq) (r *UserResp, err error)
 
+	GetAcquisitionSurvey(ctx context.Context, req *GetAcquisitionSurveyReq) (r *AcquisitionSurveyResp, err error)
+
+	SubmitAcquisitionSurvey(ctx context.Context, req *SubmitAcquisitionSurveyReq) (r *AcquisitionSurveyResp, err error)
+
 	UploadAvatar(ctx context.Context, req *UploadAvatarReq) (r *UploadAvatarResp, err error)
 
 	ListAvatarPresets(ctx context.Context, req *ListAvatarPresetsReq) (r *ListAvatarPresetsResp, err error)
@@ -1089,6 +1093,194 @@ func (p *AuthServiceUpdateUserResult) String() string {
 }
 
 var fieldIDToName_AuthServiceUpdateUserResult = map[int16]string{
+	0: "success",
+	1: "err",
+}
+
+type AuthServiceGetAcquisitionSurveyArgs struct {
+	Req *GetAcquisitionSurveyReq `thrift:"req,1,required" frugal:"1,required,GetAcquisitionSurveyReq" json:"req"`
+}
+
+func NewAuthServiceGetAcquisitionSurveyArgs() *AuthServiceGetAcquisitionSurveyArgs {
+	return &AuthServiceGetAcquisitionSurveyArgs{}
+}
+
+func (p *AuthServiceGetAcquisitionSurveyArgs) InitDefault() {
+}
+
+var AuthServiceGetAcquisitionSurveyArgs_Req_DEFAULT *GetAcquisitionSurveyReq
+
+func (p *AuthServiceGetAcquisitionSurveyArgs) GetReq() (v *GetAcquisitionSurveyReq) {
+	if !p.IsSetReq() {
+		return AuthServiceGetAcquisitionSurveyArgs_Req_DEFAULT
+	}
+	return p.Req
+}
+func (p *AuthServiceGetAcquisitionSurveyArgs) SetReq(val *GetAcquisitionSurveyReq) {
+	p.Req = val
+}
+
+func (p *AuthServiceGetAcquisitionSurveyArgs) IsSetReq() bool {
+	return p.Req != nil
+}
+
+func (p *AuthServiceGetAcquisitionSurveyArgs) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("AuthServiceGetAcquisitionSurveyArgs(%+v)", *p)
+}
+
+var fieldIDToName_AuthServiceGetAcquisitionSurveyArgs = map[int16]string{
+	1: "req",
+}
+
+type AuthServiceGetAcquisitionSurveyResult struct {
+	Success *AcquisitionSurveyResp `thrift:"success,0,optional" frugal:"0,optional,AcquisitionSurveyResp" json:"success,omitempty"`
+	Err     *AuthError             `thrift:"err,1,optional" frugal:"1,optional,AuthError" json:"err,omitempty"`
+}
+
+func NewAuthServiceGetAcquisitionSurveyResult() *AuthServiceGetAcquisitionSurveyResult {
+	return &AuthServiceGetAcquisitionSurveyResult{}
+}
+
+func (p *AuthServiceGetAcquisitionSurveyResult) InitDefault() {
+}
+
+var AuthServiceGetAcquisitionSurveyResult_Success_DEFAULT *AcquisitionSurveyResp
+
+func (p *AuthServiceGetAcquisitionSurveyResult) GetSuccess() (v *AcquisitionSurveyResp) {
+	if !p.IsSetSuccess() {
+		return AuthServiceGetAcquisitionSurveyResult_Success_DEFAULT
+	}
+	return p.Success
+}
+
+var AuthServiceGetAcquisitionSurveyResult_Err_DEFAULT *AuthError
+
+func (p *AuthServiceGetAcquisitionSurveyResult) GetErr() (v *AuthError) {
+	if !p.IsSetErr() {
+		return AuthServiceGetAcquisitionSurveyResult_Err_DEFAULT
+	}
+	return p.Err
+}
+func (p *AuthServiceGetAcquisitionSurveyResult) SetSuccess(x interface{}) {
+	p.Success = x.(*AcquisitionSurveyResp)
+}
+func (p *AuthServiceGetAcquisitionSurveyResult) SetErr(val *AuthError) {
+	p.Err = val
+}
+
+func (p *AuthServiceGetAcquisitionSurveyResult) IsSetSuccess() bool {
+	return p.Success != nil
+}
+
+func (p *AuthServiceGetAcquisitionSurveyResult) IsSetErr() bool {
+	return p.Err != nil
+}
+
+func (p *AuthServiceGetAcquisitionSurveyResult) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("AuthServiceGetAcquisitionSurveyResult(%+v)", *p)
+}
+
+var fieldIDToName_AuthServiceGetAcquisitionSurveyResult = map[int16]string{
+	0: "success",
+	1: "err",
+}
+
+type AuthServiceSubmitAcquisitionSurveyArgs struct {
+	Req *SubmitAcquisitionSurveyReq `thrift:"req,1,required" frugal:"1,required,SubmitAcquisitionSurveyReq" json:"req"`
+}
+
+func NewAuthServiceSubmitAcquisitionSurveyArgs() *AuthServiceSubmitAcquisitionSurveyArgs {
+	return &AuthServiceSubmitAcquisitionSurveyArgs{}
+}
+
+func (p *AuthServiceSubmitAcquisitionSurveyArgs) InitDefault() {
+}
+
+var AuthServiceSubmitAcquisitionSurveyArgs_Req_DEFAULT *SubmitAcquisitionSurveyReq
+
+func (p *AuthServiceSubmitAcquisitionSurveyArgs) GetReq() (v *SubmitAcquisitionSurveyReq) {
+	if !p.IsSetReq() {
+		return AuthServiceSubmitAcquisitionSurveyArgs_Req_DEFAULT
+	}
+	return p.Req
+}
+func (p *AuthServiceSubmitAcquisitionSurveyArgs) SetReq(val *SubmitAcquisitionSurveyReq) {
+	p.Req = val
+}
+
+func (p *AuthServiceSubmitAcquisitionSurveyArgs) IsSetReq() bool {
+	return p.Req != nil
+}
+
+func (p *AuthServiceSubmitAcquisitionSurveyArgs) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("AuthServiceSubmitAcquisitionSurveyArgs(%+v)", *p)
+}
+
+var fieldIDToName_AuthServiceSubmitAcquisitionSurveyArgs = map[int16]string{
+	1: "req",
+}
+
+type AuthServiceSubmitAcquisitionSurveyResult struct {
+	Success *AcquisitionSurveyResp `thrift:"success,0,optional" frugal:"0,optional,AcquisitionSurveyResp" json:"success,omitempty"`
+	Err     *AuthError             `thrift:"err,1,optional" frugal:"1,optional,AuthError" json:"err,omitempty"`
+}
+
+func NewAuthServiceSubmitAcquisitionSurveyResult() *AuthServiceSubmitAcquisitionSurveyResult {
+	return &AuthServiceSubmitAcquisitionSurveyResult{}
+}
+
+func (p *AuthServiceSubmitAcquisitionSurveyResult) InitDefault() {
+}
+
+var AuthServiceSubmitAcquisitionSurveyResult_Success_DEFAULT *AcquisitionSurveyResp
+
+func (p *AuthServiceSubmitAcquisitionSurveyResult) GetSuccess() (v *AcquisitionSurveyResp) {
+	if !p.IsSetSuccess() {
+		return AuthServiceSubmitAcquisitionSurveyResult_Success_DEFAULT
+	}
+	return p.Success
+}
+
+var AuthServiceSubmitAcquisitionSurveyResult_Err_DEFAULT *AuthError
+
+func (p *AuthServiceSubmitAcquisitionSurveyResult) GetErr() (v *AuthError) {
+	if !p.IsSetErr() {
+		return AuthServiceSubmitAcquisitionSurveyResult_Err_DEFAULT
+	}
+	return p.Err
+}
+func (p *AuthServiceSubmitAcquisitionSurveyResult) SetSuccess(x interface{}) {
+	p.Success = x.(*AcquisitionSurveyResp)
+}
+func (p *AuthServiceSubmitAcquisitionSurveyResult) SetErr(val *AuthError) {
+	p.Err = val
+}
+
+func (p *AuthServiceSubmitAcquisitionSurveyResult) IsSetSuccess() bool {
+	return p.Success != nil
+}
+
+func (p *AuthServiceSubmitAcquisitionSurveyResult) IsSetErr() bool {
+	return p.Err != nil
+}
+
+func (p *AuthServiceSubmitAcquisitionSurveyResult) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("AuthServiceSubmitAcquisitionSurveyResult(%+v)", *p)
+}
+
+var fieldIDToName_AuthServiceSubmitAcquisitionSurveyResult = map[int16]string{
 	0: "success",
 	1: "err",
 }

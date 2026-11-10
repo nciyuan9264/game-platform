@@ -1285,6 +1285,258 @@ var fieldIDToName_UpdateUserReq = map[int16]string{
 	5: "avatar_id",
 }
 
+type GetAcquisitionSurveyReq struct {
+}
+
+func NewGetAcquisitionSurveyReq() *GetAcquisitionSurveyReq {
+	return &GetAcquisitionSurveyReq{}
+}
+
+func (p *GetAcquisitionSurveyReq) InitDefault() {
+}
+
+func (p *GetAcquisitionSurveyReq) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("GetAcquisitionSurveyReq(%+v)", *p)
+}
+
+var fieldIDToName_GetAcquisitionSurveyReq = map[int16]string{}
+
+type AcquisitionSourceOption struct {
+	Value string `thrift:"value,1,required" frugal:"1,required,string" json:"value"`
+	Label string `thrift:"label,2,required" frugal:"2,required,string" json:"label"`
+}
+
+func NewAcquisitionSourceOption() *AcquisitionSourceOption {
+	return &AcquisitionSourceOption{}
+}
+
+func (p *AcquisitionSourceOption) InitDefault() {
+}
+
+func (p *AcquisitionSourceOption) GetValue() (v string) {
+	return p.Value
+}
+
+func (p *AcquisitionSourceOption) GetLabel() (v string) {
+	return p.Label
+}
+func (p *AcquisitionSourceOption) SetValue(val string) {
+	p.Value = val
+}
+func (p *AcquisitionSourceOption) SetLabel(val string) {
+	p.Label = val
+}
+
+func (p *AcquisitionSourceOption) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("AcquisitionSourceOption(%+v)", *p)
+}
+
+var fieldIDToName_AcquisitionSourceOption = map[int16]string{
+	1: "value",
+	2: "label",
+}
+
+type AcquisitionSurveyData struct {
+	Completed       bool                       `thrift:"completed,1,required" frugal:"1,required,bool" json:"completed"`
+	Source          *string                    `thrift:"source,2,optional" frugal:"2,optional,string" json:"source,omitempty"`
+	SubmittedAtUnix *int64                     `thrift:"submitted_at_unix,3,optional" frugal:"3,optional,i64" json:"submitted_at_unix,omitempty"`
+	Options         []*AcquisitionSourceOption `thrift:"options,4,required" frugal:"4,required,list<AcquisitionSourceOption>" json:"options"`
+	OtherDetail     *string                    `thrift:"other_detail,5,optional" frugal:"5,optional,string" json:"other_detail,omitempty"`
+}
+
+func NewAcquisitionSurveyData() *AcquisitionSurveyData {
+	return &AcquisitionSurveyData{}
+}
+
+func (p *AcquisitionSurveyData) InitDefault() {
+}
+
+func (p *AcquisitionSurveyData) GetCompleted() (v bool) {
+	return p.Completed
+}
+
+var AcquisitionSurveyData_Source_DEFAULT string
+
+func (p *AcquisitionSurveyData) GetSource() (v string) {
+	if !p.IsSetSource() {
+		return AcquisitionSurveyData_Source_DEFAULT
+	}
+	return *p.Source
+}
+
+var AcquisitionSurveyData_SubmittedAtUnix_DEFAULT int64
+
+func (p *AcquisitionSurveyData) GetSubmittedAtUnix() (v int64) {
+	if !p.IsSetSubmittedAtUnix() {
+		return AcquisitionSurveyData_SubmittedAtUnix_DEFAULT
+	}
+	return *p.SubmittedAtUnix
+}
+
+func (p *AcquisitionSurveyData) GetOptions() (v []*AcquisitionSourceOption) {
+	return p.Options
+}
+
+var AcquisitionSurveyData_OtherDetail_DEFAULT string
+
+func (p *AcquisitionSurveyData) GetOtherDetail() (v string) {
+	if !p.IsSetOtherDetail() {
+		return AcquisitionSurveyData_OtherDetail_DEFAULT
+	}
+	return *p.OtherDetail
+}
+func (p *AcquisitionSurveyData) SetCompleted(val bool) {
+	p.Completed = val
+}
+func (p *AcquisitionSurveyData) SetSource(val *string) {
+	p.Source = val
+}
+func (p *AcquisitionSurveyData) SetSubmittedAtUnix(val *int64) {
+	p.SubmittedAtUnix = val
+}
+func (p *AcquisitionSurveyData) SetOptions(val []*AcquisitionSourceOption) {
+	p.Options = val
+}
+func (p *AcquisitionSurveyData) SetOtherDetail(val *string) {
+	p.OtherDetail = val
+}
+
+func (p *AcquisitionSurveyData) IsSetSource() bool {
+	return p.Source != nil
+}
+
+func (p *AcquisitionSurveyData) IsSetSubmittedAtUnix() bool {
+	return p.SubmittedAtUnix != nil
+}
+
+func (p *AcquisitionSurveyData) IsSetOtherDetail() bool {
+	return p.OtherDetail != nil
+}
+
+func (p *AcquisitionSurveyData) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("AcquisitionSurveyData(%+v)", *p)
+}
+
+var fieldIDToName_AcquisitionSurveyData = map[int16]string{
+	1: "completed",
+	2: "source",
+	3: "submitted_at_unix",
+	4: "options",
+	5: "other_detail",
+}
+
+type AcquisitionSurveyResp struct {
+	StatusCode int32                  `thrift:"status_code,1,required" frugal:"1,required,i32" json:"status_code"`
+	Message    string                 `thrift:"message,2,required" frugal:"2,required,string" json:"message"`
+	Data       *AcquisitionSurveyData `thrift:"data,3,required" frugal:"3,required,AcquisitionSurveyData" json:"data"`
+}
+
+func NewAcquisitionSurveyResp() *AcquisitionSurveyResp {
+	return &AcquisitionSurveyResp{}
+}
+
+func (p *AcquisitionSurveyResp) InitDefault() {
+}
+
+func (p *AcquisitionSurveyResp) GetStatusCode() (v int32) {
+	return p.StatusCode
+}
+
+func (p *AcquisitionSurveyResp) GetMessage() (v string) {
+	return p.Message
+}
+
+var AcquisitionSurveyResp_Data_DEFAULT *AcquisitionSurveyData
+
+func (p *AcquisitionSurveyResp) GetData() (v *AcquisitionSurveyData) {
+	if !p.IsSetData() {
+		return AcquisitionSurveyResp_Data_DEFAULT
+	}
+	return p.Data
+}
+func (p *AcquisitionSurveyResp) SetStatusCode(val int32) {
+	p.StatusCode = val
+}
+func (p *AcquisitionSurveyResp) SetMessage(val string) {
+	p.Message = val
+}
+func (p *AcquisitionSurveyResp) SetData(val *AcquisitionSurveyData) {
+	p.Data = val
+}
+
+func (p *AcquisitionSurveyResp) IsSetData() bool {
+	return p.Data != nil
+}
+
+func (p *AcquisitionSurveyResp) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("AcquisitionSurveyResp(%+v)", *p)
+}
+
+var fieldIDToName_AcquisitionSurveyResp = map[int16]string{
+	1: "status_code",
+	2: "message",
+	3: "data",
+}
+
+type SubmitAcquisitionSurveyReq struct {
+	Source      string  `thrift:"source,1,required" frugal:"1,required,string" json:"source"`
+	OtherDetail *string `thrift:"other_detail,2,optional" frugal:"2,optional,string" json:"other_detail,omitempty"`
+}
+
+func NewSubmitAcquisitionSurveyReq() *SubmitAcquisitionSurveyReq {
+	return &SubmitAcquisitionSurveyReq{}
+}
+
+func (p *SubmitAcquisitionSurveyReq) InitDefault() {
+}
+
+func (p *SubmitAcquisitionSurveyReq) GetSource() (v string) {
+	return p.Source
+}
+
+var SubmitAcquisitionSurveyReq_OtherDetail_DEFAULT string
+
+func (p *SubmitAcquisitionSurveyReq) GetOtherDetail() (v string) {
+	if !p.IsSetOtherDetail() {
+		return SubmitAcquisitionSurveyReq_OtherDetail_DEFAULT
+	}
+	return *p.OtherDetail
+}
+func (p *SubmitAcquisitionSurveyReq) SetSource(val string) {
+	p.Source = val
+}
+func (p *SubmitAcquisitionSurveyReq) SetOtherDetail(val *string) {
+	p.OtherDetail = val
+}
+
+func (p *SubmitAcquisitionSurveyReq) IsSetOtherDetail() bool {
+	return p.OtherDetail != nil
+}
+
+func (p *SubmitAcquisitionSurveyReq) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("SubmitAcquisitionSurveyReq(%+v)", *p)
+}
+
+var fieldIDToName_SubmitAcquisitionSurveyReq = map[int16]string{
+	1: "source",
+	2: "other_detail",
+}
+
 type UploadAvatarReq struct {
 	AccessToken string  `thrift:"access_token,1,required" frugal:"1,required,string" json:"access_token"`
 	Content     []byte  `thrift:"content,2,required" frugal:"2,required,binary" json:"content"`

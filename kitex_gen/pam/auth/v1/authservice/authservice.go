@@ -90,6 +90,20 @@ var serviceMethods = map[string]kitex.MethodInfo{
 		false,
 		kitex.WithStreamingMode(kitex.StreamingNone),
 	),
+	"GetAcquisitionSurvey": kitex.NewMethodInfo(
+		getAcquisitionSurveyHandler,
+		newAuthServiceGetAcquisitionSurveyArgs,
+		newAuthServiceGetAcquisitionSurveyResult,
+		false,
+		kitex.WithStreamingMode(kitex.StreamingNone),
+	),
+	"SubmitAcquisitionSurvey": kitex.NewMethodInfo(
+		submitAcquisitionSurveyHandler,
+		newAuthServiceSubmitAcquisitionSurveyArgs,
+		newAuthServiceSubmitAcquisitionSurveyResult,
+		false,
+		kitex.WithStreamingMode(kitex.StreamingNone),
+	),
 	"UploadAvatar": kitex.NewMethodInfo(
 		uploadAvatarHandler,
 		newAuthServiceUploadAvatarArgs,
@@ -516,6 +530,54 @@ func newAuthServiceUpdateUserArgs() interface{} {
 
 func newAuthServiceUpdateUserResult() interface{} {
 	return v1.NewAuthServiceUpdateUserResult()
+}
+
+func getAcquisitionSurveyHandler(ctx context.Context, handler interface{}, arg, result interface{}) error {
+	realArg := arg.(*v1.AuthServiceGetAcquisitionSurveyArgs)
+	realResult := result.(*v1.AuthServiceGetAcquisitionSurveyResult)
+	success, err := handler.(v1.AuthService).GetAcquisitionSurvey(ctx, realArg.Req)
+	if err != nil {
+		switch v := err.(type) {
+		case *v1.AuthError:
+			realResult.Err = v
+		default:
+			return err
+		}
+	} else {
+		realResult.Success = success
+	}
+	return nil
+}
+func newAuthServiceGetAcquisitionSurveyArgs() interface{} {
+	return v1.NewAuthServiceGetAcquisitionSurveyArgs()
+}
+
+func newAuthServiceGetAcquisitionSurveyResult() interface{} {
+	return v1.NewAuthServiceGetAcquisitionSurveyResult()
+}
+
+func submitAcquisitionSurveyHandler(ctx context.Context, handler interface{}, arg, result interface{}) error {
+	realArg := arg.(*v1.AuthServiceSubmitAcquisitionSurveyArgs)
+	realResult := result.(*v1.AuthServiceSubmitAcquisitionSurveyResult)
+	success, err := handler.(v1.AuthService).SubmitAcquisitionSurvey(ctx, realArg.Req)
+	if err != nil {
+		switch v := err.(type) {
+		case *v1.AuthError:
+			realResult.Err = v
+		default:
+			return err
+		}
+	} else {
+		realResult.Success = success
+	}
+	return nil
+}
+func newAuthServiceSubmitAcquisitionSurveyArgs() interface{} {
+	return v1.NewAuthServiceSubmitAcquisitionSurveyArgs()
+}
+
+func newAuthServiceSubmitAcquisitionSurveyResult() interface{} {
+	return v1.NewAuthServiceSubmitAcquisitionSurveyResult()
 }
 
 func uploadAvatarHandler(ctx context.Context, handler interface{}, arg, result interface{}) error {
@@ -1009,6 +1071,34 @@ func (p *kClient) UpdateUser(ctx context.Context, req *v1.UpdateUserReq) (r *v1.
 	_args.Req = req
 	var _result v1.AuthServiceUpdateUserResult
 	if err = p.c.Call(ctx, "UpdateUser", &_args, &_result); err != nil {
+		return
+	}
+	switch {
+	case _result.Err != nil:
+		return r, _result.Err
+	}
+	return _result.GetSuccess(), nil
+}
+
+func (p *kClient) GetAcquisitionSurvey(ctx context.Context, req *v1.GetAcquisitionSurveyReq) (r *v1.AcquisitionSurveyResp, err error) {
+	var _args v1.AuthServiceGetAcquisitionSurveyArgs
+	_args.Req = req
+	var _result v1.AuthServiceGetAcquisitionSurveyResult
+	if err = p.c.Call(ctx, "GetAcquisitionSurvey", &_args, &_result); err != nil {
+		return
+	}
+	switch {
+	case _result.Err != nil:
+		return r, _result.Err
+	}
+	return _result.GetSuccess(), nil
+}
+
+func (p *kClient) SubmitAcquisitionSurvey(ctx context.Context, req *v1.SubmitAcquisitionSurveyReq) (r *v1.AcquisitionSurveyResp, err error) {
+	var _args v1.AuthServiceSubmitAcquisitionSurveyArgs
+	_args.Req = req
+	var _result v1.AuthServiceSubmitAcquisitionSurveyResult
+	if err = p.c.Call(ctx, "SubmitAcquisitionSurvey", &_args, &_result); err != nil {
 		return
 	}
 	switch {

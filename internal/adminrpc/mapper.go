@@ -31,6 +31,14 @@ func mapOverview(value adminanalytics.Overview) *admin.OverviewData {
 			PlayerDurationSeconds: item.PlayerDurationSeconds,
 		})
 	}
+	acquisitionSources := make([]*admin.AcquisitionSourceMetric, 0, len(value.AcquisitionSources))
+	for _, item := range value.AcquisitionSources {
+		acquisitionSources = append(acquisitionSources, &admin.AcquisitionSourceMetric{
+			Source: item.Source,
+			Label:  item.Label,
+			Users:  item.Users,
+		})
+	}
 	metrics := value.Metrics
 	return &admin.OverviewData{
 		Window: mapWindow(value.Window),
@@ -55,7 +63,8 @@ func mapOverview(value adminanalytics.Overview) *admin.OverviewData {
 			AverageGameDurationSeconds:   metrics.AverageGameDurationSecond,
 			AveragePlayerDurationSeconds: metrics.AveragePlayerDuration,
 		},
-		Daily: daily,
+		Daily:              daily,
+		AcquisitionSources: acquisitionSources,
 	}
 }
 

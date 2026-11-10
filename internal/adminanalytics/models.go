@@ -53,10 +53,17 @@ type DailyOverview struct {
 	PlayerDurationSeconds int64
 }
 
+type AcquisitionSourceMetric struct {
+	Source string
+	Label  string
+	Users  int64
+}
+
 type Overview struct {
-	Window  Window
-	Metrics OverviewMetrics
-	Daily   []DailyOverview
+	Window             Window
+	Metrics            OverviewMetrics
+	Daily              []DailyOverview
+	AcquisitionSources []AcquisitionSourceMetric
 }
 
 type DateRangeQuery struct {

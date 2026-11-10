@@ -449,10 +449,58 @@ var fieldIDToName_DailyOverview = map[int16]string{
 	8: "games_abandoned",
 }
 
+type AcquisitionSourceMetric struct {
+	Source string `thrift:"source,1,required" frugal:"1,required,string" json:"source"`
+	Label  string `thrift:"label,2,required" frugal:"2,required,string" json:"label"`
+	Users  int64  `thrift:"users,3,required" frugal:"3,required,i64" json:"users"`
+}
+
+func NewAcquisitionSourceMetric() *AcquisitionSourceMetric {
+	return &AcquisitionSourceMetric{}
+}
+
+func (p *AcquisitionSourceMetric) InitDefault() {
+}
+
+func (p *AcquisitionSourceMetric) GetSource() (v string) {
+	return p.Source
+}
+
+func (p *AcquisitionSourceMetric) GetLabel() (v string) {
+	return p.Label
+}
+
+func (p *AcquisitionSourceMetric) GetUsers() (v int64) {
+	return p.Users
+}
+func (p *AcquisitionSourceMetric) SetSource(val string) {
+	p.Source = val
+}
+func (p *AcquisitionSourceMetric) SetLabel(val string) {
+	p.Label = val
+}
+func (p *AcquisitionSourceMetric) SetUsers(val int64) {
+	p.Users = val
+}
+
+func (p *AcquisitionSourceMetric) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("AcquisitionSourceMetric(%+v)", *p)
+}
+
+var fieldIDToName_AcquisitionSourceMetric = map[int16]string{
+	1: "source",
+	2: "label",
+	3: "users",
+}
+
 type OverviewData struct {
-	Window  *AnalyticsWindow `thrift:"window,1,required" frugal:"1,required,AnalyticsWindow" json:"window"`
-	Metrics *OverviewMetrics `thrift:"metrics,2,required" frugal:"2,required,OverviewMetrics" json:"metrics"`
-	Daily   []*DailyOverview `thrift:"daily,3,required" frugal:"3,required,list<DailyOverview>" json:"daily"`
+	Window             *AnalyticsWindow           `thrift:"window,1,required" frugal:"1,required,AnalyticsWindow" json:"window"`
+	Metrics            *OverviewMetrics           `thrift:"metrics,2,required" frugal:"2,required,OverviewMetrics" json:"metrics"`
+	Daily              []*DailyOverview           `thrift:"daily,3,required" frugal:"3,required,list<DailyOverview>" json:"daily"`
+	AcquisitionSources []*AcquisitionSourceMetric `thrift:"acquisition_sources,4,required" frugal:"4,required,list<AcquisitionSourceMetric>" json:"acquisition_sources"`
 }
 
 func NewOverviewData() *OverviewData {
@@ -483,6 +531,10 @@ func (p *OverviewData) GetMetrics() (v *OverviewMetrics) {
 func (p *OverviewData) GetDaily() (v []*DailyOverview) {
 	return p.Daily
 }
+
+func (p *OverviewData) GetAcquisitionSources() (v []*AcquisitionSourceMetric) {
+	return p.AcquisitionSources
+}
 func (p *OverviewData) SetWindow(val *AnalyticsWindow) {
 	p.Window = val
 }
@@ -491,6 +543,9 @@ func (p *OverviewData) SetMetrics(val *OverviewMetrics) {
 }
 func (p *OverviewData) SetDaily(val []*DailyOverview) {
 	p.Daily = val
+}
+func (p *OverviewData) SetAcquisitionSources(val []*AcquisitionSourceMetric) {
+	p.AcquisitionSources = val
 }
 
 func (p *OverviewData) IsSetWindow() bool {
@@ -512,6 +567,7 @@ var fieldIDToName_OverviewData = map[int16]string{
 	1: "window",
 	2: "metrics",
 	3: "daily",
+	4: "acquisition_sources",
 }
 
 type OverviewResp struct {

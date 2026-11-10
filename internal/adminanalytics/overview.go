@@ -10,10 +10,26 @@ import (
 )
 
 type authOverview struct {
-	totalUsers int64
-	newUsers   int64
-	daily      map[string]int64
-	recentIDs  []int64
+	totalUsers         int64
+	newUsers           int64
+	daily              map[string]int64
+	recentIDs          []int64
+	acquisitionSources []AcquisitionSourceMetric
+}
+
+var acquisitionSourceDefinitions = []struct {
+	source string
+	label  string
+}{
+	{source: "friend", label: "朋友推荐"},
+	{source: "wechat_qq", label: "微信群 / QQ 群"},
+	{source: "xiaohongshu", label: "小红书"},
+	{source: "bilibili", label: "哔哩哔哩"},
+	{source: "douyin", label: "抖音"},
+	{source: "search_engine", label: "搜索引擎"},
+	{source: "board_game_community", label: "桌游社区 / 论坛"},
+	{source: "other", label: "其他"},
+	{source: "unanswered", label: "未回答"},
 }
 
 func (s *Service) Overview(ctx context.Context, query OverviewQuery) (Overview, error) {
@@ -41,7 +57,12 @@ func (s *Service) Overview(ctx context.Context, query OverviewQuery) (Overview, 
 		metrics.TotalUsers = authData.totalUsers
 		metrics.NewUsers = authData.newUsers
 		metrics.FirstMatchConversionRate = percentage(converted, int64(len(authData.recentIDs)))
-		return Overview{Window: window, Metrics: metrics, Daily: daily}, nil
+		return Overview{
+			Window:             window,
+			Metrics:            metrics,
+			Daily:              daily,
+			AcquisitionSources: authData.acquisitionSources,
+		}, nil
 	})
 }
 
@@ -103,7 +124,41 @@ func (s *Service) loadAuthOverview(ctx context.Context, window Window) (authOver
 		}
 		result.recentIDs = append(result.recentIDs, id)
 	}
-	return result, rows.Err()
+	if err := rows.Err(); err != nil {
+		return authOverview{}, err
+	}
+
+	rows, err = s.authDB.QueryContext(ctx, `
+                SELECT COALESCE(acquisition_source, 'unanswered'), COUNT(*)
+                FROM public.users
+                WHERE created_at >= $1 AND created_at < $2
+                        AND (deleted_at IS NULL OR deleted_at >= $2)
+                GROUP BY 1`, window.StartUTC, window.EndUTC)
+	if err != nil {
+		return authOverview{}, err
+	}
+	defer rows.Close()
+	counts := make(map[string]int64, len(acquisitionSourceDefinitions))
+	for rows.Next() {
+		var source string
+		var count int64
+		if err := rows.Scan(&source, &count); err != nil {
+			return authOverview{}, err
+		}
+		counts[source] = count
+	}
+	if err := rows.Err(); err != nil {
+		return authOverview{}, err
+	}
+	result.acquisitionSources = make([]AcquisitionSourceMetric, 0, len(acquisitionSourceDefinitions))
+	for _, definition := range acquisitionSourceDefinitions {
+		result.acquisitionSources = append(result.acquisitionSources, AcquisitionSourceMetric{
+			Source: definition.source,
+			Label:  definition.label,
+			Users:  counts[definition.source],
+		})
+	}
+	return result, nil
 }
 
 func (s *Service) countConvertedUsers(ctx context.Context, userIDs []int64, endUTC time.Time) (int64, error) {
