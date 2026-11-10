@@ -33,7 +33,7 @@ const (
 	CommandAnalysisResult      = "analysis_result"
 	CommandAnalysisUnavailable = "analysis_unavailable"
 
-	humanAnalysisTimeout = 3 * time.Second
+	humanAnalysisTimeout = 8 * time.Second
 	aiAnalysisTimeout    = 15 * time.Second
 	edaxOutputLimit      = 64 * 1024
 	edaxBinaryPath       = "/opt/edax/bin/edax"

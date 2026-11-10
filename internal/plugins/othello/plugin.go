@@ -17,7 +17,7 @@ import (
 
 const (
 	GameType              = "othello"
-	EngineVersion         = "othello-v12"
+	EngineVersion         = "othello-v13"
 	ReplaySchemaVersion   = 1
 	defaultMaxPlayers     = 2
 	maxNoHumanChecks      = 3
