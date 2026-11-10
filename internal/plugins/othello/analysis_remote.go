@@ -163,6 +163,7 @@ func edaxAnalyzeEndpoint(rawURL string, requireHTTPS bool) (string, error) {
 	parsed, err := url.Parse(strings.TrimSpace(rawURL))
 	if err != nil ||
 		parsed.Host == "" ||
+		(parsed.Path != "" && parsed.Path != "/") ||
 		parsed.RawQuery != "" ||
 		parsed.Fragment != "" ||
 		(requireHTTPS && parsed.Scheme != "https") ||

@@ -90,3 +90,12 @@ func TestConfiguredPositionAnalyzerRequiresRemoteServiceInProduction(
 	}()
 	_ = configuredPositionAnalyzer()
 }
+
+func TestEdaxAnalyzeEndpointRejectsEndpointPath(t *testing.T) {
+	if _, err := edaxAnalyzeEndpoint(
+		"https://othello.example.com/healthz",
+		true,
+	); err == nil {
+		t.Fatal("Edax endpoint path was accepted")
+	}
+}

@@ -46,6 +46,7 @@ RUN set -eux; \
 
 FROM debian:bookworm-slim
 WORKDIR /app
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=builder /out/service /app/service
 COPY --from=builder /out/edax/ /opt/edax/
 EXPOSE 8080 9000 18092 18093 18094 18095
